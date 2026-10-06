@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MQTT Pessoal</title>
+<style>
+  :root { color-scheme: light dark; --gap: 8px; }
+  body { font: 16px system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px; }
+  input, button { font: inherit; padding: 8px; box-sizing: border-box; }
+  input { width: 100%; margin-bottom: var(--gap); }
+  .row { display: flex; gap: var(--gap); }
+  .row > * { flex: 1; }
+  button { cursor: pointer; }
+  #status { font-weight: bold; }
+  #log { height: 40vh; overflow: auto; border: 1px solid #8884; padding: 8px; font: 13px monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>MQTT</h1>
+<p>Status: <span id="status">desconectado</span></p>
+
+<details open>
+  <summary>Conexão</summary>
+  <input id="url" placeholder="wss://broker.exemplo.com:8884/mqtt">
+  <div class="row">
+    <input id="user" placeholder="usuário (opcional)" autocomplete="username">
+    <input id="pass" type="password" placeholder="senha (opcional)" autocomplete="current-password">
+  </div>
+  <div class="row">
+    <button id="connect">Conectar</button>
+    <button id="disconnect">Desconectar</button>
+  </div>
+</details>
+
+<h3>Assinar</h3>
+<div class="row">
+  <input id="subTopic" placeholder="casa/#">
+  <button id="sub" style="flex:0 0 auto">Assinar</button>
+</div>
+
+<h3>Publicar</h3>
+<input id="pubTopic" placeholder="casa/luz/sala">
+<div class="row">
+  <input id="pubMsg" placeholder="mensagem">
+  <button id="pub" style="flex:0 0 auto">Enviar</button>
+</div>
+
+<h3>Mensagens</h3>
+<div id="log"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5/dist/mqtt.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const store = { get: k => { try { return localStorage.getItem(k) || ""; } catch { return ""; } },
+                set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+// ponytail: senha em localStorage; ok p/ uso pessoal, trocar se o dispositivo for compartilhado
+["url", "user", "pass", "subTopic", "pubTopic"].forEach(k => {
+  $(k).value = store.get(k);
+  $(k).addEventListener("input", () => store.set(k, $(k).value));
+});
+
+let client;
+const log = (t) => {
+  const el = $("log");
+  el.textContent += `${new Date().toLocaleTimeString()} ${t}\n`;
+  el.scrollTop = el.scrollHeight;
+};
+const status = (s) => $("status").textContent = s;
+
+$("connect").onclick = () => {
+  if (client) client.end(true);
+  client = mqtt.connect($("url").value.trim(), {
+    username: $("user").value || undefined,
+    password: $("pass").value || undefined,
+    reconnectPeriod: 3000,
+  });
+  status("conectando…");
+  client.on("connect", () => status("conectado"));
+  client.on("reconnect", () => status("reconectando…"));
+  client.on("close", () => status("desconectado"));
+  client.on("error", e => log("erro: " + e.message));
+  client.on("message", (topic, payload) => log(`${topic}: ${payload}`));
+};
+$("disconnect").onclick = () => client && client.end();
+
+$("sub").onclick = () => {
+  const t = $("subTopic").value.trim();
+  if (!client?.connected || !t) return log("conecte e informe um tópico");
+  client.subscribe(t, e => log(e ? "erro ao assinar: " + e.message : "assinado: " + t));
+};
+$("pub").onclick = () => {
+  const t = $("pubTopic").value.trim();
+  if (!client?.connected || !t) return log("conecte e informe um tópico");
+  client.publish(t, $("pubMsg").value, e => e && log("erro ao publicar: " + e.message));
+};
+</script>
+</body>
+</html>

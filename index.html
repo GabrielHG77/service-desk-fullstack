@@ -26,6 +26,7 @@ input[type=color]{padding:2px;height:40px}
 .q{border:0;border-radius:50%;width:18px;height:18px;font-size:11px;background:var(--primary);color:#fff;cursor:pointer;padding:0}
 .help{color:var(--sub);display:block;margin-top:3px}.err{white-space:pre-line;color:var(--danger);margin:8px 0}
 .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.pickrow{margin:6px 0}.pickrow .help{margin:0}
 .item{border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:8px}
 .pick{background:var(--card);border-radius:8px;padding:16px;margin-bottom:8px;cursor:pointer}
 .menu{position:relative;display:inline-block}.menu summary{list-style:none;cursor:pointer;padding:2px 8px;font-size:20px}.menu summary::-webkit-details-marker{display:none}
@@ -97,6 +98,12 @@ function leaf(f,v,change){
   if(f.type==='check'){
     const i=h('input',{type:'checkbox',id,checked:!!v[f.k]});i.onchange=()=>{v[f.k]=i.checked;change()};
     add(h('div',{class:'lh'},h('label',{class:'chk',for:id},i,f.label),qm),help)
+  }else if(f.type==='pick'){
+    const opts=f.src(v);
+    add(h('div',{class:'lh'},f.label),...(opts.length?opts.map(o=>{const i=h('input',{type:'checkbox',id:id+o.id,checked:v[f.k].includes(o.id)});
+      i.onchange=()=>{v[f.k]=i.checked?[...v[f.k],o.id]:v[f.k].filter(x=>x!==o.id);change()};
+      return h('label',{class:'chk pickrow',for:id+o.id},i,h('span',{},o.name,h('small',{class:'help'},`${o.topic} ← ${o.noPayload?'(empty)':o.payload}`)))})
+      :[h('small',{class:'help'},'No buttons yet. Create buttons first, then group them here.')]))
   }else if(f.type==='list'){
     const box=h('div');
     const draw=()=>{subs=[];box.replaceChildren(...v[f.k].map((it,i)=>{const s=fields(f.of,it,change);subs.push(s);s.sync();
@@ -168,19 +175,24 @@ const PT={
         b.onpointerup=b.onpointerleave=b.onpointercancel=up}
       else b.onclick=()=>send(p,pl());
       return b}},
-  group:{label:'Button group',fields:[NAME,TOPIC,
-    T('items','Buttons',{type:'list',req:1,err:'Add at least one button',addLabel:'Add button',delLabel:'Delete this button',def:[{label:'',payload:''}],
-      of:[T('label','Label for button',{req:1,err:'Button label is required'}),T('payload','Payload for button',{req:1,err:'Payload is required'})]}),
-    COLOR,SIZE,...QR,...JSN,...TAIL],
-    body:p=>h('div',{class:'grp'},p.items.map(it=>h('button',{class:'btn'+sz(p),style:`background:${cv(p.color)}`,onclick:()=>send(p,it.payload)},it.label)))}
+  group:{label:'Button group',fields:[NAME,
+    T('members','Existing buttons',{type:'pick',def:[],
+      src:v=>db.panels.filter(b=>b.type==='button'&&!db.panels.some(g=>g.id!==v.id&&g.members?.includes(b.id))),
+      val:(x,v)=>x.length||v.items?.length?null:'Select at least one button'}),...TAIL],
+    // each member keeps its own topic, payload, colour and options; p.items only exists on groups saved by older versions
+    body:p=>h('div',{class:'grp'},db.panels.filter(b=>b.type==='button'&&p.members?.includes(b.id)).map(b=>PT.button.body(b)),
+      (p.items||[]).map(it=>h('button',{class:'btn'+sz(p),style:`background:${cv(p.color)}`,onclick:()=>send(p,it.payload)},it.label)))}
 };
 
 /* ---------- views ---------- */
-function card(p,i){
-  const mv=k=>{const j=i+k;if(j<0||j>=db.panels.length)return;[db.panels[i],db.panels[j]]=[db.panels[j],db.panels[i]];save();render()},w=+p.width||100;
+const visible=()=>{const g=new Set(db.panels.flatMap(x=>x.members||[]));return db.panels.filter(p=>!g.has(p.id))};
+function card(p,i,vis){
+  const mv=k=>{const o=vis[i+k];if(!o)return;const a=db.panels.indexOf(p),b=db.panels.indexOf(o);[db.panels[a],db.panels[b]]=[db.panels[b],db.panels[a]];save();render()},w=+p.width||100;
+  const mem=p.type==='group'?db.panels.filter(b=>p.members?.includes(b.id)):[];
   return h('section',{class:'panel',style:`width:calc(${w}% - ${8*(1-w/100)}px)`},
-    menu([{label:'Edit',fn:()=>go({n:'panel',pid:p.id})},{label:'Move before',fn:()=>mv(-1)},{label:'Move after',fn:()=>mv(1)},
-      {label:'Delete',danger:1,fn:()=>{if(confirm(`Delete "${p.name}"?`)){db.panels.splice(i,1);save();render()}}}]),
+    menu([{label:'Edit',fn:()=>go({n:'panel',pid:p.id})},...mem.map(b=>({label:`Edit "${b.name}"`,fn:()=>go({n:'panel',pid:b.id})})),
+      {label:'Move before',fn:()=>mv(-1)},{label:'Move after',fn:()=>mv(1)},
+      {label:'Delete',danger:1,fn:()=>{if(confirm(`Delete "${p.name}"?`)){db.panels=db.panels.filter(x=>x!==p);db.panels.forEach(g=>{if(g.members)g.members=g.members.filter(id=>id!==p.id)});save();render()}}}]),
     p.hideName?null:h('div',{class:'pname'},p.name),PT[p.type].body(p))}
 const add=()=>go({n:'pick'});
 const views={
@@ -189,7 +201,7 @@ home(){
   const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:()=>{if(client){off=true;hangup()}else connect()}},status);
   return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
     h('main',{},!db.conn?h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn red',onclick:()=>go({n:'conn'})},'Setup a connection'))
-      :db.panels.length?h('div',{class:'panels'},db.panels.map(card))
+      :db.panels.length?h('div',{class:'panels'},visible().map((p,i,vis)=>card(p,i,vis)))
       :h('div',{class:'empty'},h('p',{},'No buttons yet'),h('button',{class:'btn',onclick:add},'Add a button')),
       db.conn&&db.panels.length?h('button',{class:'btn fab','aria-label':'Add',onclick:add},'+'):null))},
 conn(){

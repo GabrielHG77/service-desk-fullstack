@@ -16,7 +16,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px system-ui,sans-seri
 .ic{background:none;border:0;color:inherit;font-size:20px;cursor:pointer;padding:4px 8px}
 main{max-width:720px;margin:0 auto;padding:12px 16px 96px}
 .btn{border:0;border-radius:4px;padding:12px 16px;font:inherit;font-weight:600;text-transform:uppercase;cursor:pointer;background:var(--primary);color:#fff}
-.btn:active{filter:brightness(.8)}.btn.gray{background:var(--medium)}.btn.red{background:var(--danger)}.btn.sm{padding:5px 10px;font-size:12px}
+.btn:active{filter:brightness(.8)}.btn.gray{background:var(--medium)}.btn.red{background:var(--danger)}.btn.sm{padding:5px 10px;font-size:12px}.btn.lg{padding:16px 24px;font-size:17px}
 .fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;font-size:30px;padding:0;box-shadow:0 3px 8px #0006;z-index:6}
 .fld{margin:0 0 12px}.lh{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);margin-bottom:3px}
 .fld label{font-size:13px;color:var(--sub)}.fld .chk{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--fg)}.chk input{width:auto}
@@ -31,11 +31,10 @@ input[type=color]{padding:2px;height:40px}
 .menu{position:relative;display:inline-block}.menu summary{list-style:none;cursor:pointer;padding:2px 8px;font-size:20px}.menu summary::-webkit-details-marker{display:none}
 .pop{position:absolute;right:0;top:100%;background:var(--card);color:var(--fg);box-shadow:0 2px 8px #0005;border-radius:6px;z-index:10;min-width:150px;display:flex;flex-direction:column}
 .pop button{background:none;border:0;text-align:left;padding:10px 14px;font:inherit;color:inherit;cursor:pointer}.pop .dng{color:var(--danger)}
-.panels{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-.panel{background:var(--card);border-radius:8px;padding:8px;box-shadow:0 1px 3px #0003;display:flex;align-items:center;gap:4px}
-.panel .pb{flex:1;min-width:0;padding:18px 8px}.panel.wide{grid-column:1/-1;flex-direction:column;align-items:stretch}
-.head{display:flex;align-items:center;justify-content:space-between;padding-left:4px}
-.grp{display:flex;flex-wrap:wrap;gap:8px}.grp .btn{flex:1 1 90px}
+.panels{display:flex;flex-wrap:wrap;gap:8px}
+.panel{background:var(--card);border-radius:8px;padding:10px;position:relative;box-shadow:0 1px 3px #0003;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.panel>*{max-width:100%}.panel .menu{position:absolute;top:2px;right:2px}.pname{font-weight:600;font-size:14px;margin-right:24px}
+.pb{min-width:90px}.grp{display:flex;flex-wrap:wrap;gap:8px;width:100%}.grp .btn{flex:1 1 90px}
 .empty{text-align:center;padding:48px 0;color:var(--sub)}
 .st{border:0;border-radius:12px;padding:3px 10px;font:12px system-ui;cursor:pointer;color:#fff;background:var(--medium)}.st.connected{background:var(--success)}.st.connecting{background:var(--warning)}.st.error{background:var(--danger)}
 #toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:90vw;background:#000d;color:#fff;padding:8px 14px;border-radius:20px;z-index:50}
@@ -80,51 +79,56 @@ function connect(){
     .on('close',()=>cl===client&&setStatus('disconnected'))
     .on('error',e=>{if(cl===client){setStatus('error');toast(e.message)}})}
 function send(p,payload){
+  const pl=String(payload);
+  if(p.confirm&&!confirm((p.confirmMsg||'<payload>').replaceAll('<payload>',pl)))return;
   if(!client?.connected)return toast('Not connected');
-  client.publish(p.topic,String(payload),{qos:+p.qos||0,retain:!!p.retain},e=>toast(e?'Error: '+e.message:`Sent ${p.topic} ← ${payload}`))}
+  const m=p.isJson&&p.jsonEnv&&pl!==''?p.jsonEnv.replaceAll('<payload>',pl):pl;
+  client.publish(p.topic,m,{qos:+p.qos||0,retain:!!p.retain},e=>toast(e?'Error: '+e.message:`Sent ${p.topic} ← ${m}`))}
 
 /* ---------- generic form builder ---------- */
 const T=(k,label,o={})=>({k,label,...o}),N=(k,label,o={})=>T(k,label,{type:'number',...o}),C=(k,label,o={})=>T(k,label,{type:'check',...o}),
   S=(k,label,opts,o={})=>T(k,label,{type:'select',opts,...o});
 function defaults(spec,o={}){for(const f of spec){if(f.row)defaults(f.row,o);else if('def'in f&&!(f.k in o))o[f.k]=structuredClone(f.def)}return o}
 let fid=0;
-function leaf(f,v){
+function leaf(f,v,change){
   const id='f'+(++fid),el=h('div',{class:'fld'}),help=f.help&&h('small',{class:'help',hidden:true},f.help);
   const qm=f.help&&h('button',{type:'button',class:'q','aria-label':'Help',onclick:()=>{help.hidden=!help.hidden}},'?');
   const add=(...k)=>el.append(...k.filter(Boolean));let subs=[];
   if(f.type==='check'){
-    const i=h('input',{type:'checkbox',id,checked:!!v[f.k]});i.onchange=()=>{v[f.k]=i.checked};
-    add(h('label',{class:'chk',for:id},i,f.label))
+    const i=h('input',{type:'checkbox',id,checked:!!v[f.k]});i.onchange=()=>{v[f.k]=i.checked;change()};
+    add(h('div',{class:'lh'},h('label',{class:'chk',for:id},i,f.label),qm),help)
   }else if(f.type==='list'){
     const box=h('div');
-    const draw=()=>{subs=[];box.replaceChildren(...v[f.k].map((it,i)=>{const s=fields(f.of,it);subs.push(s);
-      return h('div',{class:'item'},s.nodes,h('button',{type:'button',class:'btn gray sm',onclick:()=>{v[f.k].splice(i,1);draw()}},f.delLabel))}),
-      h('button',{type:'button',class:'btn sm',onclick:()=>{v[f.k].push(defaults(f.of));draw()}},f.addLabel))};
+    const draw=()=>{subs=[];box.replaceChildren(...v[f.k].map((it,i)=>{const s=fields(f.of,it,change);subs.push(s);s.sync();
+      return h('div',{class:'item'},s.nodes,h('button',{type:'button',class:'btn gray sm',onclick:()=>{v[f.k].splice(i,1);draw();change()}},f.delLabel))}),
+      h('button',{type:'button',class:'btn sm',onclick:()=>{v[f.k].push(defaults(f.of));draw();change()}},f.addLabel))};
     draw();add(h('div',{class:'lh'},f.label),box)
   }else{
     let i;
     if(f.type==='select'){i=h('select',{id},f.opts.map(([val,l])=>h('option',{value:val,selected:String(val)===String(v[f.k])},l)));
-      i.onchange=()=>{v[f.k]=f.opts.find(o=>String(o[0])===i.value)[0]}}
+      i.onchange=()=>{v[f.k]=f.opts.find(o=>String(o[0])===i.value)[0];change()}}
     else{i=h('input',{id,type:f.type||'text',value:v[f.k]??'',step:f.type==='number'?'any':null,autocomplete:f.type==='password'?'current-password':'off'});
-      i.oninput=()=>{v[f.k]=f.type==='number'?(i.value===''?'':+i.value):i.value}}
+      i.oninput=()=>{v[f.k]=f.type==='number'?(i.value===''?'':+i.value):i.value;change()}}
     add(h('div',{class:'lh'},h('label',{for:id},f.label,f.req&&h('span',{class:'req'},' *')),qm),help,i)
   }
-  return{el,check:()=>{const x=v[f.k],e=[];
-    if(f.req&&(x===''||x==null||(f.type==='list'&&!x.length)))e.push(f.err||`${f.label} is required`);
-    else if(f.val){const m=f.val(x,v);if(m)e.push(m)}
-    return[...e,...subs.flatMap(s=>s.check())]}}
+  return{el,sync:()=>{el.hidden=!!f.show&&!f.show(v)},
+    check:()=>{if(f.show&&!f.show(v))return[];const x=v[f.k],e=[];
+      if(f.req&&(x===''||x==null||(f.type==='list'&&!x.length)))e.push(f.err||`${f.label} is required`);
+      else if(f.val){const m=f.val(x,v);if(m)e.push(m)}
+      return[...e,...subs.flatMap(s=>s.check())]}}
 }
-function fields(spec,v){
+function fields(spec,v,change){
   const kids=[];
   const nodes=spec.map(f=>{
-    if(f.row){const s=fields(f.row,v);kids.push(s);return h('div',{class:'row'},s.nodes)}
-    const L=leaf(f,v);kids.push(L);return L.el});
-  return{nodes,check:()=>kids.flatMap(k=>k.check())}}
+    if(f.row){const s=fields(f.row,v,change);kids.push(s);return h('div',{class:'row'},s.nodes)}
+    const L=leaf(f,v,change);kids.push(L);return L.el});
+  return{nodes,check:()=>kids.flatMap(k=>k.check()),sync:()=>kids.forEach(k=>k.sync())}}
 function Form(spec,v,{save:onSave,cancel,label}){
-  const b=fields(spec,v),err=h('div',{class:'err'});
-  return h('form',{novalidate:true,onsubmit:e=>{e.preventDefault();const es=b.check();
+  const b=fields(spec,v,()=>b.sync()),err=h('div',{class:'err'});
+  const f=h('form',{novalidate:true,onsubmit:e=>{e.preventDefault();const es=b.check();
     err.textContent=es.length?'Fix above error(s) first\n'+es.join('\n'):'';if(!es.length)onSave(v)}},
-    b.nodes,err,h('div',{class:'btns'},h('button',{type:'button',class:'btn gray',onclick:cancel},'Cancel'),h('button',{class:'btn'},label)))}
+    b.nodes,err,h('div',{class:'btns'},h('button',{type:'button',class:'btn gray',onclick:cancel},'Cancel'),h('button',{class:'btn'},label)));
+  b.sync();return f}
 
 /* ---------- navigation / chrome ---------- */
 const stack=[];let route={n:'home'};
@@ -144,23 +148,40 @@ const CONN=[
   T('path','Path',{def:'/mqtt',help:'Websocket path of the broker, usually /mqtt'}),
   {row:[T('username','Username'),T('password','Password',{type:'password'})]}];
 const noWild=x=>/[+#]/.test(x)?'Wildcards are not allowed':null;
-const TOPIC=T('topic','Topic',{req:1,val:noWild});
-const SEND=[{row:[S('qos','QoS',[[0,'0'],[1,'1'],[2,'2']],{def:0}),C('retain','Retain')]},S('color','Button color',COLS,{def:'primary'})];
+const NAME=T('name','Panel name',{req:1}),TOPIC=T('topic','Topic',{req:1,val:noWild});
+const WIDTHS=[[100,'Full screen'],[75,'3/4 screen width'],[66,'2/3 screen width'],[50,'1/2 screen width'],[33,'1/3 screen width'],[25,'1/4 screen width']];
+const COLOR=S('color','Button color',COLS,{def:'primary'}),SIZE=S('size','Button size',[['small','Small'],['medium','Medium'],['large','Large']],{def:'medium'});
+const QR=[{row:[S('qos','QoS',[[0,'0'],[1,'1'],[2,'2']],{def:0}),C('retain','Retain')]},C('confirm','Confirm before publish'),
+  T('confirmMsg','Confirmation message',{def:'<payload>',show:v=>v.confirm})];
+const JSN=[C('isJson','Payload is JSON Data'),T('jsonEnv','JSON pattern for publish',{show:v=>v.isJson,help:'Wrap published messages in JSON. Use <payload> where the value goes, e.g. {"state":"<payload>"}'})];
+const TAIL=[C('hideName','Hide label'),S('width','Panel Width',WIDTHS,{def:100})];
+const sz=p=>p.size==='large'?' lg':p.size==='small'?' sm':'';
 const PT={
-  button:{label:'Button',fields:[T('name','Button name',{req:1}),TOPIC,T('payload','Payload',{req:1}),...SEND],
-    card:(p,m)=>h('section',{class:'panel'},h('button',{class:'btn pb',style:`background:${cv(p.color)}`,onclick:()=>send(p,p.payload)},p.name),m)},
-  group:{label:'Button group',fields:[T('name','Group name',{req:1}),TOPIC,
+  button:{label:'Button',fields:[NAME,TOPIC,T('payload','Payload',{req:1,err:'Payload is required',show:v=>!v.noPayload}),C('noPayload','No payload'),
+    T('payloadRel','Separate payload on release',{help:'Publish a second payload when the button is released'}),C('repeat','Repeat publish until released'),
+    N('repInt','Repeat interval in milliseconds',{def:1000,show:v=>v.repeat,req:1,err:'Repeat interval is required',val:x=>x>=100&&x<=10000?null:'100-10000 allowed'}),
+    COLOR,SIZE,C('fit','Fit to panel width'),...QR,...JSN,...TAIL],
+    body(p){const b=h('button',{class:'btn pb'+sz(p),style:`background:${cv(p.color)}${p.fit?';width:100%':''}`},p.name),pl=()=>p.noPayload?'':p.payload;
+      if((p.repeat||p.payloadRel)&&!p.confirm){let tm,down=false;   // hold behaviour needs pointer events; plain taps use click (keyboard friendly)
+        const up=()=>{if(!down)return;down=false;clearInterval(tm);if(p.payloadRel)send(p,p.payloadRel)};
+        b.onpointerdown=()=>{down=true;send(p,pl());if(p.repeat)tm=setInterval(()=>send(p,pl()),+p.repInt||1000)};
+        b.onpointerup=b.onpointerleave=b.onpointercancel=up}
+      else b.onclick=()=>send(p,pl());
+      return b}},
+  group:{label:'Button group',fields:[NAME,TOPIC,
     T('items','Buttons',{type:'list',req:1,err:'Add at least one button',addLabel:'Add button',delLabel:'Delete this button',def:[{label:'',payload:''}],
-      of:[T('label','Label for button',{req:1,err:'Button label is required'}),T('payload','Payload for button',{req:1,err:'Payload is required'})]}),...SEND],
-    card:(p,m)=>h('section',{class:'panel wide'},h('div',{class:'head'},h('b',{},p.name),m),
-      h('div',{class:'grp'},p.items.map(it=>h('button',{class:'btn',style:`background:${cv(p.color)}`,onclick:()=>send(p,it.payload)},it.label))))}
+      of:[T('label','Label for button',{req:1,err:'Button label is required'}),T('payload','Payload for button',{req:1,err:'Payload is required'})]}),
+    COLOR,SIZE,...QR,...JSN,...TAIL],
+    body:p=>h('div',{class:'grp'},p.items.map(it=>h('button',{class:'btn'+sz(p),style:`background:${cv(p.color)}`,onclick:()=>send(p,it.payload)},it.label)))}
 };
 
 /* ---------- views ---------- */
 function card(p,i){
-  const mv=k=>{const j=i+k;if(j<0||j>=db.panels.length)return;[db.panels[i],db.panels[j]]=[db.panels[j],db.panels[i]];save();render()};
-  return PT[p.type].card(p,menu([{label:'Edit',fn:()=>go({n:'panel',pid:p.id})},{label:'Move before',fn:()=>mv(-1)},{label:'Move after',fn:()=>mv(1)},
-    {label:'Delete',danger:1,fn:()=>{if(confirm(`Delete "${p.name}"?`)){db.panels.splice(i,1);save();render()}}}]))}
+  const mv=k=>{const j=i+k;if(j<0||j>=db.panels.length)return;[db.panels[i],db.panels[j]]=[db.panels[j],db.panels[i]];save();render()},w=+p.width||100;
+  return h('section',{class:'panel',style:`width:calc(${w}% - ${8*(1-w/100)}px)`},
+    menu([{label:'Edit',fn:()=>go({n:'panel',pid:p.id})},{label:'Move before',fn:()=>mv(-1)},{label:'Move after',fn:()=>mv(1)},
+      {label:'Delete',danger:1,fn:()=>{if(confirm(`Delete "${p.name}"?`)){db.panels.splice(i,1);save();render()}}}]),
+    p.hideName?null:h('div',{class:'pname'},p.name),PT[p.type].body(p))}
 const add=()=>go({n:'pick'});
 const views={
 home(){
@@ -177,7 +198,7 @@ conn(){
 pick(){return page('Select panel type to add',Object.entries(PT).map(([k,t])=>h('div',{class:'pick',tabindex:0,role:'button',onclick:()=>go({n:'panel',type:k,pick:1})},h('b',{},t.label))))},
 panel({pid,type,pick}){
   const ex=pid&&db.panels.find(p=>p.id===pid),t=PT[ex?ex.type:type],v=ex?structuredClone(ex):defaults(t.fields,{id:uid(),type});
-  return page((ex?'Edit ':'Add ')+t.label,Form(t.fields,v,{label:ex?'SAVE':'CREATE',cancel:()=>back(),
+  return page((ex?'Edit ':'Add ')+t.label,Form(t.fields,v,{label:ex?'SAVE':'CREATE',cancel:()=>{if(pick)stack.pop();back()},
     save:x=>{const i=db.panels.findIndex(p=>p.id===x.id);i<0?db.panels.push(x):db.panels[i]=x;save();if(pick)stack.pop();back()}}))}
 };
 function render(){$('#app').replaceChildren(views[route.n](route));window.scrollTo(0,0)}

@@ -10,13 +10,13 @@
 [data-theme=dark]{--bg:#121212;--card:#1e1e1e;--fg:#f2f2f2;--line:#3a3a3a;--sub:#aaa}
 *{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--fg)}
-.bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--primary);color:#fff}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--primary);color:#fff}
 .bar h1{font-size:18px;margin:0;font-weight:500}.sp{flex:1}
 .ic{background:none;border:0;color:inherit;font-size:20px;cursor:pointer;padding:4px 8px}
-main{max-width:720px;margin:0 auto;padding:12px 12px 96px}
+main{max-width:720px;margin:0 auto;padding:12px 16px 96px}
 .btn{border:0;border-radius:4px;padding:10px 16px;font:inherit;font-weight:600;text-transform:uppercase;cursor:pointer;background:var(--primary);color:#fff}
 .btn.gray{background:var(--medium)}.btn.red{background:var(--danger)}.btn.sm{padding:5px 10px;font-size:12px}.btn.lg{padding:16px 24px;font-size:17px}
-.fab{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;font-size:30px;padding:0;box-shadow:0 3px 8px #0006;z-index:6}
+.fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;font-size:30px;padding:0;box-shadow:0 3px 8px #0006;z-index:6}
 .fld{margin:0 0 12px}.lh{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);margin-bottom:3px}
 .fld label{font-size:13px;color:var(--sub)}.fld .chk{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--fg)}.chk input{width:auto}
 input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--fg);font:inherit}
@@ -43,9 +43,9 @@ input[type=color]{padding:2px;height:40px}input[type=range]{padding:0;border:0;b
 .led{width:36px;height:36px;border-radius:50%;box-shadow:inset 0 0 6px #0006}
 .pbar{width:100%;height:14px;background:var(--line);border-radius:7px;overflow:hidden}.pbar i{display:block;height:100%}
 .pbar.v{width:14px;height:120px;display:flex;align-items:flex-end}.pbar.v i{width:100%}
-.gauge,.graph{width:100%;max-width:300px}.log{width:100%;max-height:200px;overflow:auto;font:13px monospace;white-space:pre-wrap;word-break:break-all}
+.gauge,.graph{display:block;width:100%;max-width:300px}.log{width:100%;max-height:200px;overflow:auto;font:13px monospace;white-space:pre-wrap;word-break:break-all}
 .empty{text-align:center;padding:48px 0;color:var(--sub)}
-.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);z-index:5}
+.tabs{position:fixed;left:0;right:0;bottom:0;padding-bottom:env(safe-area-inset-bottom,0px);display:flex;background:var(--card);border-top:1px solid var(--line);z-index:5}
 .tabs button{flex:1;padding:14px 4px;border:0;background:none;color:var(--sub);font:inherit;cursor:pointer}.tabs .on{color:var(--primary);font-weight:700;border-top:3px solid var(--primary)}
 .st{border:0;border-radius:12px;padding:3px 10px;font:12px system-ui;cursor:pointer;color:#fff;background:var(--medium)}.st.connected{background:var(--success)}.st.connecting{background:var(--warning)}.st.error{background:var(--danger)}
 dialog{border:0;border-radius:8px;padding:16px;width:min(92vw,420px);background:var(--card);color:var(--fg)}dialog h2{margin:0 0 12px;font-size:18px}
@@ -73,7 +73,7 @@ const cv=c=>COL[c]||(/^#[0-9a-f]{3,8}$/i.test(c)?c:'#92949c');   // also keeps r
 /* ---------- storage (ponytail: password in plain localStorage; fine for personal use, encrypt if the device is shared) ---------- */
 const KEY='mqtt-panel-v1';
 let db;try{db=JSON.parse(localStorage.getItem(KEY))}catch{}
-db=db&&Array.isArray(db.connections)?db:{dark:false,connections:[]};
+db=db&&Array.isArray(db.connections)?db:{dark:matchMedia('(prefers-color-scheme: dark)').matches,connections:[]};
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch{toast('Could not save (storage blocked)')}};
 
 /* ---------- MQTT helpers ---------- */

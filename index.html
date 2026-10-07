@@ -2,54 +2,43 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MQTT Panel</title>
 <style>
 :root{--primary:#3880ff;--secondary:#3dc2ff;--tertiary:#5260ff;--success:#2dd36f;--warning:#ffc409;--danger:#eb445a;--medium:#92949c;
   --bg:#f4f5f8;--card:#fff;--fg:#1c1c1e;--line:#d7d8da;--sub:#666}
-[data-theme=dark]{--bg:#121212;--card:#1e1e1e;--fg:#f2f2f2;--line:#3a3a3a;--sub:#aaa}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#121212;--card:#1e1e1e;--fg:#f2f2f2;--line:#3a3a3a;--sub:#aaa;color-scheme:dark}}
+:root[data-theme=dark]{--bg:#121212;--card:#1e1e1e;--fg:#f2f2f2;--line:#3a3a3a;--sub:#aaa;color-scheme:dark}
 *{box-sizing:border-box}[hidden]{display:none!important}
-body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px system-ui,sans-serif}
 .bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--primary);color:#fff}
 .bar h1{font-size:18px;margin:0;font-weight:500}.sp{flex:1}
 .ic{background:none;border:0;color:inherit;font-size:20px;cursor:pointer;padding:4px 8px}
 main{max-width:720px;margin:0 auto;padding:12px 16px 96px}
-.btn{border:0;border-radius:4px;padding:10px 16px;font:inherit;font-weight:600;text-transform:uppercase;cursor:pointer;background:var(--primary);color:#fff}
-.btn.gray{background:var(--medium)}.btn.red{background:var(--danger)}.btn.sm{padding:5px 10px;font-size:12px}.btn.lg{padding:16px 24px;font-size:17px}
+.btn{border:0;border-radius:4px;padding:12px 16px;font:inherit;font-weight:600;text-transform:uppercase;cursor:pointer;background:var(--primary);color:#fff}
+.btn:active{filter:brightness(.8)}.btn.gray{background:var(--medium)}.btn.red{background:var(--danger)}.btn.sm{padding:5px 10px;font-size:12px}
 .fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;font-size:30px;padding:0;box-shadow:0 3px 8px #0006;z-index:6}
 .fld{margin:0 0 12px}.lh{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);margin-bottom:3px}
 .fld label{font-size:13px;color:var(--sub)}.fld .chk{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--fg)}.chk input{width:auto}
 input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--fg);font:inherit}
-input[type=color]{padding:2px;height:40px}input[type=range]{padding:0;border:0;background:none}
+input[type=color]{padding:2px;height:40px}
 .row{display:flex;gap:8px}.row>*{flex:1;min-width:0}.req{color:var(--danger)}
 .q{border:0;border-radius:50%;width:18px;height:18px;font-size:11px;background:var(--primary);color:#fff;cursor:pointer;padding:0}
 .help{color:var(--sub);display:block;margin-top:3px}.err{white-space:pre-line;color:var(--danger);margin:8px 0}
 .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
-.sec{border-top:1px solid var(--line);padding:8px 0;margin:8px 0}.sec summary{cursor:pointer;padding:6px 0;font-weight:600}
 .item{border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:8px}
-.drow,.conn{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
-.conn{background:var(--card);border-radius:8px;padding:12px;margin-bottom:8px;border:0;cursor:pointer}.conn small{color:var(--sub);display:block}
+.pick{background:var(--card);border-radius:8px;padding:16px;margin-bottom:8px;cursor:pointer}
 .menu{position:relative;display:inline-block}.menu summary{list-style:none;cursor:pointer;padding:2px 8px;font-size:20px}.menu summary::-webkit-details-marker{display:none}
-.pop{position:absolute;right:0;top:100%;background:var(--card);color:var(--fg);box-shadow:0 2px 8px #0005;border-radius:6px;z-index:10;min-width:170px;display:flex;flex-direction:column}
+.pop{position:absolute;right:0;top:100%;background:var(--card);color:var(--fg);box-shadow:0 2px 8px #0005;border-radius:6px;z-index:10;min-width:150px;display:flex;flex-direction:column}
 .pop button{background:none;border:0;text-align:left;padding:10px 14px;font:inherit;color:inherit;cursor:pointer}.pop .dng{color:var(--danger)}
-.panels{display:flex;flex-wrap:wrap;gap:8px}
-.panel{background:var(--card);border-radius:8px;padding:10px;position:relative;box-shadow:0 1px 3px #0003;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
-.panel>*{max-width:100%}.panel .menu{position:absolute;top:2px;right:2px}.pname{font-weight:600;font-size:14px;margin-right:24px;min-height:1em}
-.panel input[type=range],.panel select,.panel input:not([type=radio]){width:100%}.val{font-size:20px}
-.pb{min-width:90px}.sw{position:relative;display:inline-block;width:52px;height:30px}.sw input{opacity:0;width:0;height:0}
-.tr{position:absolute;inset:0;background:var(--medium);border-radius:30px;transition:.2s}
-.tr:before{content:'';position:absolute;width:24px;height:24px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
-.sw input:checked+.tr{background:var(--c,var(--primary))}.sw input:checked+.tr:before{transform:translateX(22px)}
-.led{width:36px;height:36px;border-radius:50%;box-shadow:inset 0 0 6px #0006}
-.pbar{width:100%;height:14px;background:var(--line);border-radius:7px;overflow:hidden}.pbar i{display:block;height:100%}
-.pbar.v{width:14px;height:120px;display:flex;align-items:flex-end}.pbar.v i{width:100%}
-.gauge,.graph{display:block;width:100%;max-width:300px}.log{width:100%;max-height:200px;overflow:auto;font:13px monospace;white-space:pre-wrap;word-break:break-all}
+.panels{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.panel{background:var(--card);border-radius:8px;padding:8px;box-shadow:0 1px 3px #0003;display:flex;align-items:center;gap:4px}
+.panel .pb{flex:1;min-width:0;padding:18px 8px}.panel.wide{grid-column:1/-1;flex-direction:column;align-items:stretch}
+.head{display:flex;align-items:center;justify-content:space-between;padding-left:4px}
+.grp{display:flex;flex-wrap:wrap;gap:8px}.grp .btn{flex:1 1 90px}
 .empty{text-align:center;padding:48px 0;color:var(--sub)}
-.tabs{position:fixed;left:0;right:0;bottom:0;padding-bottom:env(safe-area-inset-bottom,0px);display:flex;background:var(--card);border-top:1px solid var(--line);z-index:5}
-.tabs button{flex:1;padding:14px 4px;border:0;background:none;color:var(--sub);font:inherit;cursor:pointer}.tabs .on{color:var(--primary);font-weight:700;border-top:3px solid var(--primary)}
 .st{border:0;border-radius:12px;padding:3px 10px;font:12px system-ui;cursor:pointer;color:#fff;background:var(--medium)}.st.connected{background:var(--success)}.st.connecting{background:var(--warning)}.st.error{background:var(--danger)}
-dialog{border:0;border-radius:8px;padding:16px;width:min(92vw,420px);background:var(--card);color:var(--fg)}dialog h2{margin:0 0 12px;font-size:18px}
-#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#000d;color:#fff;padding:8px 14px;border-radius:20px;z-index:50}
+#toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:90vw;background:#000d;color:#fff;padding:8px 14px;border-radius:20px;z-index:50}
 </style>
 </head>
 <body>
@@ -62,346 +51,137 @@ const $=s=>document.querySelector(s);
 const h=(tag,attrs,...kids)=>{const e=document.createElement(tag);
   for(const[k,v]of Object.entries(attrs||{})){if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else if(v===true)e.setAttribute(k,'');else if(v!==false&&v!=null)e.setAttribute(k,v)}
   for(const c of kids.flat())if(c!=null&&c!==false)e.append(c.nodeType?c:String(c));return e};
-const S_=(tag,a={},...k)=>{const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[n,v]of Object.entries(a))e.setAttribute(n,v);e.append(...k);return e};
 const uid=()=>Math.random().toString(36).slice(2,10);
 const rid=()=>Array.from(crypto.getRandomValues(new Uint8Array(10)),b=>'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[b%62]).join('');
-let tt;const toast=m=>{const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,3500)};
-const COL={primary:'#3880ff',secondary:'#3dc2ff',tertiary:'#5260ff',success:'#2dd36f',warning:'#ffc409',danger:'#eb445a',medium:'#92949c',dark:'#222428'};
+let tt;const toast=m=>{const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,2500)};
+const COL={primary:'#3880ff',secondary:'#3dc2ff',tertiary:'#5260ff',success:'#2dd36f',warning:'#ffc409',danger:'#eb445a',medium:'#92949c'};
 const COLS=Object.keys(COL).map(k=>[k,k[0].toUpperCase()+k.slice(1)]);
-const cv=c=>COL[c]||(/^#[0-9a-f]{3,8}$/i.test(c)?c:'#92949c');   // also keeps restored JSON out of style attrs
+const cv=c=>COL[c]||COL.primary;
 
 /* ---------- storage (ponytail: password in plain localStorage; fine for personal use, encrypt if the device is shared) ---------- */
-const KEY='mqtt-panel-v1';
+const KEY='mqtt-buttons-v1';
 let db;try{db=JSON.parse(localStorage.getItem(KEY))}catch{}
-db=db&&Array.isArray(db.connections)?db:{dark:matchMedia('(prefers-color-scheme: dark)').matches,connections:[]};
+db=db&&Array.isArray(db.panels)?db:{conn:null,panels:[]};
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch{toast('Could not save (storage blocked)')}};
 
-/* ---------- MQTT helpers ---------- */
-const matches=(f,t)=>{const a=f.split('/'),b=t.split('/');for(let i=0;i<a.length;i++){if(a[i]==='#')return true;if(i>=b.length)return false;if(a[i]!=='+'&&a[i]!==b[i])return false}return a.length===b.length};
-// ponytail: subset of JsonPath ($.a.b[0] / ['a']); full JsonPath if filters/wildcards are needed
-const jpath=(s,p)=>{try{let o=JSON.parse(s);for(const k of p.replace(/^\$/,'').match(/[^.[\]'"]+/g)||[])o=o?.[k];return o==null?null:typeof o==='object'?JSON.stringify(o):String(o)}catch{return null}};
-const parse=(p,raw)=>p.isJson&&p.jsonPath?jpath(raw,p.jsonPath):raw;
-const num=(p,raw)=>{const v=parse(p,raw);if(v==null||v==='')return null;const n=Number(v)*(+p.factor||1);return isNaN(n)?null:n};
-const disp=(p,n)=>(p.prec===''||p.prec==null?String(n):Number(n).toFixed(p.prec))+(p.unit?' '+p.unit:'');
-
-let client=null,status='disconnected',activeConn=null,curDash=null,mounted=[];const subd=new Set(),STATE={};
-const ST=p=>STATE[p.id]??={};
-const pf=(p,t)=>(curDash?.prefix&&!p.noPrefix?curDash.prefix:'')+t;
-const setStatus=s=>{status=s;const e=document.getElementById('st');if(e){e.className='st '+s;e.textContent=s}};
-function syncSubs(){if(!client?.connected)return;const w=new Map();
-  mounted.forEach(m=>m.filters.forEach(f=>w.set(f,Math.max(w.get(f)||0,+m.p.qos||0))));
-  for(const f of subd)if(!w.has(f)){client.unsubscribe(f);subd.delete(f)}
-  for(const[f,q]of w){client.subscribe(f,{qos:q});subd.add(f)}}
-function dispatch(t,raw){for(const m of mounted)m.filters.forEach((f,i)=>{if(matches(f,t))m.onMsg?.(t,raw,i)})}
-function connect(c){
-  hangup();activeConn=c.id;
+/* ---------- MQTT ---------- */
+let client=null,status='disconnected',off=false;
+const setStatus=s=>{status=s;const e=$('#st');if(e){e.className='st '+s;e.textContent=s}};
+function hangup(){if(client){const c=client;client=null;c.end(true)}setStatus('disconnected')}
+function connect(){
+  hangup();off=false;const c=db.conn;
   if(typeof mqtt==='undefined'){setStatus('error');return toast('MQTT library failed to load (check internet)')}
-  const path='/'+String(c.path||'mqtt').replace(/^\/+/,'');
-  const o={clientId:c.clientId||rid(),username:c.username||undefined,password:c.password||undefined,keepalive:+c.keepAlive,clean:!!c.clean,reconnectPeriod:3000,connectTimeout:20000};
-  if(c.will)o.will={topic:c.willTopic,payload:c.willPayload||'',qos:+c.willQoS||0,retain:!!c.willRetain};
   setStatus('connecting');let cl;
-  try{cl=client=mqtt.connect(`${c.protocol==='wss'?'wss':'ws'}://${c.host}:${c.port}${path}`,o)}catch(e){setStatus('error');return toast(e.message)}
-  cl.on('connect',()=>{if(cl!==client)return;setStatus('connected');subd.clear();syncSubs()})
+  try{cl=client=mqtt.connect(`${c.protocol==='wss'?'wss':'ws'}://${c.host}:${c.port}/${String(c.path||'mqtt').replace(/^\/+/,'')}`,
+    {clientId:rid(),username:c.username||undefined,password:c.password||undefined,reconnectPeriod:3000,connectTimeout:20000})}
+  catch(e){setStatus('error');return toast(e.message)}
+  cl.on('connect',()=>cl===client&&setStatus('connected'))
     .on('reconnect',()=>cl===client&&setStatus('connecting'))
     .on('close',()=>cl===client&&setStatus('disconnected'))
-    .on('error',e=>{if(cl===client){setStatus('error');toast(e.message)}})
-    .on('message',(t,b)=>dispatch(t,b.toString()));
-}
-function hangup(){if(client){const c=client;client=null;c.end(true)}subd.clear();setStatus('disconnected')}
-function leave(){hangup();activeConn=null;mounted=[];for(const k in STATE)delete STATE[k]}
-function pub(p,payload){
-  const pl=String(payload);
-  if(p.confirm&&!confirm((p.confirmMsg||'<payload>').replaceAll('<payload>',pl)))return false;
-  if(!client?.connected){toast('Not connected');return false}
-  const m=p.isJson&&p.jsonEnv&&pl!==''?p.jsonEnv.replaceAll('<payload>',pl):pl;
-  client.publish(pf(p,p.topic),m,{qos:+p.qos||0,retain:!!p.retain});return true}
+    .on('error',e=>{if(cl===client){setStatus('error');toast(e.message)}})}
+function send(p,payload){
+  if(!client?.connected)return toast('Not connected');
+  client.publish(p.topic,String(payload),{qos:+p.qos||0,retain:!!p.retain},e=>toast(e?'Error: '+e.message:`Sent ${p.topic} ← ${payload}`))}
 
 /* ---------- generic form builder ---------- */
 const T=(k,label,o={})=>({k,label,...o}),N=(k,label,o={})=>T(k,label,{type:'number',...o}),C=(k,label,o={})=>T(k,label,{type:'check',...o}),
   S=(k,label,opts,o={})=>T(k,label,{type:'select',opts,...o});
-function defaults(spec,o={}){for(const f of spec){if(f.row)defaults(f.row,o);else if(f.fields)defaults(f.fields,o);else if(f.k&&'def'in f&&!(f.k in o))o[f.k]=structuredClone(f.def)}return o}
+function defaults(spec,o={}){for(const f of spec){if(f.row)defaults(f.row,o);else if('def'in f&&!(f.k in o))o[f.k]=structuredClone(f.def)}return o}
 let fid=0;
-function leaf(f,v,change){
+function leaf(f,v){
   const id='f'+(++fid),el=h('div',{class:'fld'}),help=f.help&&h('small',{class:'help',hidden:true},f.help);
   const qm=f.help&&h('button',{type:'button',class:'q','aria-label':'Help',onclick:()=>{help.hidden=!help.hidden}},'?');
-  const lab=h('label',{for:id},f.label,f.req&&h('span',{class:'req'},' *'));
-  let subs=[];const add=(...k)=>el.append(...k.filter(x=>x!=null&&x!==false));
+  const add=(...k)=>el.append(...k.filter(Boolean));let subs=[];
   if(f.type==='check'){
-    const i=h('input',{type:'checkbox',id,checked:!!v[f.k]});i.onchange=()=>{v[f.k]=i.checked;change()};
-    add(h('div',{class:'lh'},h('label',{class:'chk',for:id},i,f.label),qm),help)
+    const i=h('input',{type:'checkbox',id,checked:!!v[f.k]});i.onchange=()=>{v[f.k]=i.checked};
+    add(h('label',{class:'chk',for:id},i,f.label))
   }else if(f.type==='list'){
     const box=h('div');
-    const draw=()=>{subs=[];box.replaceChildren(...v[f.k].map((it,i)=>{const s=fields(f.of,it,change);subs.push(s);s.sync();
-      return h('div',{class:'item'},s.nodes,h('button',{type:'button',class:'btn gray sm',onclick:()=>{v[f.k].splice(i,1);draw();change()}},f.delLabel||'Delete'))}),
-      h('button',{type:'button',class:'btn sm',onclick:()=>{v[f.k].push(defaults(f.of));draw();change()}},f.addLabel||'Add'))};
-    draw();add(h('div',{class:'lh'},f.label,qm),help,box)
+    const draw=()=>{subs=[];box.replaceChildren(...v[f.k].map((it,i)=>{const s=fields(f.of,it);subs.push(s);
+      return h('div',{class:'item'},s.nodes,h('button',{type:'button',class:'btn gray sm',onclick:()=>{v[f.k].splice(i,1);draw()}},f.delLabel))}),
+      h('button',{type:'button',class:'btn sm',onclick:()=>{v[f.k].push(defaults(f.of));draw()}},f.addLabel))};
+    draw();add(h('div',{class:'lh'},f.label),box)
   }else{
     let i;
     if(f.type==='select'){i=h('select',{id},f.opts.map(([val,l])=>h('option',{value:val,selected:String(val)===String(v[f.k])},l)));
-      i.onchange=()=>{v[f.k]=f.opts.find(o=>String(o[0])===i.value)[0];change()}}
-    else{i=h('input',{id,type:f.type||'text',value:v[f.k]??'',placeholder:f.ph,step:f.type==='number'?'any':null,autocomplete:f.type==='password'?'current-password':'off'});
-      i.oninput=()=>{v[f.k]=f.type==='number'?(i.value===''?'':+i.value):i.value;change()}}
-    const eye=f.type==='password'&&h('button',{type:'button',class:'ic','aria-label':'Show password',onclick:()=>{i.type=i.type==='password'?'text':'password'}},'👁');
-    add(h('div',{class:'lh'},lab,qm),help,eye?h('div',{class:'row'},i,h('div',{style:'flex:0'},eye)):i)
+      i.onchange=()=>{v[f.k]=f.opts.find(o=>String(o[0])===i.value)[0]}}
+    else{i=h('input',{id,type:f.type||'text',value:v[f.k]??'',step:f.type==='number'?'any':null,autocomplete:f.type==='password'?'current-password':'off'});
+      i.oninput=()=>{v[f.k]=f.type==='number'?(i.value===''?'':+i.value):i.value}}
+    add(h('div',{class:'lh'},h('label',{for:id},f.label,f.req&&h('span',{class:'req'},' *')),qm),help,i)
   }
-  return{el,
-    sync:()=>{el.hidden=!!f.show&&!f.show(v)},
-    check:()=>{if(f.show&&!f.show(v))return[];const x=v[f.k],e=[];
-      if(f.req&&(x===''||x==null||(f.type==='list'&&!x.length)))e.push(f.err||`${f.label} is required`);
-      else if(f.val){const m=f.val(x,v);if(m)e.push(m)}
-      return[...e,...subs.flatMap(s=>s.check())]}}
+  return{el,check:()=>{const x=v[f.k],e=[];
+    if(f.req&&(x===''||x==null||(f.type==='list'&&!x.length)))e.push(f.err||`${f.label} is required`);
+    else if(f.val){const m=f.val(x,v);if(m)e.push(m)}
+    return[...e,...subs.flatMap(s=>s.check())]}}
 }
-function fields(spec,v,change){
+function fields(spec,v){
   const kids=[];
   const nodes=spec.map(f=>{
-    if(f.node)return f.node(v,change);
-    if(f.fields||f.row){const s=fields(f.fields||f.row,v,change);kids.push(s);
-      return f.row?h('div',{class:'row'},s.nodes):h('details',{class:'sec',open:!!f.open},h('summary',{},f.section),s.nodes)}
-    const L=leaf(f,v,change);kids.push(L);return L.el});
-  return{nodes,check:()=>kids.flatMap(k=>k.check()),sync:()=>kids.forEach(k=>k.sync())}}
-function Form(spec,v,{save:onSave,cancel,label='SAVE'}){
-  const b=fields(spec,v,()=>b.sync()),err=h('div',{class:'err'});
-  const f=h('form',{novalidate:true,onsubmit:e=>{e.preventDefault();const es=b.check();
-    err.textContent=es.length?'Fix above error(s) first\n'+es.join('\n'):'';
-    if(es.length){f.querySelectorAll('details.sec').forEach(d=>d.open=true);return}onSave(v)}},
-    b.nodes,err,h('div',{class:'btns'},h('button',{type:'button',class:'btn gray',onclick:cancel},'Cancel'),h('button',{class:'btn'},label)));
-  b.sync();return f}
-function modal(title,build){const d=h('dialog',{},h('h2',{},title));const close=()=>{d.close();d.remove()};
-  d.append(build(close));d.addEventListener('cancel',()=>d.remove());document.body.append(d);d.showModal()}
+    if(f.row){const s=fields(f.row,v);kids.push(s);return h('div',{class:'row'},s.nodes)}
+    const L=leaf(f,v);kids.push(L);return L.el});
+  return{nodes,check:()=>kids.flatMap(k=>k.check())}}
+function Form(spec,v,{save:onSave,cancel,label}){
+  const b=fields(spec,v),err=h('div',{class:'err'});
+  return h('form',{novalidate:true,onsubmit:e=>{e.preventDefault();const es=b.check();
+    err.textContent=es.length?'Fix above error(s) first\n'+es.join('\n'):'';if(!es.length)onSave(v)}},
+    b.nodes,err,h('div',{class:'btns'},h('button',{type:'button',class:'btn gray',onclick:cancel},'Cancel'),h('button',{class:'btn'},label)))}
 
 /* ---------- navigation / chrome ---------- */
-const stack=[];let route={n:'connections'};
-const go=r=>{stack.push(route);route=r;render()},back=()=>{route=stack.pop()||{n:'connections'};render()},replace=r=>{route=r;render()};
+const stack=[];let route={n:'home'};
+const go=r=>{stack.push(route);route=r;render()},back=()=>{route=stack.pop()||{n:'home'};render()};
 const menu=items=>h('details',{class:'menu'},h('summary',{'aria-label':'Menu'},'⋮'),
-  h('div',{class:'pop'},items.filter(Boolean).map(i=>h('button',{type:'button',class:i.danger?'dng':'',onclick:e=>{e.target.closest('details').open=false;i.fn()}},i.label))));
+  h('div',{class:'pop'},items.map(i=>h('button',{type:'button',class:i.danger?'dng':'',onclick:e=>{e.target.closest('details').open=false;i.fn()}},i.label))));
 document.addEventListener('click',e=>document.querySelectorAll('details.menu[open]').forEach(d=>{if(!d.contains(e.target))d.open=false}));
-const bar=(title,{back:b=true,right,color}={})=>h('header',{class:'bar',style:color?`background:${cv(color)}`:null},
+const bar=(title,{back:b=true,right}={})=>h('header',{class:'bar'},
   b?h('button',{class:'ic','aria-label':'Back',onclick:()=>back()},'←'):null,h('h1',{},title),h('span',{class:'sp'}),right);
-const page=(title,body,o)=>h('div',{},bar(title,o),h('main',{},body));
-const reid=c=>{const n=structuredClone(c);n.id=uid();(n.dashboards||[]).forEach(d=>{d.id=uid();d.panels.forEach(p=>p.id=uid())});return n};
-const fixHome=ds=>{if(ds.length&&!ds.some(d=>d.home))ds[0].home=true};
-const setHome=(ds,d)=>{if(d.home)ds.forEach(x=>{if(x!==d)x.home=false});fixHome(ds)};
+const page=(title,body)=>h('div',{},bar(title),h('main',{},body));
 
-/* ---------- connection / dashboard specs ---------- */
-const WIDTHS=[[100,'Full screen'],[75,'3/4 screen width'],[66,'2/3 screen width'],[50,'1/2 screen width'],[33,'1/3 screen width'],[25,'1/4 screen width']];
-const DASH=[T('name','Dashboard name',{req:1}),
-  T('prefix','Dashboard prefix topic',{help:'Optional prefix for this dashboard. Useful for public broker'}),
-  S('color','Dashboard theme color',[['light','Light'],['primary','Primary'],['success','Success'],['warning','Warning'],['danger','Danger']],{def:'light'}),
-  C('home','Set as connection home',{help:'Choosing this option will allow the dashboard open by default when you select a connection'})];
-function dashDialog(v,onSave){modal(v.id?'Edit Dashboard':'Add Dashboard',close=>Form(DASH,v,{cancel:close,save:x=>{close();onSave(x)}}))}
+/* ---------- forms ---------- */
 const CONN=[
-  T('name','Connection name',{req:1,help:'Friendly connection name'}),
-  T('clientId','Client ID',{help:'Enter client-id or leave blank for randomly generate'}),
   T('host','Broker address',{req:1,err:'Broker host address is required',help:'DNS/IP address of MQTT broker. e.g. test.mosquitto.org or 192.168.1.5',val:x=>/^[\w.-]+$/.test(x)?null:'Invalid host address'}),
   {row:[N('port','Port',{req:1,def:8080,err:'Port number is required',val:x=>x>=1&&x<=65535?null:'Invalid port'}),
-    S('protocol','Network protocol',[['ws','Websocket'],['wss','Websocket-SSL']],{def:'ws',help:'Browsers only speak MQTT over Websocket (TCP is not possible). Usual ports: 8080 Websocket, 8081 Websocket-SSL. On an https page use Websocket-SSL.'})]},
-  T('path','Path',{def:'/mqtt'}),
-  {node:(v,change)=>{const box=h('div',{class:'fld'});
-    const draw=()=>{box.replaceChildren(h('div',{class:'lh'},'Add Dashboard ',h('button',{type:'button',class:'btn sm',onclick:()=>dashDialog(defaults(DASH,{}),x=>{x.id=uid();x.panels=[];v.dashboards.push(x);setHome(v.dashboards,x);draw();change()})},'+')),
-      ...v.dashboards.map(d=>h('div',{class:'drow'},h('span',{class:'sp'},d.home?'🏠 ':'',d.name),
-        menu([{label:'Edit',fn:()=>dashDialog({...d},x=>{Object.assign(d,x);setHome(v.dashboards,d);draw()})},
-          {label:'Delete',danger:1,fn:()=>{if(d.home&&v.dashboards.length>1)return alert('You can not delete the home dashboard of a connection. Make another dashboard as connection home and then delete this dashboard.');
-            v.dashboards.splice(v.dashboards.indexOf(d),1);draw()}}]))))};
-    draw();return box}},
-  {section:'Additional options',fields:[
-    {row:[T('username','Username',{help:'Optional username and password for authentication'}),T('password','Password',{type:'password'})]},
-    C('autoConnect','Auto connect',{def:true}),
-    N('keepAlive','Keep alive',{req:1,def:300,err:'Keep alive is required',help:'Seconds',val:x=>x===0||(x>=60&&x<=86400)?null:'0 or 60-86400 allowed'}),
-    C('clean','Clean session',{def:true}),
-    C('will','Enable will message'),
-    T('willTopic','Topic',{req:1,show:v=>v.will,val:x=>/[+#]/.test(x)?'Wildcards are not allowed':null}),
-    T('willPayload','Payload',{show:v=>v.will}),
-    {row:[S('willQoS','QoS',[[0,'0'],[1,'1'],[2,'2']],{def:0,show:v=>v.will}),C('willRetain','Retain',{show:v=>v.will})]}]}];
-
-/* ---------- panel types ---------- */
-const QOS=S('qos','QoS',[[0,'0'],[1,'1'],[2,'2']],{def:0});
-const PUB=[{row:[QOS,C('retain','Retain')]},C('confirm','Confirm before publish'),T('confirmMsg','Confirmation message',{def:'<payload>',show:v=>v.confirm})];
-const NUMF=[N('factor','Factor',{def:1,val:x=>x===0?'0 not allowed':null}),N('prec','Decimal precision',{val:x=>x===''||x==null||(x>=0&&x<=10)?null:'0-10 allowed'})];
-const TAIL=[C('hideName','Hide label'),C('noPrefix','Disable dashboard prefix topic'),S('width','Panel Width',WIDTHS,{def:100})];
-const NAME=T('name','Panel name',{req:1});
+    S('protocol','Network protocol',[['ws','Websocket'],['wss','Websocket-SSL']],{def:'ws',help:'Browsers only speak MQTT over Websocket. Use the broker\'s websocket port. On an https page use Websocket-SSL.'})]},
+  T('path','Path',{def:'/mqtt',help:'Websocket path of the broker, usually /mqtt'}),
+  {row:[T('username','Username'),T('password','Password',{type:'password'})]}];
 const noWild=x=>/[+#]/.test(x)?'Wildcards are not allowed':null;
-const TOPIC=T('topic','Topic',{req:1,val:noWild}),TOPIC_SUB=T('topic','Topic',{req:1});
-const SUBT=T('subTopic','Subscribe Topic',{help:'Provide subscribe topic if you wish to use different one from publish topic. Leave it blank to use same with publish topic'});
-const ISJ=C('isJson','Payload is JSON Data');
-const JSUB=T('jsonPath','JsonPath for subscribe',{show:v=>v.isJson,req:1,err:'JsonPath is required',help:'JsonPath to parse the JSON data from received message, e.g. $.temperature'});
-const JPUB=T('jsonEnv','JSON pattern for publish',{show:v=>v.isJson,help:'Wrap published messages in JSON. Use <payload> where the value goes, e.g. {"state":"<payload>"}'});
-const SIZE=S('size','Button size',[['small','Small'],['medium','Medium'],['large','Large']],{def:'medium'});
-const ITEMS=T('items','Items',{type:'list',req:1,err:'Item label is required',addLabel:'Add item',delLabel:'Delete this item',def:[{label:'',payload:''}],
-  of:[T('label','Label for item',{req:1,err:'Item label is required'}),T('payload','Payload for item',{req:1,err:'Payload is required'})],
-  val:a=>new Set(a.map(i=>i.payload)).size<a.length?'Duplicate payloads are not allowed':null});
-const MINMAX=[N('min','Payload min',{req:1,def:0,err:'Payload min required'}),N('max','Payload max',{req:1,def:100,err:'Payload max required',val:(x,v)=>x<=v.min?'Max value must be greter than min value':null})];
-
-const msgOn=(p,st,draw)=>(t,raw)=>{const v=parse(p,raw);if(v===p.payloadOn)st.on=true;else if(v===p.payloadOff)st.on=false;else return;draw()};
-const stamp=(p,s)=>p.showRecv?`${new Date().toLocaleTimeString()} ${s}`:s;
-const subOf=p=>[pf(p,p.subTopic||p.topic)];
-
+const TOPIC=T('topic','Topic',{req:1,val:noWild});
+const SEND=[{row:[S('qos','QoS',[[0,'0'],[1,'1'],[2,'2']],{def:0}),C('retain','Retain')]},S('color','Button color',COLS,{def:'primary'})];
 const PT={
-button:{label:'Button',fields:[NAME,TOPIC,T('payload','Payload',{req:1,show:v=>!v.noPayload,err:'Payload is required'}),C('noPayload','No payload'),
-  T('payloadRel','Separate payload on release'),C('repeat','Repeat publish until released'),
-  N('repInt','Repeat interval in milliseconds',{def:1000,show:v=>v.repeat,req:1,val:x=>x>=100&&x<=10000?null:'100-10000 allowed'}),
-  S('color','Button color',COLS,{def:'primary'}),SIZE,C('fit','Fit to panel width'),...PUB,ISJ,JPUB,...TAIL],
-  mount(p){const b=h('button',{class:'btn pb '+(p.size==='large'?'lg':p.size==='small'?'sm':''),style:`background:${cv(p.color)};${p.fit?'width:100%':''}`},p.name||'Button');
-    const send=s=>pub(p,p.noPayload?'':p.payload);
-    if(p.confirm)b.onclick=send;else{let tm,down=false;
-      const up=()=>{if(!down)return;down=false;clearInterval(tm);if(p.payloadRel!=null&&p.payloadRel!=='')pub(p,p.payloadRel)};
-      b.onpointerdown=()=>{down=true;send();if(p.repeat)tm=setInterval(send,+p.repInt||1000)};
-      b.onpointerup=b.onpointerleave=b.onpointercancel=up}
-    return{el:b}}},
-switch:{label:'Switch',fields:[NAME,TOPIC,SUBT,T('payloadOn','Payload on',{req:1,err:'Payload on required'}),T('payloadOff','Payload off',{req:1,err:'Payload off required'}),
-  S('color','Switch color',COLS,{def:'primary'}),...PUB,C('showRecv','Show received timestamp'),ISJ,JSUB,JPUB,...TAIL],subs:subOf,
-  mount(p){const st=ST(p),i=h('input',{type:'checkbox'}),w=h('label',{class:'sw',style:`--c:${cv(p.color)}`},i,h('span',{class:'tr'}));
-    const draw=()=>{i.checked=st.on===true};i.onchange=()=>{if(pub(p,i.checked?p.payloadOn:p.payloadOff))st.on=i.checked;draw()};draw();
-    return{el:w,onMsg:msgOn(p,st,draw)}}},
-slider:{label:'Slider',fields:[NAME,TOPIC,SUBT,...MINMAX,N('step','Slider step',{req:1,def:1,err:'Slider step is required'}),T('unit','Unit'),
-  S('orientation','Slider Orientation',[['horizontal','Horizontal'],['vertical','Vertical']],{def:'horizontal'}),S('color','Slider color',COLS,{def:'primary'}),...NUMF,...PUB,ISJ,JSUB,JPUB,...TAIL],subs:subOf,
-  mount(p){const st=ST(p),out=h('div',{class:'val'}),r=h('input',{type:'range',min:p.min,max:p.max,step:p.step||1});r.style.accentColor=cv(p.color);
-    if(p.orientation==='vertical')Object.assign(r.style,{writingMode:'vertical-lr',direction:'rtl',height:'140px',width:'auto'});
-    const draw=()=>{if(st.v!=null)r.value=st.v;out.textContent=disp(p,r.value)};
-    r.oninput=()=>{out.textContent=disp(p,r.value)};r.onchange=()=>{if(pub(p,r.value))st.v=r.value;draw()};draw();
-    return{el:h('div',{style:'width:100%'},r,out),onMsg:(t,raw)=>{const n=num(p,raw);if(n==null)return;st.v=n;draw()}}}},
-combo:{label:'Combo Box',fields:[NAME,TOPIC,SUBT,ITEMS,...PUB,ISJ,JSUB,JPUB,...TAIL],subs:subOf,
-  mount(p){const st=ST(p),s=h('select',{},h('option',{value:''},'--'),p.items.map((it,i)=>h('option',{value:i},it.label)));
-    const draw=()=>{s.value=st.i??''};s.onchange=()=>{if(s.value===''){draw();return}if(pub(p,p.items[s.value].payload))st.i=s.value;draw()};draw();
-    return{el:s,onMsg:(t,raw)=>{const v=parse(p,raw),i=p.items.findIndex(x=>x.payload===v);if(i<0)return;st.i=String(i);draw()}}}},
-radio:{label:'Radio Buttons',fields:[NAME,TOPIC,SUBT,ITEMS,...PUB,ISJ,JSUB,JPUB,...TAIL],subs:subOf,
-  mount(p){const st=ST(p),rs=p.items.map((it,i)=>h('input',{type:'radio',name:'r'+p.id,value:i}));
-    const draw=()=>rs.forEach((r,i)=>r.checked=String(i)===st.i);
-    rs.forEach((r,i)=>r.onchange=()=>{if(pub(p,p.items[i].payload))st.i=String(i);draw()});draw();
-    return{el:h('div',{},p.items.map((it,i)=>h('label',{style:'display:flex;gap:6px;align-items:center'},rs[i],it.label))),
-      onMsg:(t,raw)=>{const v=parse(p,raw),i=p.items.findIndex(x=>x.payload===v);if(i<0)return;st.i=String(i);draw()}}}},
-led:{label:'LED Indicator',fields:[NAME,TOPIC_SUB,T('payloadOn','Payload on',{req:1,err:'Payload on required'}),T('payloadOff','Payload off',{req:1,err:'Payload off required'}),
-  T('colorOn','LED color (on)',{type:'color',def:'#df0000'}),T('colorOff','LED color (off)',{type:'color',def:'#9e9e9e'}),QOS,C('showRecv','Show received timestamp'),ISJ,JSUB,...TAIL],subs:p=>[pf(p,p.topic)],
-  mount(p){const st=ST(p),l=h('div',{class:'led'}),t=h('small',{});
-    const draw=()=>{l.style.background=cv(st.on?p.colorOn:p.colorOff);t.textContent=st.t||''};draw();
-    return{el:h('div',{},l,t),onMsg:(tp,raw)=>{msgOn(p,st,()=>{st.t=stamp(p,'').trim();draw()})(tp,raw)}}}},
-progress:{label:'Progress',fields:[NAME,TOPIC_SUB,S('ptype','Progress type',[['horizontal','Horizontal'],['vertical','Vertical'],['circular','Circular']],{def:'horizontal'}),...MINMAX,T('unit','Unit'),
-  S('color','Color',COLS,{def:'primary'}),...NUMF,QOS,C('showRecv','Show received timestamp'),ISJ,JSUB,...TAIL],subs:p=>[pf(p,p.topic)],
-  mount(p){const st=ST(p),box=h('div',{style:'width:100%'}),txt=h('div',{class:'val'});
-    const draw=()=>{const f=st.v==null?0:Math.min(1,Math.max(0,(st.v-p.min)/((p.max-p.min)||1))),c=cv(p.color);let g;
-      if(p.ptype==='circular'){g=S_('svg',{viewBox:'0 0 100 100',width:90},S_('circle',{cx:50,cy:50,r:40,fill:'none',stroke:'#8884','stroke-width':10}),
-        S_('circle',{cx:50,cy:50,r:40,fill:'none',stroke:c,'stroke-width':10,'stroke-dasharray':`${f*251.3} 251.3`,transform:'rotate(-90 50 50)'}))}
-      else g=h('div',{class:'pbar'+(p.ptype==='vertical'?' v':'')},h('i',{style:`background:${c};${p.ptype==='vertical'?'height':'width'}:${f*100}%`}));
-      box.replaceChildren(g);txt.textContent=st.v==null?'--':stamp(p,disp(p,st.v))};draw();
-    return{el:h('div',{style:'width:100%'},box,txt),onMsg:(t,raw)=>{const n=num(p,raw);if(n==null)return;st.v=n;draw()}}}},
-gauge:{label:'Gauge',fields:[NAME,TOPIC_SUB,...MINMAX,T('unit','Unit'),T('c1','Color range 1',{type:'color',def:'#960000'}),T('c2','Color range 2',{type:'color',def:'#fac800'}),T('c3','Color range 3',{type:'color',def:'#82ff21'}),
-  N('end1','Range 1 ends at (%)',{def:33.33}),N('end2','Range 2 ends at (%)',{def:66.67}),...NUMF,QOS,C('showRecv','Show received timestamp'),ISJ,JSUB,...TAIL],subs:p=>[pf(p,p.topic)],
-  mount(p){const st=ST(p),svg=S_('svg',{viewBox:'0 0 200 110',class:'gauge'}),txt=h('div',{class:'val'});
-    const pt=(f,r)=>{const a=Math.PI*(1-f);return[100+r*Math.cos(a),100-r*Math.sin(a)]};
-    const arc=(a,b,c)=>{const[x1,y1]=pt(a,80),[x2,y2]=pt(b,80);return S_('path',{d:`M${x1} ${y1}A80 80 0 ${b-a>.5?1:0} 1 ${x2} ${y2}`,fill:'none',stroke:cv(c),'stroke-width':16})};
-    const e1=(+p.end1||33.33)/100,e2=(+p.end2||66.67)/100;
-    const draw=()=>{const f=st.v==null?0:Math.min(1,Math.max(0,(st.v-p.min)/((p.max-p.min)||1))),[nx,ny]=pt(f,68);
-      svg.replaceChildren(arc(0,e1,p.c1),arc(e1,e2,p.c2),arc(e2,1,p.c3),S_('line',{x1:100,y1:100,x2:nx,y2:ny,stroke:'currentColor','stroke-width':3}),S_('circle',{cx:100,cy:100,r:5,fill:'currentColor'}));
-      txt.textContent=st.v==null?'--':stamp(p,disp(p,st.v))};draw();
-    return{el:h('div',{style:'width:100%;text-align:center'},svg,txt),onMsg:(t,raw)=>{const n=num(p,raw);if(n==null)return;st.v=n;draw()}}}},
-textin:{label:'Text Input',fields:[NAME,TOPIC,C('clear','Clear text on publish'),...PUB,C('showSent','Show sent timestamp'),ISJ,JPUB,...TAIL],
-  mount(p){const st=ST(p),i=h('input',{type:'text','aria-label':p.name||'Text'}),out=h('small',{},st.t||'');
-    const f=h('form',{style:'display:flex;gap:6px;width:100%',onsubmit:e=>{e.preventDefault();if(pub(p,i.value)){if(p.showSent)out.textContent=st.t='Sent '+new Date().toLocaleTimeString();if(p.clear)i.value=''}}},i,h('button',{class:'btn sm'},'Send'));
-    return{el:h('div',{style:'width:100%'},f,out)}}},
-textout:{label:'Text Output',fields:[NAME,T('topic','Topic',{req:1,help:'Wildcards allowed, e.g. home/#'}),C('history','Show history'),
-  N('maxP','Max persistence',{def:100,show:v=>v.history,val:x=>x>=0&&x<=1000?null:'0-1000 allowed'}),N('fs','Text size',{def:20}),C('hideTopic','Hide topic'),C('showRecv','Show received timestamp'),
-  T('unit','Unit'),...NUMF,QOS,ISJ,JSUB,...TAIL],subs:p=>[pf(p,p.topic)],
-  mount(p){const st=ST(p),o=h('div',{class:'log',style:`font-size:${+p.fs||20}px`});st.l??=[];
-    const draw=()=>o.textContent=(p.history?st.l:st.l.slice(0,1)).join('\n')||'--';draw();
-    return{el:o,onMsg:(t,raw)=>{const v=parse(p,raw);if(v==null)return;const n=num(p,raw);
-      st.l.unshift((p.hideTopic?'':t+': ')+stamp(p,n==null?v:disp(p,n)));st.l.length=Math.min(st.l.length,p.history?Math.max(1,+p.maxP||100):1);draw()}}}},
-graph:{label:'Line Graph',fields:[NAME,T('series','Graphs',{type:'list',req:1,addLabel:'Add more graph',delLabel:'Delete this graph',err:'Topic is required',def:[{topic:'',label:'',color:'#3880ff',jsonPath:''}],
-  of:[T('topic','Topic for graph',{req:1}),T('label','Label for graph'),T('color','Graph color',{type:'color',def:'#3880ff'}),T('jsonPath','JsonPath (optional)')]}),
-  N('maxP','Max persistence',{def:1000,val:x=>x>=0&&x<=1000?null:'0-1000 allowed'}),QOS,...TAIL],subs:p=>p.series.map(s=>pf(p,s.topic)),
-  mount(p){const st=ST(p);st.d??=p.series.map(()=>[]);const svg=S_('svg',{viewBox:'0 0 300 140',class:'graph'}),lg=h('small',{});
-    const draw=()=>{const pts=st.d.flat(),vs=pts.map(x=>x[1]),ts=pts.map(x=>x[0]);svg.replaceChildren(S_('rect',{x:0,y:0,width:300,height:140,fill:'none',stroke:'#8884'}));
-      if(vs.length){let lo=Math.min(...vs),hi=Math.max(...vs);if(lo===hi){lo-=1;hi+=1}const t0=Math.min(...ts),t1=Math.max(...ts)||1,X=t=>10+280*((t-t0)/((t1-t0)||1)),Y=v=>130-120*((v-lo)/(hi-lo));
-        st.d.forEach((d,i)=>{if(d.length)svg.append(S_('polyline',{points:d.map(([t,v])=>`${X(t).toFixed(1)},${Y(v).toFixed(1)}`).join(' '),fill:'none',stroke:cv(p.series[i].color),'stroke-width':2}))});
-        svg.append(S_('text',{x:12,y:12,'font-size':10,fill:'currentColor'},String(+hi.toFixed(2))),S_('text',{x:12,y:136,'font-size':10,fill:'currentColor'},String(+lo.toFixed(2))))}
-      lg.textContent=p.series.map((s,i)=>`${s.label||s.topic}: ${st.d[i].at(-1)?.[1]??'--'}`).join('  |  ')};draw();
-    return{el:h('div',{style:'width:100%'},svg,lg),onMsg:(t,raw,i)=>{const s=p.series[i],v=s.jsonPath?jpath(raw,s.jsonPath):raw,n=Number(v);if(v==null||v===''||isNaN(n))return;
-      const d=st.d[i];d.push([Date.now(),n]);if(d.length>(+p.maxP||1000))d.shift();draw()}}}}
+  button:{label:'Button',fields:[T('name','Button name',{req:1}),TOPIC,T('payload','Payload',{req:1}),...SEND],
+    card:(p,m)=>h('section',{class:'panel'},h('button',{class:'btn pb',style:`background:${cv(p.color)}`,onclick:()=>send(p,p.payload)},p.name),m)},
+  group:{label:'Button group',fields:[T('name','Group name',{req:1}),TOPIC,
+    T('items','Buttons',{type:'list',req:1,err:'Add at least one button',addLabel:'Add button',delLabel:'Delete this button',def:[{label:'',payload:''}],
+      of:[T('label','Label for button',{req:1,err:'Button label is required'}),T('payload','Payload for button',{req:1,err:'Payload is required'})]}),...SEND],
+    card:(p,m)=>h('section',{class:'panel wide'},h('div',{class:'head'},h('b',{},p.name),m),
+      h('div',{class:'grp'},p.items.map(it=>h('button',{class:'btn',style:`background:${cv(p.color)}`,onclick:()=>send(p,it.payload)},it.label))))}
 };
 
 /* ---------- views ---------- */
+function card(p,i){
+  const mv=k=>{const j=i+k;if(j<0||j>=db.panels.length)return;[db.panels[i],db.panels[j]]=[db.panels[j],db.panels[i]];save();render()};
+  return PT[p.type].card(p,menu([{label:'Edit',fn:()=>go({n:'panel',pid:p.id})},{label:'Move before',fn:()=>mv(-1)},{label:'Move after',fn:()=>mv(1)},
+    {label:'Delete',danger:1,fn:()=>{if(confirm(`Delete "${p.name}"?`)){db.panels.splice(i,1);save();render()}}}]))}
+const add=()=>go({n:'pick'});
 const views={
-connections(){
-  const list=db.connections.map(c=>h('div',{class:'conn',tabindex:0,role:'button',onclick:()=>go({n:'dash',cid:c.id,did:(c.dashboards.find(d=>d.home)||c.dashboards[0]).id})},
-    h('div',{class:'sp'},h('b',{},c.name),h('small',{},`${c.protocol}://${c.host}:${c.port}`)),
-    h('span',{onclick:e=>e.stopPropagation()},menu([{label:'Edit',fn:()=>go({n:'conn',id:c.id})},
-      {label:'Clone',fn:()=>{const n=reid(c);n.name+=' (copy)';n.clientId='';db.connections.push(n);save();render();toast('Duplicate client id may cause connection termination. Clone has a blank client id.')}},
-      {label:'Delete',danger:1,fn:()=>{if(confirm('Are you sure that you want to delete this connection?')){db.connections=db.connections.filter(x=>x!==c);save();render()}}}]))));
-  return h('div',{},bar('Connections',{back:false,right:menu([{label:'App Settings',fn:()=>go({n:'settings'})}])}),
-    h('main',{},list.length?list:h('div',{class:'empty'},h('p',{},'No connections yet'),h('button',{class:'btn red',onclick:()=>go({n:'conn'})},'Setup a connection')),
-    list.length?h('button',{class:'btn fab','aria-label':'Add connection',onclick:()=>go({n:'conn'})},'+'):null))},
-conn({id}){
-  const src=db.connections.find(c=>c.id===id);
-  const v=src?structuredClone(src):defaults(CONN,{id:uid(),dashboards:[{id:uid(),name:'Dashboard',prefix:'',color:'light',home:true,panels:[]}]});
-  const orig=JSON.stringify(v);
-  return page(src?'Edit Connection':'Add Connection',Form(CONN,v,{label:src?'SAVE':'CREATE',
-    cancel:()=>{if(JSON.stringify(v)===orig||confirm('Are you sure you want to discard the changes?'))back()},
-    save:x=>{if(!x.dashboards.length)return alert('At least one dashboard is required');fixHome(x.dashboards);
-      const i=db.connections.findIndex(c=>c.id===x.id);i<0?db.connections.push(x):db.connections[i]=x;save();back()}}))},
-dash({cid,did}){
-  const c=db.connections.find(x=>x.id===cid),d=c?.dashboards.find(x=>x.id===did);
-  if(!d){queueMicrotask(()=>replace({n:'connections'}));return h('div')}
-  curDash=d;if(activeConn!==cid){activeConn=cid;c.autoConnect?connect(c):setStatus('disconnected')}
-  mounted=[];const list=h('div',{class:'panels'});
-  for(const p of d.panels){const t=PT[p.type];if(!t)continue;const m=t.mount(p);mounted.push({p,filters:t.subs?t.subs(p):[],onMsg:m.onMsg});list.append(card(c,d,p,m.el))}
-  syncSubs();
-  const chip=h('button',{id:'st',class:'st '+status,onclick:()=>client?hangup():connect(c)},status);
-  const home=c.dashboards.find(x=>x.home);
-  return h('div',{},bar(c.name+' · '+d.name,{color:d.color==='light'?null:d.color,right:[chip,menu([
-    {label:d.locked?'Unlock panels':'Lock panels',fn:()=>{d.locked=!d.locked;save();render()}},
-    {label:'Dashboard configurations',fn:()=>dashDialog({...d},x=>{Object.assign(d,x);setHome(c.dashboards,d);save();render()})},
-    {label:'Clone dashboard',fn:()=>{const n=structuredClone(d);n.id=uid();n.home=false;n.name+=' (copy)';n.panels.forEach(p=>p.id=uid());c.dashboards.push(n);save();replace({n:'dash',cid,did:n.id})}},
-    {label:'Add a new dashboard',fn:()=>dashDialog(defaults(DASH,{}),x=>{x.id=uid();x.panels=[];c.dashboards.push(x);setHome(c.dashboards,x);save();replace({n:'dash',cid,did:x.id})})},
-    {label:'Delete this dashboard',danger:1,fn:()=>{if(d.home&&c.dashboards.length>1)return alert('You can not delete the home dashboard of a connection. Make another dashboard as connection home and then delete this dashboard.');
-      if(c.dashboards.length<2)return alert('At least one dashboard is required');
-      if(!confirm('Are you sure that you want to delete this dashboard. All associated panels will be lost.'))return;
-      c.dashboards.splice(c.dashboards.indexOf(d),1);save();replace({n:'dash',cid,did:(home!==d?home:c.dashboards[0]).id})}}])]}),
-    h('main',{},d.panels.length?list:h('div',{class:'empty'},h('p',{},'Current dashboard does not have any panel'),h('button',{class:'btn',onclick:()=>go({n:'pick',cid,did})},'Add a panel'))),
-    d.panels.length?h('button',{class:'btn fab','aria-label':'Add panel',onclick:()=>go({n:'pick',cid,did})},'+'):null,
-    c.dashboards.length>1?h('nav',{class:'tabs'},c.dashboards.map(x=>h('button',{class:x===d?'on':'',onclick:()=>replace({n:'dash',cid,did:x.id})},x.name))):null)},
-pick({cid,did}){return page('Select panel type to add',Object.entries(PT).map(([k,t])=>h('div',{class:'conn',tabindex:0,role:'button',onclick:()=>go({n:'panel',cid,did,type:k,pick:1})},h('b',{},t.label))))},
-panel({cid,did,pid,type,pick}){
-  const d=db.connections.find(x=>x.id===cid)?.dashboards.find(x=>x.id===did),ex=pid&&d.panels.find(p=>p.id===pid),t=PT[ex?ex.type:type];
-  const v=ex?structuredClone(ex):defaults(t.fields,{id:uid(),type});
+home(){
+  if(db.conn&&!client&&!off)connect();
+  const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:()=>{if(client){off=true;hangup()}else connect()}},status);
+  return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
+    h('main',{},!db.conn?h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn red',onclick:()=>go({n:'conn'})},'Setup a connection'))
+      :db.panels.length?h('div',{class:'panels'},db.panels.map(card))
+      :h('div',{class:'empty'},h('p',{},'No buttons yet'),h('button',{class:'btn',onclick:add},'Add a button')),
+      db.conn&&db.panels.length?h('button',{class:'btn fab','aria-label':'Add',onclick:add},'+'):null))},
+conn(){
+  const v=db.conn?structuredClone(db.conn):defaults(CONN,{});
+  return page(db.conn?'Edit Connection':'Add Connection',Form(CONN,v,{label:db.conn?'SAVE':'CREATE',cancel:()=>back(),save:x=>{db.conn=x;save();connect();back()}}))},
+pick(){return page('Select panel type to add',Object.entries(PT).map(([k,t])=>h('div',{class:'pick',tabindex:0,role:'button',onclick:()=>go({n:'panel',type:k,pick:1})},h('b',{},t.label))))},
+panel({pid,type,pick}){
+  const ex=pid&&db.panels.find(p=>p.id===pid),t=PT[ex?ex.type:type],v=ex?structuredClone(ex):defaults(t.fields,{id:uid(),type});
   return page((ex?'Edit ':'Add ')+t.label,Form(t.fields,v,{label:ex?'SAVE':'CREATE',cancel:()=>back(),
-    save:x=>{const i=d.panels.findIndex(p=>p.id===x.id);i<0?d.panels.push(x):d.panels[i]=x;save();if(pick)stack.pop();back()}}))},
-settings(){
-  let excl=false;
-  const file=h('input',{type:'file',accept:'application/json',hidden:true,onchange:async()=>{const f=file.files[0];file.value='';if(!f)return;
-    try{const j=JSON.parse(await f.text());if(!Array.isArray(j.connections))throw 0;
-      if(!confirm('Restore will replace all current connections. Continue?'))return;
-      const fresh=confirm('Same client-id for different MQTT client may terminate connection automatically. Do you want to generate client-id randomly for each connection?');
-      db.connections=j.connections.filter(c=>c&&typeof c.host==='string'&&Array.isArray(c.dashboards)).map(c=>{c.dashboards.forEach(d=>d.panels=(d.panels||[]).filter(p=>PT[p.type]));if(fresh)c.clientId='';return c});
-      save();toast('Restored '+db.connections.length+' connection(s)');render()}catch{toast('Invalid backup file')}}});
-  return page('App Settings',[
-    h('div',{class:'fld'},h('label',{class:'chk'},h('input',{type:'checkbox',checked:db.dark,onchange:e=>{db.dark=e.target.checked;save();render()}}),'Dark theme')),
-    h('h3',{},'Backup and Restore'),
-    h('div',{class:'fld'},h('label',{class:'chk'},h('input',{type:'checkbox',onchange:e=>excl=e.target.checked}),'Exclude broker info?'),
-      h('small',{class:'help'},'Excludes broker address, client ID, username and password from each connection. The backup is plain text.')),
-    h('div',{class:'btns',style:'justify-content:flex-start'},
-      h('button',{class:'btn',onclick:()=>{const o=structuredClone(db.connections);if(excl)o.forEach(c=>{c.host='';c.clientId='';c.username='';c.password=''});
-        const a=h('a',{href:URL.createObjectURL(new Blob([JSON.stringify({app:'mqtt-panel',version:1,connections:o},null,1)],{type:'application/json'})),download:`mqtt-panel-${new Date().toISOString().slice(2,19).replace(/\D/g,'').replace(/^(\d{6})/,'$1_')}.json`});a.click();URL.revokeObjectURL(a.href)}},'Backup'),
-      h('button',{class:'btn gray',onclick:()=>file.click()},'Restore'),file)])}
+    save:x=>{const i=db.panels.findIndex(p=>p.id===x.id);i<0?db.panels.push(x):db.panels[i]=x;save();if(pick)stack.pop();back()}}))}
 };
-function card(c,d,p,body){
-  const i=d.panels.indexOf(p),mv=k=>{const j=i+k;if(j<0||j>=d.panels.length)return;[d.panels[i],d.panels[j]]=[d.panels[j],d.panels[i]];save();render()},w=+p.width||100;
-  return h('section',{class:'panel',style:`width:calc(${w}% - ${8*(1-w/100)}px)`},
-    d.locked?null:menu([{label:'Edit this panel',fn:()=>go({n:'panel',cid:c.id,did:d.id,pid:p.id})},
-      {label:'Clone Panel',fn:()=>{d.panels.splice(i+1,0,{...structuredClone(p),id:uid()});save();render()}},
-      {label:'Move before',fn:()=>mv(-1)},{label:'Move after',fn:()=>mv(1)},
-      {label:'Delete this panel',danger:1,fn:()=>{if(confirm('Are you sure that you want to delete this panel?')){d.panels.splice(i,1);save();render()}}}]),
-    p.hideName?null:h('div',{class:'pname'},p.name),body)}
-
-function render(){
-  document.documentElement.dataset.theme=db.dark?'dark':'light';
-  if(['connections','settings','conn'].includes(route.n))leave();
-  $('#app').replaceChildren(views[route.n](route));window.scrollTo(0,0)}
+function render(){$('#app').replaceChildren(views[route.n](route));window.scrollTo(0,0)}
 render();
-
-/* self-check: open index.html#selftest -> title becomes "selftest ok" or the page throws */
-if(location.hash==='#selftest'){const a=(c,m)=>{if(!c)throw Error('selftest: '+m)};
-  a(matches('a/#','a/b/c'),'#');a(matches('a/#','a'),'# parent');a(matches('a/+/c','a/b/c'),'+');a(!matches('a/+','a/b/c'),'len');a(!matches('a/b','a/c'),'neq');
-  a(jpath('{"a":[{"b":5}]}','$.a[0].b')==='5','jsonpath');a(jpath('{"a":1}','$.x')===null,'jsonpath miss');a(jpath('nope','$.x')===null,'jsonpath bad');
-  a(disp({prec:1,unit:'C'},21.456)==='21.5 C','disp');a(num({factor:10},'2')===20,'factor');a(num({isJson:true,jsonPath:'$.t'},'{"t":"4"}')===4,'json num');
-  document.title='selftest ok'}
 </script>
 </body>
 </html>

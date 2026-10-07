@@ -53,7 +53,7 @@ const h=(tag,attrs,...kids)=>{const e=document.createElement(tag);
   for(const c of kids.flat())if(c!=null&&c!==false)e.append(c.nodeType?c:String(c));return e};
 const uid=()=>Math.random().toString(36).slice(2,10);
 const rid=()=>Array.from(crypto.getRandomValues(new Uint8Array(10)),b=>'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[b%62]).join('');
-let tt;const toast=m=>{const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,2500)};
+let tt;const toast=m=>{const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,Math.max(2500,m.length*70))};
 const COL={primary:'#3880ff',secondary:'#3dc2ff',tertiary:'#5260ff',success:'#2dd36f',warning:'#ffc409',danger:'#eb445a',medium:'#92949c'};
 const COLS=Object.keys(COL).map(k=>[k,k[0].toUpperCase()+k.slice(1)]);
 const cv=c=>COL[c]||COL.primary;
@@ -75,10 +75,12 @@ function connect(){
   try{cl=client=mqtt.connect(`${c.protocol==='wss'?'wss':'ws'}://${c.host}:${c.port}/${String(c.path||'mqtt').replace(/^\/+/,'')}`,
     {clientId:rid(),username:c.username||undefined,password:c.password||undefined,reconnectPeriod:3000,connectTimeout:20000})}
   catch(e){setStatus('error');return toast(e.message)}
-  cl.on('connect',()=>cl===client&&setStatus('connected'))
+  let opened=false,told=false;   // told: explain a failed attempt once, not on every 3s retry
+  cl.on('connect',()=>{if(cl===client){opened=true;setStatus('connected')}})
     .on('reconnect',()=>cl===client&&setStatus('connecting'))
-    .on('close',()=>cl===client&&setStatus('disconnected'))
-    .on('error',e=>{if(cl===client){setStatus('error');toast(e.message)}})}
+    .on('close',()=>{if(cl!==client)return;setStatus('disconnected');
+      if(!opened&&!told){told=true;toast(/^(1883|8883)$/.test(String(c.port))?"Port 1883/8883 is plain MQTT (TCP), which browsers can't use. Use your broker's Websocket port.":'Could not connect. Check the address, the Websocket port and that the broker is reachable.')}})
+    .on('error',e=>{if(cl===client){told=true;setStatus('error');toast(e.message)}})}
 function send(p,payload){
   const pl=String(payload);
   if(p.confirm&&!confirm((p.confirmMsg||'<payload>').replaceAll('<payload>',pl)))return;

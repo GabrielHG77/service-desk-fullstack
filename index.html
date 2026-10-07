@@ -16,11 +16,11 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px system-ui,sans-seri
 .ic{background:none;border:0;color:inherit;font-size:20px;cursor:pointer;padding:4px 8px}
 main{max-width:720px;margin:0 auto;padding:12px 16px 96px}
 .btn{border:0;border-radius:4px;padding:12px 16px;font:inherit;font-weight:600;text-transform:uppercase;cursor:pointer;background:var(--primary);color:#fff}
-.btn:active{filter:brightness(.8)}.btn.gray{background:var(--medium)}.btn.red{background:var(--danger)}.btn.sm{padding:5px 10px;font-size:12px}.btn.lg{padding:16px 24px;font-size:17px}
+.btn{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}.btn:active{filter:brightness(.8)}.btn.gray{background:var(--medium)}.btn.red{background:var(--danger)}.btn.sm{padding:5px 10px;font-size:12px}.btn.lg{padding:16px 24px;font-size:17px}
 .fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;font-size:30px;padding:0;box-shadow:0 3px 8px #0006;z-index:6}
 .fld{margin:0 0 12px}.lh{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);margin-bottom:3px}
 .fld label{font-size:13px;color:var(--sub)}.fld .chk{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--fg)}.chk input{width:auto}
-input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--fg);font:inherit}
+input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--fg);font:inherit;font-size:16px}
 input[type=color]{padding:2px;height:40px}
 .row{display:flex;gap:8px}.row>*{flex:1;min-width:0}.req{color:var(--danger)}
 .q{border:0;border-radius:50%;width:18px;height:18px;font-size:11px;background:var(--primary);color:#fff;cursor:pointer;padding:0}
@@ -173,6 +173,7 @@ const PT={
     body(p){const b=h('button',{class:'btn pb'+sz(p),style:`background:${cv(p.color)}${p.fit?';width:100%':''}`},p.name),pl=()=>p.noPayload?'':p.payload;
       if((p.repeat||p.payloadRel)&&!p.confirm){let tm,down=false;   // hold behaviour needs pointer events; plain taps use click (keyboard friendly)
         const up=()=>{if(!down)return;down=false;clearInterval(tm);if(p.payloadRel)send(p,p.payloadRel)};
+        b.style.touchAction='none';b.oncontextmenu=e=>e.preventDefault();
         b.onpointerdown=()=>{down=true;send(p,pl());if(p.repeat)tm=setInterval(()=>send(p,pl()),+p.repInt||1000)};
         b.onpointerup=b.onpointerleave=b.onpointercancel=up}
       else b.onclick=()=>send(p,pl());
@@ -207,7 +208,7 @@ home(){
       :h('div',{class:'empty'},h('p',{},'No buttons yet'),h('button',{class:'btn',onclick:add},'Add a button')),
       db.conn&&db.panels.length?h('button',{class:'btn fab','aria-label':'Add',onclick:add},'+'):null))},
 conn(){
-  const v=db.conn?structuredClone(db.conn):defaults(CONN,{});
+  const v=db.conn?structuredClone(db.conn):defaults(CONN,{host:location.protocol==='http:'?location.hostname:''});   // served by the broker's http_dir: same host
   return page(db.conn?'Edit Connection':'Add Connection',Form(CONN,v,{label:db.conn?'SAVE':'CREATE',cancel:()=>back(),save:x=>{db.conn=x;save();connect();back()}}))},
 pick(){return page('Select panel type to add',Object.entries(PT).map(([k,t])=>h('div',{class:'pick',tabindex:0,role:'button',onclick:()=>go({n:'panel',type:k,pick:1})},h('b',{},t.label))))},
 panel({pid,type,pick}){

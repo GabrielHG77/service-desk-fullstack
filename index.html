@@ -65,6 +65,7 @@ db=db&&Array.isArray(db.panels)?db:{conn:null,panels:[]};
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch{toast('Could not save (storage blocked)')}};
 
 /* ---------- MQTT ---------- */
+const BRIDGE=false;   // the Windows program serves this page with true: it relays Websocket <-> plain TCP, so the broker's normal port 1883 works
 let client=null,status='disconnected',off=false;
 const setStatus=s=>{status=s;const e=$('#st');if(e){e.className='st '+s;e.textContent=s}};
 function hangup(){if(client){const c=client;client=null;c.end(true)}setStatus('disconnected')}
@@ -72,14 +73,15 @@ function connect(){
   hangup();off=false;const c=db.conn;
   if(typeof mqtt==='undefined'){setStatus('error');return toast('MQTT library failed to load (check internet)')}
   setStatus('connecting');let cl;
-  try{cl=client=mqtt.connect(`${c.protocol==='wss'?'wss':'ws'}://${c.host}:${c.port}/${String(c.path||'mqtt').replace(/^\/+/,'')}`,
+  const url=c.protocol==='tcp'?`ws://${location.host}/tcp/${c.host}/${c.port}`:`${c.protocol==='wss'?'wss':'ws'}://${c.host}:${c.port}/${String(c.path||'mqtt').replace(/^\/+/,'')}`;
+  try{cl=client=mqtt.connect(url,
     {clientId:rid(),username:c.username||undefined,password:c.password||undefined,reconnectPeriod:3000,connectTimeout:20000})}
   catch(e){setStatus('error');return toast(e.message)}
   let opened=false,told=false;   // told: explain a failed attempt once, not on every 3s retry
   cl.on('connect',()=>{if(cl===client){opened=true;setStatus('connected')}})
     .on('reconnect',()=>cl===client&&setStatus('connecting'))
     .on('close',()=>{if(cl!==client)return;setStatus('disconnected');
-      if(!opened&&!told){told=true;toast(/^(1883|8883)$/.test(String(c.port))?"Port 1883/8883 is plain MQTT (TCP), which browsers can't use. Use your broker's Websocket port.":'Could not connect. Check the address, the Websocket port and that the broker is reachable.')}})
+      if(!opened&&!told){told=true;toast(c.protocol==='tcp'?'Could not connect. Check the address and port, and that this PC can reach the broker.':/^(1883|8883)$/.test(String(c.port))?"Port 1883/8883 is plain MQTT (TCP), which browsers can't use. Use your broker's Websocket port.":'Could not connect. Check the address, the Websocket port and that the broker is reachable.')}})
     .on('error',e=>{if(cl===client){told=true;setStatus('error');toast(e.message)}})}
 function send(p,payload){
   const pl=String(payload);
@@ -152,9 +154,10 @@ const page=(title,body)=>h('div',{},bar(title),h('main',{},body));
 /* ---------- forms ---------- */
 const CONN=[
   T('host','Broker address',{req:1,err:'Broker host address is required',help:'DNS/IP address of MQTT broker. e.g. test.mosquitto.org or 192.168.1.5',val:x=>/^[\w.-]+$/.test(x)?null:'Invalid host address'}),
-  {row:[N('port','Port',{req:1,def:8080,err:'Port number is required',val:x=>x>=1&&x<=65535?null:'Invalid port'}),
-    S('protocol','Network protocol',[['ws','Websocket'],['wss','Websocket-SSL']],{def:'ws',help:'Browsers only speak MQTT over Websocket. Use the broker\'s websocket port. On an https page use Websocket-SSL.'})]},
-  T('path','Path',{def:'/mqtt',help:'Websocket path of the broker, usually /mqtt'}),
+  {row:[N('port','Port',{req:1,def:BRIDGE?1883:8080,err:'Port number is required',val:x=>x>=1&&x<=65535?null:'Invalid port'}),
+    S('protocol','Network protocol',[...(BRIDGE?[['tcp','MQTT (TCP)']]:[]),['ws','Websocket'],['wss','Websocket-SSL']],{def:BRIDGE?'tcp':'ws',
+      help:BRIDGE?'MQTT (TCP) is the broker\'s normal port, usually 1883. Websocket needs a broker with a websocket port.':'Browsers only speak MQTT over Websocket. Use the broker\'s websocket port. On an https page use Websocket-SSL.'})]},
+  T('path','Path',{def:'/mqtt',show:v=>v.protocol!=='tcp',help:'Websocket path of the broker, usually /mqtt'}),
   {row:[T('username','Username'),T('password','Password',{type:'password'})]}];
 const noWild=x=>/[+#]/.test(x)?'Wildcards are not allowed':null;
 const NAME=T('name','Panel name',{req:1}),TOPIC=T('topic','Topic',{req:1,val:noWild});
@@ -208,7 +211,7 @@ home(){
       :h('div',{class:'empty'},h('p',{},'No buttons yet'),h('button',{class:'btn',onclick:add},'Add a button')),
       db.conn&&db.panels.length?h('button',{class:'btn fab','aria-label':'Add',onclick:add},'+'):null))},
 conn(){
-  const v=db.conn?structuredClone(db.conn):defaults(CONN,{host:location.protocol==='http:'?location.hostname:''});   // served by the broker's http_dir: same host
+  const v=db.conn?structuredClone(db.conn):defaults(CONN,{host:location.protocol==='http:'&&!BRIDGE?location.hostname:''});   // served by the broker's http_dir: same host
   return page(db.conn?'Edit Connection':'Add Connection',Form(CONN,v,{label:db.conn?'SAVE':'CREATE',cancel:()=>back(),save:x=>{db.conn=x;save();connect();back()}}))},
 pick(){return page('Select panel type to add',Object.entries(PT).map(([k,t])=>h('div',{class:'pick',tabindex:0,role:'button',onclick:()=>go({n:'panel',type:k,pick:1})},h('b',{},t.label))))},
 panel({pid,type,pick}){

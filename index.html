@@ -79,13 +79,13 @@ const setStatus=s=>{status=s;const e=$('#st');if(e){e.className='st '+s;e.textCo
 const SUBS=['+/discovery','+/status','$SYS/broker/clients/connected','$SYS/broker/version'];
 const boards=new Map(),feed=[];let sys={},denied=[],dirty=false;
 const touch=()=>{if(dirty)return;dirty=true;requestAnimationFrame(()=>{dirty=false;if(route.n==='status')draw()})};   // one redraw per frame, retained messages arrive in bursts
-function onMsg(t,m){
-  feed.unshift({t,m,at:Date.now()});feed.length=Math.min(feed.length,20);
-  let x;const dev=id=>{if(!boards.has(id))boards.set(id,{id});return boards.get(id)};
+function onMsg(t,m,stored){   // stored: the broker replays a retained message = the board spoke once, not proof it is there now. Only a live message or an answer makes a board "live"
+  feed.unshift({t,m,at:Date.now(),stored});feed.length=Math.min(feed.length,20);
+  let x;const dev=id=>{if(!boards.has(id))boards.set(id,{id});const b=boards.get(id);if(!stored)b.live=true;return b};
   if(t==='$SYS/broker/clients/connected')sys.clients=m;
   else if(t==='$SYS/broker/version')sys.version=m;
   else if(x=/^(.+)\/discovery$/.exec(t)){try{const d=JSON.parse(m);Object.assign(dev(x[1]),{ip:d.ip,host:d.hostname,mac:d.mac,sw:d.swAppVersion})}catch{}}
-  else if(x=/^(.+)\/status$/.exec(t))Object.assign(dev(x[1]),{state:m.trim().toLowerCase(),at:Date.now()});
+  else if(x=/^(.+)\/status$/.exec(t)){const b=Object.assign(dev(x[1]),{state:m.trim().toLowerCase()});if(!stored)b.at=Date.now()}
   touch()}
 function hangup(){if(client){const c=client;client=null;c.end(true)}setStatus('disconnected')}
 function connect(){
@@ -98,8 +98,9 @@ function connect(){
   catch(e){setStatus('error');return toast(e.message)}
   let opened=false,told=false;   // told: explain a failed attempt once, not on every 3s retry
   cl.on('connect',()=>{if(cl===client){opened=true;setStatus('connected');denied=[];
-      SUBS.forEach(t=>cl.subscribe(t,e=>{if(cl===client&&/^Subscribe error/.test(e?.message)){denied.push(t);touch()}}))}})   // one by one: for a refusal mqtt.js does not say which filter
-    .on('message',(t,m)=>cl===client&&onMsg(t,String(m)))
+      SUBS.forEach(t=>cl.subscribe(t,e=>{if(cl===client&&/^Subscribe error/.test(e?.message)){denied.push(t);touch()}}));   // one by one: for a refusal mqtt.js does not say which filter
+      setTimeout(()=>{if(cl===client&&cl.connected)ask()},1500)}})   // the broker's stored messages are in by now: ask each board, only an answer proves it is there
+    .on('message',(t,m,pk)=>cl===client&&onMsg(t,String(m),pk.retain))
     .on('reconnect',()=>cl===client&&setStatus('connecting'))
     .on('close',()=>{if(cl!==client)return;setStatus('disconnected');
       if(!opened&&!told){told=true;toast(c.protocol==='tcp'?'Could not connect. Check the address and port, and that this PC can reach the broker.':/^(1883|8883)$/.test(String(c.port))?"Port 1883/8883 is plain MQTT (TCP), which browsers can't use. Use your broker's Websocket port.":'Could not connect. Check the address, the Websocket port and that the broker is reachable.')}})
@@ -230,7 +231,8 @@ function ask(){   // the manual (18.6.7): an empty message on <name>/status/get 
   draw();setTimeout(()=>route.n==='status'&&draw(),2600)}
 function draw(){
   const body=$('#stbody');if(!body||!db.conn)return;
-  const at=t=>new Date(t).toLocaleTimeString(),list=[...boards.values()].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})),
+  const at=t=>new Date(t).toLocaleTimeString(),all=[...boards.values()].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})),
+    list=all.filter(b=>b.live),stored=all.filter(b=>!b.live),
     card=b=>h('section',{class:'panel box'},
       h('div',{class:'row2'},h('b',{},b.id),h('span',{class:'pill '+(b.state||'')},b.state||'no status')),
       h('div',{},b.ip||'IP unknown'),h('small',{class:'help'},[b.host,b.mac,b.sw].filter(Boolean).join(' · ')),
@@ -239,12 +241,14 @@ function draw(){
   body.replaceChildren(...[
     h('section',{class:'panel box'},h('div',{class:'row2'},h('b',{},`${db.conn.host}:${db.conn.port}`),h('span',{class:'st '+status},status)),
       h('small',{class:'help'},sys.clients?`${sys.clients} clients connected to the broker${sys.version?' · '+sys.version:''}`:'The broker has not said how many clients are connected')),
-    status!=='connected'&&h('div',{class:'err'},'Not connected. Showing the last data received.'),
+    status!=='connected'&&h('div',{class:'err'},'Not connected.'+(all.length?' Showing the last data received.':'')),
     denied.length&&h('div',{class:'err'},'The broker does not let this app listen to: '+denied.join(', ')),
     h('div',{class:'row2'},h('b',{},`Devices (${list.length})`),h('button',{class:'btn sm',onclick:ask},'Refresh')),
-    ...(list.length?list.map(card):[h('div',{class:'empty'},h('p',{},'No devices seen yet'),h('small',{class:'help'},'Boards announce themselves on <name>/discovery and <name>/status. If nothing shows up, this broker has none of them, or this app is not allowed to listen.'))])
+    ...(list.length?list.map(card):[h('div',{class:'empty'},h('p',{},'No board has answered yet'),h('small',{class:'help'},'A board is listed here only after it publishes on <name>/status or answers Refresh. If nothing shows up, no board is talking to this broker, or this app is not allowed to listen.'))])
   ].filter(Boolean));
-  $('#feed').textContent=feed.map(f=>`${at(f.at)}  ${f.t}  ${f.m.slice(0,160)}`).join('\n')||'(nothing yet)'}
+  $('#stored').hidden=!stored.length;$('#storedsum').textContent=`Stored in the broker, no answer (${stored.length})`;   // what the broker remembers from boards that did not answer: possibly switched off or renamed
+  $('#storedlist').textContent=stored.map(b=>[b.id,b.ip||'IP unknown',b.state&&'last state: '+b.state].filter(Boolean).join(' · ')).join('\n');
+  $('#feed').textContent=feed.map(f=>`${at(f.at)}  ${f.t}  ${f.m.slice(0,160)}${f.stored?'  (stored in the broker)':''}`).join('\n')||'(nothing yet)'}
 const views={
 home(){
   if(db.conn&&!client&&!off)connect();
@@ -258,7 +262,9 @@ status(){
   if(db.conn&&!client&&!off)connect();
   const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:()=>{if(client){off=true;hangup()}else connect()}},status);
   return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
-    h('main',{},tabs('status'),h('div',{id:'stbody'}),h('details',{class:'feed'},h('summary',{},'Messages received'),h('pre',{id:'feed'}))))},
+    h('main',{},tabs('status'),h('div',{id:'stbody'}),
+      h('details',{class:'feed',id:'stored',hidden:true},h('summary',{id:'storedsum'}),h('pre',{id:'storedlist'})),
+      h('details',{class:'feed'},h('summary',{},'Messages received'),h('pre',{id:'feed'}))))},
 conn(){
   const v=db.conn?structuredClone(db.conn):defaults(CONN,{host:location.protocol==='http:'&&!BRIDGE?location.hostname:''});   // served by the broker's http_dir: same host
   return page(db.conn?'Edit Connection':'Add Connection',Form(CONN,v,{label:db.conn?'SAVE':'CREATE',cancel:()=>back(),save:x=>{db.conn=x;save();connect();back()}}))},

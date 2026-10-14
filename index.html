@@ -39,6 +39,13 @@ input[type=color]{padding:2px;height:40px}
 .empty{text-align:center;padding:48px 0;color:var(--sub)}
 .st{border:0;border-radius:12px;padding:3px 10px;font:12px system-ui;cursor:pointer;color:#fff;background:var(--medium)}.st.connected{background:var(--success)}.st.connecting{background:var(--warning)}.st.error{background:var(--danger)}
 #toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:90vw;background:#000d;color:#fff;padding:8px 14px;border-radius:20px;z-index:50}
+.tabs{display:flex;margin:0 0 12px;border-bottom:2px solid var(--line)}
+.tabs button{flex:1;background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:10px 0;font:inherit;font-weight:600;text-transform:uppercase;color:var(--sub);cursor:pointer}
+.tabs .on{color:var(--fg);border-bottom-color:var(--primary)}
+.box{margin-bottom:8px;align-items:stretch}.row2{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}.box .row2{margin:0}
+.pill{border-radius:12px;padding:2px 10px;font-size:12px;font-weight:600;background:var(--medium);color:#fff}
+.pill.ready,.pill.running{background:var(--success)}.pill.online{background:var(--warning);color:var(--black)}.pill.offline{background:var(--danger)}
+.feed{margin-top:12px}.feed summary{cursor:pointer;color:var(--sub)}.feed pre{white-space:pre-wrap;word-break:break-all;font-size:12px;margin:8px 0}
 </style>
 </head>
 <body>
@@ -67,18 +74,32 @@ const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch{toast('Co
 /* ---------- MQTT ---------- */
 const BRIDGE=false;   // the Windows program serves this page with true: it relays Websocket <-> plain TCP, so the broker's normal port 1883 works
 let client=null,status='disconnected',off=false;
-const setStatus=s=>{status=s;const e=$('#st');if(e){e.className='st '+s;e.textContent=s}};
+const setStatus=s=>{status=s;const e=$('#st');if(e){e.className='st '+s;e.textContent=s}touch()};
+// what the boards say about themselves (MCP PLAY manual 18.6): <name>/discovery (JSON, retained) and <name>/status (offline, online, ready, running)
+const SUBS=['+/discovery','+/status','$SYS/broker/clients/connected','$SYS/broker/version'];
+const boards=new Map(),feed=[];let sys={},denied=[],dirty=false;
+const touch=()=>{if(dirty)return;dirty=true;requestAnimationFrame(()=>{dirty=false;if(route.n==='status')draw()})};   // one redraw per frame, retained messages arrive in bursts
+function onMsg(t,m){
+  feed.unshift({t,m,at:Date.now()});feed.length=Math.min(feed.length,20);
+  let x;const dev=id=>{if(!boards.has(id))boards.set(id,{id});return boards.get(id)};
+  if(t==='$SYS/broker/clients/connected')sys.clients=m;
+  else if(t==='$SYS/broker/version')sys.version=m;
+  else if(x=/^(.+)\/discovery$/.exec(t)){try{const d=JSON.parse(m);Object.assign(dev(x[1]),{ip:d.ip,host:d.hostname,mac:d.mac,sw:d.swAppVersion})}catch{}}
+  else if(x=/^(.+)\/status$/.exec(t))Object.assign(dev(x[1]),{state:m.trim().toLowerCase(),at:Date.now()});
+  touch()}
 function hangup(){if(client){const c=client;client=null;c.end(true)}setStatus('disconnected')}
 function connect(){
-  hangup();off=false;const c=db.conn;
+  hangup();off=false;boards.clear();feed.length=0;sys={};denied=[];const c=db.conn;
   if(typeof mqtt==='undefined'){setStatus('error');return toast('MQTT library failed to load (check internet)')}
   setStatus('connecting');let cl;
   const url=c.protocol==='tcp'?`ws://${location.host}/tcp/${c.host}/${c.port}`:`${c.protocol==='wss'?'wss':'ws'}://${c.host}:${c.port}/${String(c.path||'mqtt').replace(/^\/+/,'')}`;
   try{cl=client=mqtt.connect(url,
-    {clientId:rid(),username:c.username||undefined,password:c.password||undefined,reconnectPeriod:3000,connectTimeout:20000})}
+    {clientId:rid(),username:c.username||undefined,password:c.password||undefined,reconnectPeriod:3000,connectTimeout:20000,resubscribe:false})}
   catch(e){setStatus('error');return toast(e.message)}
   let opened=false,told=false;   // told: explain a failed attempt once, not on every 3s retry
-  cl.on('connect',()=>{if(cl===client){opened=true;setStatus('connected')}})
+  cl.on('connect',()=>{if(cl===client){opened=true;setStatus('connected');denied=[];
+      SUBS.forEach(t=>cl.subscribe(t,e=>{if(cl===client&&/^Subscribe error/.test(e?.message)){denied.push(t);touch()}}))}})   // one by one: for a refusal mqtt.js does not say which filter
+    .on('message',(t,m)=>cl===client&&onMsg(t,String(m)))
     .on('reconnect',()=>cl===client&&setStatus('connecting'))
     .on('close',()=>{if(cl!==client)return;setStatus('disconnected');
       if(!opened&&!told){told=true;toast(c.protocol==='tcp'?'Could not connect. Check the address and port, and that this PC can reach the broker.':/^(1883|8883)$/.test(String(c.port))?"Port 1883/8883 is plain MQTT (TCP), which browsers can't use. Use your broker's Websocket port.":'Could not connect. Check the address, the Websocket port and that the broker is reachable.')}})
@@ -201,15 +222,43 @@ function card(p,i,vis){
       {label:'Delete',danger:1,fn:()=>{if(confirm(`Delete "${p.name}"?`)){db.panels=db.panels.filter(x=>x!==p);db.panels.forEach(g=>{if(g.members)g.members=g.members.filter(id=>id!==p.id)});save();render()}}}]),
     p.hideName?null:h('div',{class:'pname'},p.name),PT[p.type].body(p))}
 const add=()=>go({n:'pick'});
+const tabs=cur=>h('nav',{class:'tabs'},[['home','Buttons'],['status','Status']].map(([n,l])=>
+  h('button',{type:'button',class:n===cur?'on':'','aria-current':n===cur?'page':null,onclick:()=>{if(n!==cur){route={n};render()}}},l)));
+function ask(){   // the manual (18.6.7): an empty message on <name>/status/get makes a board repeat its state; no answer within 2 s means it is probably offline
+  if(!client?.connected)return toast('Not connected');
+  const t=Date.now();boards.forEach(b=>{b.asked=t;client.publish(b.id+'/status/get','')});
+  draw();setTimeout(()=>route.n==='status'&&draw(),2600)}
+function draw(){
+  const body=$('#stbody');if(!body||!db.conn)return;
+  const at=t=>new Date(t).toLocaleTimeString(),list=[...boards.values()].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})),
+    card=b=>h('section',{class:'panel box'},
+      h('div',{class:'row2'},h('b',{},b.id),h('span',{class:'pill '+(b.state||'')},b.state||'no status')),
+      h('div',{},b.ip||'IP unknown'),h('small',{class:'help'},[b.host,b.mac,b.sw].filter(Boolean).join(' · ')),
+      b.at?h('small',{class:'help'},'status at '+at(b.at)):null,
+      b.asked&&Date.now()-b.asked>2500&&(b.at||0)<b.asked?h('small',{class:'err'},'No answer to the status request, probably offline'):null);
+  body.replaceChildren(...[
+    h('section',{class:'panel box'},h('div',{class:'row2'},h('b',{},`${db.conn.host}:${db.conn.port}`),h('span',{class:'st '+status},status)),
+      h('small',{class:'help'},sys.clients?`${sys.clients} clients connected to the broker${sys.version?' · '+sys.version:''}`:'The broker has not said how many clients are connected')),
+    status!=='connected'&&h('div',{class:'err'},'Not connected. Showing the last data received.'),
+    denied.length&&h('div',{class:'err'},'The broker does not let this app listen to: '+denied.join(', ')),
+    h('div',{class:'row2'},h('b',{},`Devices (${list.length})`),h('button',{class:'btn sm',onclick:ask},'Refresh')),
+    ...(list.length?list.map(card):[h('div',{class:'empty'},h('p',{},'No devices seen yet'),h('small',{class:'help'},'Boards announce themselves on <name>/discovery and <name>/status. If nothing shows up, this broker has none of them, or this app is not allowed to listen.'))])
+  ].filter(Boolean));
+  $('#feed').textContent=feed.map(f=>`${at(f.at)}  ${f.t}  ${f.m.slice(0,160)}`).join('\n')||'(nothing yet)'}
 const views={
 home(){
   if(db.conn&&!client&&!off)connect();
   const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:()=>{if(client){off=true;hangup()}else connect()}},status);
   return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
-    h('main',{},!db.conn?h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn',onclick:()=>go({n:'conn'})},'Setup a connection'))
+    h('main',{},db.conn&&tabs('home'),!db.conn?h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn',onclick:()=>go({n:'conn'})},'Setup a connection'))
       :db.panels.length?h('div',{class:'panels'},visible().map((p,i,vis)=>card(p,i,vis)))
       :h('div',{class:'empty'},h('p',{},'No buttons yet'),h('button',{class:'btn',onclick:add},'Add a button')),
       db.conn&&db.panels.length?h('button',{class:'btn fab','aria-label':'Add',onclick:add},'+'):null))},
+status(){
+  if(db.conn&&!client&&!off)connect();
+  const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:()=>{if(client){off=true;hangup()}else connect()}},status);
+  return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
+    h('main',{},tabs('status'),h('div',{id:'stbody'}),h('details',{class:'feed'},h('summary',{},'Messages received'),h('pre',{id:'feed'}))))},
 conn(){
   const v=db.conn?structuredClone(db.conn):defaults(CONN,{host:location.protocol==='http:'&&!BRIDGE?location.hostname:''});   // served by the broker's http_dir: same host
   return page(db.conn?'Edit Connection':'Add Connection',Form(CONN,v,{label:db.conn?'SAVE':'CREATE',cancel:()=>back(),save:x=>{db.conn=x;save();connect();back()}}))},
@@ -219,7 +268,7 @@ panel({pid,type,pick}){
   return page((ex?'Edit ':'Add ')+t.label,Form(t.fields,v,{label:ex?'SAVE':'CREATE',cancel:()=>{if(pick)stack.pop();back()},
     save:x=>{const i=db.panels.findIndex(p=>p.id===x.id);i<0?db.panels.push(x):db.panels[i]=x;save();if(pick)stack.pop();back()}}))}
 };
-function render(){$('#app').replaceChildren(views[route.n](route));window.scrollTo(0,0)}
+function render(){$('#app').replaceChildren(views[route.n](route));window.scrollTo(0,0);if(route.n==='status')draw()}
 render();
 </script>
 </body>

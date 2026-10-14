@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 )
@@ -75,6 +76,9 @@ func (l *pktLog) show(h byte, p []byte) {
 		}
 		log.Printf("%s CONNACK %s", l.who, s)
 	case 3: // PUBLISH
+		if l.want == 2 {
+			return // what the broker delivers to the page is shown in the app's Status tab
+		}
 		qos := int(flags >> 1 & 3)
 		o := 2 + u16(p, 0)
 		topic := string(p[2:o])
@@ -89,6 +93,20 @@ func (l *pktLog) show(h byte, p []byte) {
 		log.Printf("%s PUBLISH %+q qos=%d retain=%v payload=%+q%s (%d bytes)", l.who, topic, qos, flags&1 == 1, payload, more, len(p[o:]))
 	case 4:
 		log.Printf("%s PUBACK", l.who)
+	case 8: // SUBSCRIBE: packet id, then topic filter and requested qos, repeated
+		s := ""
+		for o := 2; o+2 < len(p); {
+			n := u16(p, o)
+			s += fmt.Sprintf(" %+q(qos %d)", string(p[o+2:o+2+n]), p[o+2+n])
+			o += 3 + n
+		}
+		log.Printf("%s SUBSCRIBE%s", l.who, s)
+	case 9: // SUBACK: 0 to 2 = granted, 128 = refused
+		refused := ""
+		if bytes.IndexByte(p[2:], 0x80) >= 0 {
+			refused = " (128 = the broker refused)"
+		}
+		log.Printf("%s SUBACK %v%s", l.who, p[2:], refused)
 	case 14:
 		log.Printf("%s DISCONNECT", l.who)
 	}

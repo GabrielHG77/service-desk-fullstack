@@ -46,6 +46,18 @@ func TestPktLog(t *testing.T) {
 		t.Errorf("connack not decoded: %q", out)
 	}
 
+	subscribe := append([]byte{0x82, 13, 0, 1, 0, 8}, "+/status"...)
+	subscribe = append(subscribe, 0)
+	up2 := &pktLog{who: "->", want: 1}
+	if out := capture(func() { up2.feed(append(append([]byte{}, connect...), subscribe...)) }); !strings.Contains(out, `SUBSCRIBE "+/status"(qos 0)`) {
+		t.Errorf("subscribe not decoded: %q", out)
+	}
+	down2 := &pktLog{who: "<-", want: 2}
+	incoming := []byte{0x20, 2, 0, 0, 0x90, 3, 0, 1, 0x80, 0x30, 7, 0, 3, 'a', '/', 'b', 'x', 'y'} // CONNACK, SUBACK refused, then a PUBLISH
+	if out := capture(func() { down2.feed(incoming) }); !strings.Contains(out, "SUBACK [128] (128 = the broker refused)") || strings.Contains(out, "PUBLISH") {
+		t.Errorf("suback not decoded, or an incoming publish was printed: %q", out)
+	}
+
 	junk := &pktLog{who: "<-", want: 2} // an HTTP answer is not MQTT: say nothing and do not break
 	if out := capture(func() { junk.feed([]byte("HTTP/1.1 400 Bad Request\r\n\r\n")) }); out != "" || !junk.off {
 		t.Errorf("non-MQTT stream was logged: %q", out)

@@ -76,6 +76,7 @@ func relay(w http.ResponseWriter, r *http.Request, host, port string) {
 	}
 	defer conn.Close()
 	log.Printf("connected to %s", conn.RemoteAddr())
+	up, down := &pktLog{who: "-> " + conn.RemoteAddr().String(), want: 1}, &pktLog{who: "<- " + conn.RemoteAddr().String(), want: 2}
 	ctx, stop := context.WithCancel(r.Context())
 	defer stop()
 	go func() { // broker -> page
@@ -83,6 +84,7 @@ func relay(w http.ResponseWriter, r *http.Request, host, port string) {
 		buf := make([]byte, 32<<10)
 		for {
 			n, err := conn.Read(buf)
+			down.feed(buf[:n])
 			if n > 0 && ws.Write(ctx, websocket.MessageBinary, buf[:n]) != nil {
 				return
 			}
@@ -96,6 +98,7 @@ func relay(w http.ResponseWriter, r *http.Request, host, port string) {
 		if err != nil {
 			return
 		}
+		up.feed(data)
 		if _, err := conn.Write(data); err != nil {
 			return
 		}
@@ -137,6 +140,7 @@ func main() {
 		return
 	}
 	fmt.Println("MQTT Panel rodando em", url, "- feche esta janela para sair")
+	fmt.Println("O que o app manda para o broker (topico, QoS, payload) e o que ele responde aparece aqui.")
 	if !*noOpen {
 		go open(url)
 	}

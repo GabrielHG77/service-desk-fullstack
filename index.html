@@ -5,25 +5,25 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MQTT Panel</title>
 <style>
-:root{--primary:#3880ff;--secondary:#3dc2ff;--tertiary:#5260ff;--success:#2dd36f;--warning:#ffc409;--danger:#eb445a;--medium:#92949c;
+:root{--primary:#f2d740;--black:#0c0e0f;--secondary:#3dc2ff;--tertiary:#5260ff;--success:#2dd36f;--warning:#ffc409;--danger:#eb445a;--medium:#92949c;
   --bg:#f4f5f8;--card:#fff;--fg:#1c1c1e;--line:#d7d8da;--sub:#666}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#121212;--card:#1e1e1e;--fg:#f2f2f2;--line:#3a3a3a;--sub:#aaa;color-scheme:dark}}
 :root[data-theme=dark]{--bg:#121212;--card:#1e1e1e;--fg:#f2f2f2;--line:#3a3a3a;--sub:#aaa;color-scheme:dark}
 *{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px system-ui,sans-serif}
-.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--primary);color:#fff}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--black);color:#fff;border-bottom:3px solid var(--primary)}
 .bar h1{font-size:18px;margin:0;font-weight:500}.sp{flex:1}
 .ic{background:none;border:0;color:inherit;font-size:20px;cursor:pointer;padding:4px 8px}
 main{max-width:720px;margin:0 auto;padding:12px 16px 96px}
-.btn{border:0;border-radius:4px;padding:12px 16px;font:inherit;font-weight:600;text-transform:uppercase;cursor:pointer;background:var(--primary);color:#fff}
-.btn{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}.btn:active{filter:brightness(.8)}.btn.gray{background:var(--medium)}.btn.red{background:var(--danger)}.btn.sm{padding:5px 10px;font-size:12px}.btn.lg{padding:16px 24px;font-size:17px}
+.btn{border:0;border-radius:4px;padding:12px 16px;font:inherit;font-weight:600;text-transform:uppercase;cursor:pointer;background:var(--primary);color:var(--black)}
+.btn{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}.btn:active{filter:brightness(.8)}.btn.gray{background:var(--medium);color:#fff}.btn.sm{padding:5px 10px;font-size:12px}.btn.lg{padding:16px 24px;font-size:17px}
 .fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;font-size:30px;padding:0;box-shadow:0 3px 8px #0006;z-index:6}
 .fld{margin:0 0 12px}.lh{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);margin-bottom:3px}
 .fld label{font-size:13px;color:var(--sub)}.fld .chk{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--fg)}.chk input{width:auto}
 input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--fg);font:inherit;font-size:16px}
 input[type=color]{padding:2px;height:40px}
 .row{display:flex;gap:8px}.row>*{flex:1;min-width:0}.req{color:var(--danger)}
-.q{border:0;border-radius:50%;width:18px;height:18px;font-size:11px;background:var(--primary);color:#fff;cursor:pointer;padding:0}
+.q{border:0;border-radius:50%;width:18px;height:18px;font-size:11px;background:var(--primary);color:var(--black);cursor:pointer;padding:0}
 .help{color:var(--sub);display:block;margin-top:3px}.err{white-space:pre-line;color:var(--danger);margin:8px 0}
 .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
 .pickrow{margin:6px 0}.pickrow .help{margin:0}
@@ -54,9 +54,9 @@ const h=(tag,attrs,...kids)=>{const e=document.createElement(tag);
 const uid=()=>Math.random().toString(36).slice(2,10);
 const rid=()=>Array.from(crypto.getRandomValues(new Uint8Array(10)),b=>'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[b%62]).join('');
 let tt;const toast=m=>{const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,Math.max(2500,m.length*70))};
-const COL={primary:'#3880ff',secondary:'#3dc2ff',tertiary:'#5260ff',success:'#2dd36f',warning:'#ffc409',danger:'#eb445a',medium:'#92949c'};
+const COL={primary:'#f2d740',secondary:'#3dc2ff',tertiary:'#5260ff',success:'#2dd36f',warning:'#ffc409',danger:'#eb445a',medium:'#92949c'};
 const COLS=Object.keys(COL).map(k=>[k,k[0].toUpperCase()+k.slice(1)]);
-const cv=c=>COL[c]||COL.primary;
+const fill=c=>{const k=COL[c]?c:'primary';return `background:${COL[k]};color:${k==='primary'||k==='warning'?'#0c0e0f':'#fff'}`};   // white text is unreadable on the two yellows
 
 /* ---------- storage (ponytail: password in plain localStorage; fine for personal use, encrypt if the device is shared) ---------- */
 const KEY='mqtt-buttons-v1';
@@ -170,7 +170,7 @@ const PT={
     T('payloadRel','Separate payload on release',{help:'Publish a second payload when the button is released'}),C('repeat','Repeat publish until released'),
     N('repInt','Repeat interval in milliseconds',{def:1000,show:v=>v.repeat,req:1,err:'Repeat interval is required',val:x=>x>=100&&x<=10000?null:'100-10000 allowed'}),
     COLOR,SIZE,C('fit','Fit to panel width'),...QR,...JSN,...TAIL],
-    body(p){const b=h('button',{class:'btn pb'+sz(p),style:`background:${cv(p.color)}${p.fit?';width:100%':''}`},p.name),pl=()=>p.noPayload?'':p.payload;
+    body(p){const b=h('button',{class:'btn pb'+sz(p),style:`${fill(p.color)}${p.fit?';width:100%':''}`},p.name),pl=()=>p.noPayload?'':p.payload;
       if((p.repeat||p.payloadRel)&&!p.confirm){let tm,down=false;   // hold behaviour needs pointer events; plain taps use click (keyboard friendly)
         const up=()=>{if(!down)return;down=false;clearInterval(tm);if(p.payloadRel)send(p,p.payloadRel)};
         b.style.touchAction='none';b.oncontextmenu=e=>e.preventDefault();
@@ -184,7 +184,7 @@ const PT={
       val:(x,v)=>x.length||v.items?.length?null:'Select at least one button'}),...TAIL],
     // each member keeps its own topic, payload, colour and options; p.items only exists on groups saved by older versions
     body:p=>h('div',{class:'grp'},db.panels.filter(b=>b.type==='button'&&p.members?.includes(b.id)).map(b=>PT.button.body(b)),
-      (p.items||[]).map(it=>h('button',{class:'btn'+sz(p),style:`background:${cv(p.color)}`,onclick:()=>send(p,it.payload)},it.label)))}
+      (p.items||[]).map(it=>h('button',{class:'btn'+sz(p),style:fill(p.color),onclick:()=>send(p,it.payload)},it.label)))}
 };
 
 /* ---------- views ---------- */
@@ -203,7 +203,7 @@ home(){
   if(db.conn&&!client&&!off)connect();
   const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:()=>{if(client){off=true;hangup()}else connect()}},status);
   return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
-    h('main',{},!db.conn?h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn red',onclick:()=>go({n:'conn'})},'Setup a connection'))
+    h('main',{},!db.conn?h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn',onclick:()=>go({n:'conn'})},'Setup a connection'))
       :db.panels.length?h('div',{class:'panels'},visible().map((p,i,vis)=>card(p,i,vis)))
       :h('div',{class:'empty'},h('p',{},'No buttons yet'),h('button',{class:'btn',onclick:add},'Add a button')),
       db.conn&&db.panels.length?h('button',{class:'btn fab','aria-label':'Add',onclick:add},'+'):null))},

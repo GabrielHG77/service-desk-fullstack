@@ -120,9 +120,11 @@ const note=(t,m)=>{feed.unshift({t,m,at:Date.now()});feed.length=Math.min(feed.l
 // a command kept (retained) by the broker is handed to a board again every time it connects: held lists the ones seen, to show and clear them
 const CMD=/\/command\/|\/set$|\/(stopflow|continue)$|^network_broadcast\//;
 const touch=()=>{if(dirty)return;dirty=true;setTimeout(()=>{dirty=false;if(route.n==='status')draw()},250)};   // at most 4 redraws a second, retained messages arrive in bursts
-function onMsg(t,m,stored,pk){   // stored: the broker replays a retained message = the board spoke once, not proof it is there now. Only a live message or an answer makes a board "live"
+const CTRL=/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+function onMsg(t,raw,stored,pk){   // stored: the broker replays a retained message = the board spoke once, not proof it is there now. Only a live message or an answer makes a board "live"
+  const m=raw.replace(CTRL,'');   // a board may end its text with a zero byte ("ready\0"): that is not "ready", and pasted on Windows the text stops at that byte. The log keeps the original
   if(!t.startsWith('$SYS/')){feed.unshift({t,m:m.slice(0,2000),at:Date.now(),stored});feed.length=Math.min(feed.length,300)}
-  log('mqtt.in',{conn:cn,topic:t,payload:m,retain:!!stored,qos:pk?.qos,dup:pk?.dup||undefined,bytes:m.length});
+  log('mqtt.in',{conn:cn,topic:t,payload:raw,retain:!!stored,qos:pk?.qos,dup:pk?.dup||undefined,bytes:raw.length});
   if(stored&&m!==''&&CMD.test(t)&&!held.has(t)){held.set(t,m);log('board.held_command',{level:'warn',topic:t,payload:m,note:'the broker keeps this command and gives it to the board every time it connects'})}
   let x;const dev=id=>{let b=boards.get(id);if(!b){b={id};boards.set(id,b);log('board.new',{id,topic:t,stored})}if(!stored&&!b.live){b.live=true;log('board.live',{id,topic:t})}return b};
   if(t==='$SYS/broker/clients/connected')sys.clients=m;
@@ -319,6 +321,7 @@ function diagnose(){
   log('ui.diagnose',{boards:live.map(b=>b.id).join(','),requests:DIAG.length});
   const ms=live.length*DIAG.length*300;toast(`Asking ${live.map(b=>b.id).join(', ')}, about ${Math.ceil(ms/1000)} s`);setTimeout(()=>route.n==='status'&&draw(),ms+1500)}
 const clock=t=>new Date(t).toLocaleTimeString(),
+  vis=s=>s.replace(CTRL,c=>'\\x'+c.charCodeAt(0).toString(16).padStart(2,'0')),   // what is copied never holds a zero byte or the like: on Windows the pasted text would stop there
   feedText=()=>feed.map(f=>`${clock(f.at)}  ${f.t}  ${f.m}${f.stored?'  (stored in the broker)':''}`).join('\n')||'(nothing yet)',
   diagLines=b=>{const L=[],e=b.eventhandler,mo=b.motors,ty=mo?.config?.type;
     if(b.manualmode!=null)L.push('manual mode: '+b.manualmode+(b.manualmode==='false'?' (speed commands are ignored)':''));
@@ -330,7 +333,7 @@ const clock=t=>new Date(t).toLocaleTimeString(),
     return L},
   boardsText=()=>[...boards.values()].map(b=>[`${b.id} ${b.state||'no status'} ${b.ip||'IP unknown'}${b.live?'':' (stored, no answer)'}`,...diagLines(b).map(l=>'  '+l)].join('\n')).join('\n'),
   heldText=()=>held.size?'commands kept by the broker: '+[...held].map(([t,m])=>`${t} ← ${m}`).join(', '):'',
-  report=()=>boardsText()+(held.size?'\n'+heldText():'')+'\n--- messages, newest first ---\n'+feedText(),
+  report=()=>vis(boardsText()+(held.size?'\n'+heldText():'')+'\n--- messages, newest first ---\n'+feedText()),
   copyReport=()=>Promise.resolve().then(()=>navigator.clipboard.writeText(report())).then(()=>toast('Copied: paste it in the chat'),()=>toast('Could not copy: open "Messages received", select the text and copy it'));
 // ---- what the person sends to the assistant: the log of the program and of the page, merged by time ----
 async function mergedTail(n){
@@ -341,7 +344,7 @@ const isKey=l=>{const t=l.split(' ',4)[3]||'';
   return / level=(error|warn)\b/.test(l)||/^(sys|app|ui|board|note)(\.|$)/.test(t)||/^mqtt\.(connect|reconnect|close|offline|end|disconnect|hangup|sub|out_error|lib_missing)/.test(t)||/^relay\.(ws_|dial|end|stats)/.test(t)||t==='relay.pkt'&&/ type=(CONNECT|CONNACK|DISCONNECT)\b/.test(l)};
 async function buildExport(n=2000){
   const lines=await mergedTail(n),key=lines.filter(isKey),i=INFO||{},c=db.conn,o=-new Date().getTimezoneOffset(),tz=`UTC${o>=0?'+':'-'}${pad(Math.floor(Math.abs(o)/60))}:${pad(Math.abs(o)%60)}`;
-  return [
+  return vis([
     '# MQTT Panel log, written to be read by an assistant',
     `exported ${stamp(Date.now())} (${tz}) | ${lines.length} lines, ${key.length} of them key events | page hash ${i.page||'?'} | program run ${i.run||'?'} pid ${i.pid||'?'}`,
     `machine ${i.host||'?'} user ${i.user||'?'} ${i.os||''} | program file ${i.exe||'?'} | log file ${i.logPath||'(only in the page)'}`,
@@ -359,7 +362,7 @@ async function buildExport(n=2000){
     ...(held.size?[heldText()]:[]),...(denied.length?['subscriptions the broker refused: '+denied.join(', ')]:[]),
     `buttons (${db.panels.length}):`,...db.panels.map(p=>'  '+Object.entries(panelInfo(p)).filter(([,v])=>v!==undefined).map(([k,v])=>`${k}=${val(v)}`).join(' ')),
     '',`## KEY EVENTS (${key.length})`,...key,
-    '',`## FULL TIMELINE (${lines.length} lines, oldest first)`,...lines].join('\n')}
+    '',`## FULL TIMELINE (${lines.length} lines, oldest first)`,...lines].join('\n'))}
 async function copyExport(){
   const text=await buildExport();log('ui.export',{action:'copy',chars:text.length});
   try{await navigator.clipboard.writeText(text);toast(`Copied ${Math.ceil(text.length/1024)} KB: paste it in the chat with Claude`)}

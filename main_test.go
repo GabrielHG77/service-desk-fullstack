@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -96,6 +97,8 @@ func TestRelay(t *testing.T) {
 
 // the console says who ended a connection, so a drop of the broker or the network can be told from the page closing
 func TestRelayLogsWhoEndedIt(t *testing.T) {
+	l := useLog(t, 1<<20)
+	atomic.StoreInt64(&connSeq, 0) // the connections of this test are numbered 1 and 2
 	broker, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -137,6 +140,12 @@ func TestRelayLogsWhoEndedIt(t *testing.T) {
 	if !strings.Contains(out, "ended by the broker or the network after") {
 		t.Errorf("a broker hang-up was not logged as such:\n%s", out)
 	}
+	all := strings.Join(l.tail(100), "\n")
+	for _, want := range []string{" relay.ws_open c=1 to=127.0.0.1:", " relay.dial c=1 to=127.0.0.1:", ` relay.end c=1 by="the broker or the network" secs=`, " up_bytes=1 ", "local=127.0.0.1:"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("the event log is missing %q:\n%s", want, all)
+		}
+	}
 
 	out = capture(func() {
 		c, _, err := websocket.Dial(ctx, ws+bport, &websocket.DialOptions{Subprotocols: []string{"mqtt"}})
@@ -151,5 +160,8 @@ func TestRelayLogsWhoEndedIt(t *testing.T) {
 	hangUp <- true
 	if !strings.Contains(out, "ended by the page after") {
 		t.Errorf("the page closing was not logged as such:\n%s", out)
+	}
+	if all := strings.Join(l.tail(100), "\n"); !strings.Contains(all, ` relay.end c=2 by="the page" secs=`) {
+		t.Errorf("the event log does not say the page ended connection 2:\n%s", all)
 	}
 }

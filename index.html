@@ -46,6 +46,8 @@ input[type=color]{padding:2px;height:40px}
 .pill{border-radius:12px;padding:2px 10px;font-size:12px;font-weight:600;background:var(--medium);color:#fff}
 .pill.ready,.pill.running{background:var(--success)}.pill.online{background:var(--warning);color:var(--black)}.pill.offline{background:var(--danger)}
 .btns2{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.diag{display:block;white-space:pre-line;word-break:break-word;margin-top:4px}
+.logview{white-space:pre-wrap;word-break:break-all;font-size:11px;line-height:1.35;max-height:48vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px;margin:8px 0}
+#logbox{width:100%;height:30vh;font-size:11px;margin-top:8px}.quick{justify-content:flex-start;margin:6px 0}#note{flex:1}
 .feed{margin-top:12px}.feed summary{cursor:pointer;color:var(--sub)}.feed pre{white-space:pre-wrap;word-break:break-all;font-size:12px;margin:8px 0}
 </style>
 </head>
@@ -61,7 +63,7 @@ const h=(tag,attrs,...kids)=>{const e=document.createElement(tag);
   for(const c of kids.flat())if(c!=null&&c!==false)e.append(c.nodeType?c:String(c));return e};
 const uid=()=>Math.random().toString(36).slice(2,10);
 const rid=()=>Array.from(crypto.getRandomValues(new Uint8Array(10)),b=>'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[b%62]).join('');
-let tt;const toast=m=>{const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,Math.max(2500,m.length*70))};
+let tt;const toast=m=>{log('ui.toast',{text:m});const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,Math.max(2500,m.length*70))};
 const COL={primary:'#f2d740',secondary:'#3dc2ff',tertiary:'#5260ff',success:'#2dd36f',warning:'#ffc409',danger:'#eb445a',medium:'#92949c'};
 const COLS=Object.keys(COL).map(k=>[k,k[0].toUpperCase()+k.slice(1)]);
 const fill=c=>{const k=COL[c]?c:'primary';return `background:${COL[k]};color:${k==='primary'||k==='warning'?'#0c0e0f':'#fff'}`};   // white text is unreadable on the two yellows
@@ -70,7 +72,40 @@ const fill=c=>{const k=COL[c]?c:'primary';return `background:${COL[k]};color:${k
 const KEY='mqtt-buttons-v1';
 let db;try{db=JSON.parse(localStorage.getItem(KEY))}catch{}
 db=db&&Array.isArray(db.panels)?db:{conn:null,panels:[]};
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch{toast('Could not save (storage blocked)')}};
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){log('app.storage_error',{level:'error',err:e.message});toast('Could not save (storage blocked)')}};
+
+/* ---------- log: everything that happens, one line each, to be read by a person or by an assistant. The Windows program keeps the same lines in a file (mqtt-panel.log) ---------- */
+// line: <local time> T+<seconds since the program started> <tag.event> key=value ...   (the same format the program writes, so both sort into one story)
+const LOG=[],OUT=[],T0=Date.now(),SAFE=/^[\w.:/+#$@<>-]+$/;let progStart=null,INFO=null,sink=true,logAll=false;
+const pad=(n,w=2)=>String(n).padStart(w,'0'),
+  stamp=t=>{const d=new Date(t);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(),3)}`},
+  val=v=>{if(v==null)return 'null';if(typeof v==='object')v=JSON.stringify(v);if(typeof v!=='string')return String(v);const r=[...v];
+    return r.length>300?JSON.stringify(r.slice(0,300).join('')+`…(+${r.length-300})`):v!==''&&SAFE.test(v)?v:JSON.stringify(v)},
+  fmt=e=>`${stamp(e.t)} T+${((e.t-(progStart??T0))/1000).toFixed(3)} ${e.tag}${Object.entries(e.d||{}).filter(([,v])=>v!==undefined).map(([k,v])=>` ${k}=${val(v)}`).join('')}`;
+function log(tag,d){const e={t:Date.now(),tag,d};LOG.push(e);OUT.push(e);if(LOG.length>20000)LOG.splice(0,2000);if(OUT.length>20000)OUT.splice(0,2000);return e}
+function flush(beacon){   // sends what is new to the program, which writes it in the file
+  if(!sink||progStart==null||!OUT.length)return;
+  const text=OUT.splice(0,500).map(fmt).join('\n')+'\n';
+  if(beacon&&navigator.sendBeacon){navigator.sendBeacon('/log',new Blob([text],{type:'text/plain'}));return}
+  fetch('/log',{method:'POST',headers:{'Content-Type':'text/plain'},body:text}).then(r=>{if(!r.ok)sink=false},()=>{sink=false})}   // no Windows program behind this page: the lines stay here
+setInterval(flush,500);
+fetch('/info',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject(r.status)).then(i=>{INFO=i;progStart=i.startedAt;
+  log('app.program',{run:i.run,pid:i.pid,host:i.host,user:i.user,os:i.os,go:i.go,exe:i.exe,page_hash:i.page,vcs:i['vcs.revision']?String(i['vcs.revision']).slice(0,8)+(i['vcs.modified']==='true'?'+modified':''):null,net:i.net,log_file:i.logPath})},
+  ()=>{progStart=T0;sink=false;log('app.program',{note:'no Windows program behind this page, so the lines stay in the page'})});
+let beat=Date.now();setInterval(()=>{const n=Date.now(),gap=n-beat;beat=n;   // a page that was frozen or throttled misses its keepalive pings: that can look like the broker dropping it
+  if(gap>3000)log('app.stall',{level:'warn',gap_ms:gap,hidden:document.hidden,note:'the page did not run for that long: window hidden or throttled, PC asleep, or busy'})},1000);
+setInterval(()=>log('board.snapshot',{conn:status,connected:!!client?.connected,boards:[...boards.values()].map(b=>`${b.id}:${b.state||'?'}${b.live?'':'(stored)'}@${b.ip||'?'}`).join(' ')||null,kept_commands:held.size,messages:feed.length}),60000);
+addEventListener('error',e=>log('app.error',{level:'error',msg:e.message,at:`${String(e.filename||'').split('/').pop()}:${e.lineno}:${e.colno}`,stack:String(e.error?.stack||'').slice(0,500)}));
+addEventListener('unhandledrejection',e=>log('app.rejection',{level:'error',reason:String(e.reason?.message||e.reason),stack:String(e.reason?.stack||'').slice(0,500)}));
+for(const k of ['error','warn']){const o=console[k];console[k]=(...a)=>{log('app.console',{level:k==='error'?'error':'warn',msg:a.map(x=>x instanceof Error?x.message:String(x)).join(' ').slice(0,400)});o.apply(console,a)}}
+document.addEventListener('visibilitychange',()=>log('app.visibility',{state:document.visibilityState}));
+addEventListener('online',()=>log('app.network',{online:true}));addEventListener('offline',()=>log('app.network',{level:'warn',online:false}));
+addEventListener('pagehide',()=>{log('app.pagehide',{});while(OUT.length&&sink&&progStart!=null)flush(true)});
+document.addEventListener('click',e=>{const el=e.target.closest?.('button,summary,a,[role=button],input[type=checkbox],select');   // never the value of a field: it may be a password
+  if(el)log('ui.click',{el:el.id||el.className||el.tagName.toLowerCase(),text:el.matches('input,select')?undefined:(el.textContent||'').trim().slice(0,40),route:typeof route==='undefined'?null:route.n})},true);
+
+const panelInfo=p=>({name:p.name,id:p.id,topic:p.topic,payload:p.noPayload?'(empty)':p.payload,payload_off:p.toggle?p.payloadOff:undefined,toggle:p.toggle||undefined,payload_release:p.payloadRel||undefined,
+  repeat_ms:p.repeat?p.repInt:undefined,qos:p.qos,retain:p.retain||undefined,confirm:p.confirm||undefined,json:p.isJson||undefined,members:p.members?.join(',')});
 
 /* ---------- MQTT ---------- */
 const BRIDGE=false;   // the Windows program serves this page with true: it relays Websocket <-> plain TCP, so the broker's normal port 1883 works
@@ -85,44 +120,70 @@ const note=(t,m)=>{feed.unshift({t,m,at:Date.now()});feed.length=Math.min(feed.l
 // a command kept (retained) by the broker is handed to a board again every time it connects: held lists the ones seen, to show and clear them
 const CMD=/\/command\/|\/set$|\/(stopflow|continue)$|^network_broadcast\//;
 const touch=()=>{if(dirty)return;dirty=true;setTimeout(()=>{dirty=false;if(route.n==='status')draw()},250)};   // at most 4 redraws a second, retained messages arrive in bursts
-function onMsg(t,m,stored){   // stored: the broker replays a retained message = the board spoke once, not proof it is there now. Only a live message or an answer makes a board "live"
+function onMsg(t,m,stored,pk){   // stored: the broker replays a retained message = the board spoke once, not proof it is there now. Only a live message or an answer makes a board "live"
   if(!t.startsWith('$SYS/')){feed.unshift({t,m:m.slice(0,2000),at:Date.now(),stored});feed.length=Math.min(feed.length,300)}
-  if(stored&&m!==''&&CMD.test(t))held.set(t,m);
-  let x;const dev=id=>{if(!boards.has(id))boards.set(id,{id});const b=boards.get(id);if(!stored)b.live=true;return b};
+  log('mqtt.in',{conn:cn,topic:t,payload:m,retain:!!stored,qos:pk?.qos,dup:pk?.dup||undefined,bytes:m.length});
+  if(stored&&m!==''&&CMD.test(t)&&!held.has(t)){held.set(t,m);log('board.held_command',{level:'warn',topic:t,payload:m,note:'the broker keeps this command and gives it to the board every time it connects'})}
+  let x;const dev=id=>{let b=boards.get(id);if(!b){b={id};boards.set(id,b);log('board.new',{id,topic:t,stored})}if(!stored&&!b.live){b.live=true;log('board.live',{id,topic:t})}return b};
   if(t==='$SYS/broker/clients/connected')sys.clients=m;
   else if(t==='$SYS/broker/version')sys.version=m;
-  else if(x=/^([^/]+)\/discovery$/.exec(t)){try{const d=JSON.parse(m),b=dev(x[1]);Object.assign(b,{host:d.hostname,mac:d.mac,sw:d.swAppVersion});if(d.ip&&!b.ipLive)b.ip=d.ip}catch{}}   // the board's own answer beats the boot-time IP
-  else if(x=/^([^/]+)\/network\/ip$/.exec(t)){const ip=m.trim().replace(/^"|"$/g,'');if(/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)){const b=dev(x[1]);b.ip=ip;if(!stored)b.ipLive=true}}
-  else if(x=/^([^/]+)\/status$/.exec(t)){const b=Object.assign(dev(x[1]),{state:m.trim().toLowerCase()});if(!stored)b.at=Date.now()}
-  else if(x=/^([^/]+)\/(manualmode|mcpplayenable)$/.exec(t))dev(x[1])[x[2]]=m.trim();   // answers to Diagnose, shown on the board's card
-  else if(x=/^([^/]+)\/(eventhandler|motors)$/.exec(t)){try{dev(x[1])[x[2]]=JSON.parse(m)}catch{}}
-  else if(x=/^([^/]+)\/motors\/(\d)\/info\/startstops$/.exec(t)){const b=dev(x[1]);(b.startstops||(b.startstops={}))[x[2]]=m.trim()}
+  else if(x=/^([^/]+)\/discovery$/.exec(t)){try{const d=JSON.parse(m),b=dev(x[1]),ip0=b.ip;Object.assign(b,{host:d.hostname,mac:d.mac,sw:d.swAppVersion});if(d.ip&&!b.ipLive)b.ip=d.ip;   // the board's own answer beats the boot-time IP
+    if(b.ip!==ip0)log('board.ip',{id:b.id,from:ip0??null,to:b.ip,source:'discovery',stored})}catch(e){log('board.bad_json',{level:'warn',topic:t,err:e.message})}}
+  else if(x=/^([^/]+)\/network\/ip$/.exec(t)){const ip=m.trim().replace(/^"|"$/g,'');
+    if(/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)){const b=dev(x[1]);if(b.ip!==ip)log('board.ip',{id:b.id,from:b.ip??null,to:ip,source:stored?'stored answer':'answer',stored});b.ip=ip;if(!stored)b.ipLive=true}
+    else log('board.bad_ip',{level:'warn',topic:t,payload:m})}
+  else if(x=/^([^/]+)\/status$/.exec(t)){const b=dev(x[1]),to=m.trim().toLowerCase(),from=b.state;b.state=to;if(!stored)b.at=Date.now();if(from!==to)log('board.state',{id:b.id,from:from??null,to,stored,live:!stored})}
+  else if(x=/^([^/]+)\/(manualmode|mcpplayenable)$/.exec(t)){dev(x[1])[x[2]]=m.trim();log('board.diag',{id:x[1],what:x[2],value:m.trim()})}   // answers to Diagnose, shown on the board's card
+  else if(x=/^([^/]+)\/(eventhandler|motors)$/.exec(t)){try{const d=dev(x[1])[x[2]]=JSON.parse(m);
+    log('board.diag',x[2]==='eventhandler'?{id:x[1],what:'eventhandler',state:d.state,active_event:d['active event'],last_event:d['last event'],network:d.network,overvoltage:d.overvoltage,undervoltage:d.undervoltage,motor:d.motor}:
+      {id:x[1],what:'motors',types:d.config?.type?.join(','),status:d.info?.status?.join(','),speedrel:d.speedrel?.join(','),normspeed:d.config?.normspeed?.join(',')})}catch(e){log('board.bad_json',{level:'warn',topic:t,err:e.message})}}
+  else if(x=/^([^/]+)\/motors\/(\d)\/info\/startstops$/.exec(t)){const b=dev(x[1]);(b.startstops||(b.startstops={}))[x[2]]=m.trim();log('board.diag',{id:x[1],what:'startstops',motor:x[2],value:m.trim()})}
   touch()}
-function hangup(){if(client){const c=client;client=null;c.end(true)}setStatus('disconnected')}
+let cn=0;   // number of the connection attempt, to follow one through the log
+function hangup(){if(client){const c=client;client=null;log('mqtt.hangup',{conn:cn,by:'the app'});c.end(true)}setStatus('disconnected')}
+const pktInfo=pk=>({cmd:pk.cmd,id:pk.messageId,...(pk.cmd==='connect'?{client_id:pk.clientId,keepalive:pk.keepalive,clean:pk.clean,user:!!pk.username}:pk.cmd==='connack'?{return_code:pk.returnCode,session_present:pk.sessionPresent}:
+  pk.cmd==='subscribe'?{subs:(pk.subscriptions||[]).map(s=>s.topic+':'+s.qos).join(',')}:pk.cmd==='suback'?{granted:pk.granted}:pk.cmd==='disconnect'?{reason:pk.reasonCode}:{})});
+function pub(topic,payload,opts,why,cb){   // every message the app sends goes through here, so it is in the log with the reason
+  log('mqtt.out',{conn:cn,topic,payload:String(payload),qos:opts?.qos||0,retain:!!opts?.retain,why});
+  client.publish(topic,payload,opts||{},e=>{if(e)log('mqtt.out_error',{level:'error',topic,err:e.message});cb&&cb(e)})}
 function connect(){
   hangup();off=false;boards.clear();held.clear();sys={};denied=[];const c=db.conn;   // the list of messages stays: it is the story of what happened
-  if(typeof mqtt==='undefined'){setStatus('error');return toast('MQTT library failed to load (check internet)')}
+  if(typeof mqtt==='undefined'){setStatus('error');log('mqtt.lib_missing',{level:'error'});return toast('MQTT library failed to load (check internet)')}
   setStatus('connecting');let cl;
   const url=c.protocol==='tcp'?`ws://${location.host}/tcp/${c.host}/${c.port}`:`${c.protocol==='wss'?'wss':'ws'}://${c.host}:${c.port}/${String(c.path||'mqtt').replace(/^\/+/,'')}`;
+  const cid=rid(),me=++cn;let up=0,tries=0;
+  log('mqtt.connect_try',{conn:me,url,client_id:cid,user:c.username||null,protocol:c.protocol,keepalive_s:60,reconnect_ms:3000,connect_timeout_ms:20000});
   try{cl=client=mqtt.connect(url,
-    {clientId:rid(),username:c.username||undefined,password:c.password||undefined,reconnectPeriod:3000,connectTimeout:20000,resubscribe:false})}
-  catch(e){setStatus('error');return toast(e.message)}
+    {clientId:cid,username:c.username||undefined,password:c.password||undefined,reconnectPeriod:3000,connectTimeout:20000,resubscribe:false})}
+  catch(e){setStatus('error');log('mqtt.connect_throw',{conn:me,level:'error',err:e.message});return toast(e.message)}
+  const ev=(e,d)=>log('mqtt.'+e,{conn:me,...(cl===client?{}:{stale:true}),...d});   // stale: an old connection that is still closing
+  cl.on('connect',pk=>{up=Date.now();ev('connect',{session_present:pk?.sessionPresent,return_code:pk?.returnCode,attempt:++tries})})
+    .on('reconnect',()=>ev('reconnect',{}))
+    .on('offline',()=>ev('offline',{level:'warn'}))
+    .on('close',()=>{ev('close',{level:up?'warn':'error',up_for_s:up?(Date.now()-up)/1000:null,was_connected:!!up});up=0})
+    .on('end',()=>ev('end',{}))
+    .on('disconnect',pk=>ev('disconnect',{reason:pk?.reasonCode}))
+    .on('error',e=>ev('error',{level:'error',err:e?.message,code:e?.code}))
+    .on('packetsend',pk=>{if(pk.cmd!=='publish')ev('pkt',{dir:'out',...pktInfo(pk)})})
+    .on('packetreceive',pk=>{if(pk.cmd!=='publish')ev('pkt',{dir:'in',...pktInfo(pk)})});
   let opened=false,told=false;   // told: explain a failed attempt once, not on every 3s retry
   cl.on('connect',()=>{if(cl===client){opened=true;setStatus('connected');denied=[];
-      SUBS.forEach(t=>cl.subscribe(t,e=>{if(cl===client&&/^Subscribe error/.test(e?.message)){denied.push(t);touch()}}));   // one by one: for a refusal mqtt.js does not say which filter
+      SUBS.forEach(t=>cl.subscribe(t,(e,g)=>{log('mqtt.sub',{conn:me,filter:t,ok:!e,granted_qos:g?.[0]?.qos,err:e?.message,level:e?'warn':undefined});
+        if(cl===client&&/^Subscribe error/.test(e?.message)){denied.push(t);touch()}}));   // one by one: for a refusal mqtt.js does not say which filter
       setTimeout(()=>{if(cl===client&&cl.connected)ask()},1500)}})   // the broker's stored messages are in by now: ask each board, only an answer proves it is there
-    .on('message',(t,m,pk)=>cl===client&&onMsg(t,String(m),pk.retain))
+    .on('message',(t,m,pk)=>cl===client&&onMsg(t,String(m),pk.retain,pk))
     .on('reconnect',()=>cl===client&&setStatus('connecting'))
     .on('close',()=>{if(cl!==client)return;setStatus('disconnected');
       if(!opened&&!told){told=true;toast(c.protocol==='tcp'?'Could not connect. Check the address and port, and that this PC can reach the broker.':/^(1883|8883)$/.test(String(c.port))?"Port 1883/8883 is plain MQTT (TCP), which browsers can't use. Use your broker's Websocket port.":'Could not connect. Check the address, the Websocket port and that the broker is reachable.')}})
     .on('error',e=>{if(cl===client){told=true;setStatus('error');toast(e.message)}})}
 function send(p,payload){   // true when the message went out (a toggle button only flips when it did)
-  const pl=String(payload);
-  if(/\/command\/teachin$/.test(p.topic)&&!confirm('Teach-in deletes the IP configuration of the board (manual, 18.8.7), and the board may not come back. Send it anyway?'))return false;
-  if(p.confirm&&!confirm((p.confirmMsg||'<payload>').replaceAll('<payload>',pl)))return false;
-  if(!client?.connected){toast('Not connected');return false}
+  const pl=String(payload),blocked=reason=>{log('ui.press_blocked',{level:'warn',name:p.name,topic:p.topic,payload:pl,reason});return false};
+  log('ui.press',{name:p.name,id:p.id,topic:p.topic,payload:pl,qos:+p.qos||0,retain:!!p.retain,mode:p.toggle?'toggle':p.payloadRel?'hold':p.repeat?'repeat':'tap',connected:!!client?.connected});
+  if(/\/command\/teachin$/.test(p.topic)&&!confirm('Teach-in deletes the IP configuration of the board (manual, 18.8.7), and the board may not come back. Send it anyway?'))return blocked('teach-in not confirmed');
+  if(p.confirm&&!confirm((p.confirmMsg||'<payload>').replaceAll('<payload>',pl)))return blocked('confirmation dismissed');
+  if(!client?.connected){toast('Not connected');return blocked('not connected')}
   const m=p.isJson&&p.jsonEnv&&pl!==''?p.jsonEnv.replaceAll('<payload>',pl):pl,keep=p.retain&&CMD.test(p.topic);
-  client.publish(p.topic,m,{qos:+p.qos||0,retain:!!p.retain},e=>toast(e?'Error: '+e.message:`Sent ${p.topic} ← ${m}`+(keep&&m!==''?'  (RETAINED: the broker gives it to the board again every time it connects)':'')));
+  pub(p.topic,m,{qos:+p.qos||0,retain:!!p.retain},'button '+p.name,e=>toast(e?'Error: '+e.message:`Sent ${p.topic} ← ${m}`+(keep&&m!==''?'  (RETAINED: the broker gives it to the board again every time it connects)':'')));
   if(keep){m===''?held.delete(p.topic):held.set(p.topic,m);touch()}
   return true}
 
@@ -234,19 +295,19 @@ const PT={
 /* ---------- views ---------- */
 const visible=()=>{const g=new Set(db.panels.flatMap(x=>x.members||[]));return db.panels.filter(p=>!g.has(p.id))};
 function card(p,i,vis){
-  const mv=k=>{const o=vis[i+k];if(!o)return;const a=db.panels.indexOf(p),b=db.panels.indexOf(o);[db.panels[a],db.panels[b]]=[db.panels[b],db.panels[a]];save();render()},w=+p.width||100;
+  const mv=k=>{const o=vis[i+k];if(!o)return;log('ui.panel',{action:'move',name:p.name,id:p.id,dir:k<0?'before':'after'});const a=db.panels.indexOf(p),b=db.panels.indexOf(o);[db.panels[a],db.panels[b]]=[db.panels[b],db.panels[a]];save();render()},w=+p.width||100;
   const mem=p.type==='group'?db.panels.filter(b=>p.members?.includes(b.id)):[];
   return h('section',{class:'panel',style:`width:calc(${w}% - ${8*(1-w/100)}px)`},
     menu([{label:'Edit',fn:()=>go({n:'panel',pid:p.id})},...mem.map(b=>({label:`Edit "${b.name}"`,fn:()=>go({n:'panel',pid:b.id})})),
       {label:'Move before',fn:()=>mv(-1)},{label:'Move after',fn:()=>mv(1)},
-      {label:'Delete',danger:1,fn:()=>{if(confirm(`Delete "${p.name}"?`)){db.panels=db.panels.filter(x=>x!==p);db.panels.forEach(g=>{if(g.members)g.members=g.members.filter(id=>id!==p.id)});save();render()}}}]),
+      {label:'Delete',danger:1,fn:()=>{if(confirm(`Delete "${p.name}"?`)){log('ui.panel',{action:'delete',name:p.name,id:p.id});db.panels=db.panels.filter(x=>x!==p);db.panels.forEach(g=>{if(g.members)g.members=g.members.filter(id=>id!==p.id)});save();render()}}}]),
     p.hideName?null:h('div',{class:'pname'},p.name),PT[p.type].body(p))}
 const add=()=>go({n:'pick'});
-const tabs=cur=>h('nav',{class:'tabs'},[['home','Buttons'],['status','Status']].map(([n,l])=>
+const tabs=cur=>h('nav',{class:'tabs'},[['home','Buttons'],['status','Status'],['logs','Log']].map(([n,l])=>
   h('button',{type:'button',class:n===cur?'on':'','aria-current':n===cur?'page':null,onclick:()=>{if(n!==cur){route={n};render()}}},l)));
 function ask(){   // the manual: an empty message on <name>/status/get (18.6.7) makes a board repeat its state, no answer within 2 s means it is probably offline; on <name>/network/ip/get (18.6.4) it answers its IP on <name>/network/ip. Never <name>/network/ip/set: that changes the IP
   if(!client?.connected)return toast('Not connected');
-  const t=Date.now();boards.forEach(b=>{b.asked=t;client.publish(b.id+'/status/get','');client.publish(b.id+'/network/ip/get','')});
+  const t=Date.now();log('ui.refresh',{boards:[...boards.keys()].join(',')||null});boards.forEach(b=>{b.asked=t;pub(b.id+'/status/get','',{},'refresh');pub(b.id+'/network/ip/get','',{},'refresh')});
   draw();setTimeout(()=>route.n==='status'&&draw(),2600)}
 // Diagnose asks a live board why it may not run its motor. Only read-only "get" requests (empty message): manual mode 13.2, MCP PLAY on/off 18.8, event handler and its log 18.8.8, motor configuration and status 18.8.2, starts counter 18.8.2
 const DIAG=['manualmode','mcpplayenable','eventhandler','eventhandler/log','motors','motors/all/info/startstops'];
@@ -254,7 +315,8 @@ function diagnose(){
   if(!client?.connected)return toast('Not connected');
   const live=[...boards.values()].filter(b=>b.live);if(!live.length)return toast('No board has answered yet');
   // spaced out: a board has little MQTT capacity (manual 18.6.5) and its event log can be long
-  live.forEach((b,i)=>DIAG.forEach((s,j)=>setTimeout(()=>client?.connected&&client.publish(`${b.id}/${s}/get`,''),(i*DIAG.length+j)*300)));
+  live.forEach((b,i)=>DIAG.forEach((s,j)=>setTimeout(()=>client?.connected&&pub(`${b.id}/${s}/get`,'',{},'diagnose'),(i*DIAG.length+j)*300)));
+  log('ui.diagnose',{boards:live.map(b=>b.id).join(','),requests:DIAG.length});
   const ms=live.length*DIAG.length*300;toast(`Asking ${live.map(b=>b.id).join(', ')}, about ${Math.ceil(ms/1000)} s`);setTimeout(()=>route.n==='status'&&draw(),ms+1500)}
 const clock=t=>new Date(t).toLocaleTimeString(),
   feedText=()=>feed.map(f=>`${clock(f.at)}  ${f.t}  ${f.m}${f.stored?'  (stored in the broker)':''}`).join('\n')||'(nothing yet)',
@@ -266,15 +328,61 @@ const clock=t=>new Date(t).toLocaleTimeString(),
     if(e)L.push(`event handler: ${e.state}, active event: ${e['active event']||'none'}, last event: ${e['last event']||'none'}`,
       `on events: network ${e.network}, overvoltage ${e.overvoltage}, undervoltage ${e.undervoltage}, motor ${e.motor}, general control ${e.generalcontrol}, sensor ${e.sensor}`);
     return L},
-  report=()=>[...boards.values()].map(b=>[`${b.id} ${b.state||'no status'} ${b.ip||'IP unknown'}${b.live?'':' (stored, no answer)'}`,...diagLines(b).map(l=>'  '+l)].join('\n')).join('\n')
-    +(held.size?'\ncommands kept by the broker: '+[...held].map(([t,m])=>`${t} ← ${m}`).join(', '):'')+'\n--- messages, newest first ---\n'+feedText(),
+  boardsText=()=>[...boards.values()].map(b=>[`${b.id} ${b.state||'no status'} ${b.ip||'IP unknown'}${b.live?'':' (stored, no answer)'}`,...diagLines(b).map(l=>'  '+l)].join('\n')).join('\n'),
+  heldText=()=>held.size?'commands kept by the broker: '+[...held].map(([t,m])=>`${t} ← ${m}`).join(', '):'',
+  report=()=>boardsText()+(held.size?'\n'+heldText():'')+'\n--- messages, newest first ---\n'+feedText(),
   copyReport=()=>Promise.resolve().then(()=>navigator.clipboard.writeText(report())).then(()=>toast('Copied: paste it in the chat'),()=>toast('Could not copy: open "Messages received", select the text and copy it'));
+// ---- what the person sends to the assistant: the log of the program and of the page, merged by time ----
+async function mergedTail(n){
+  let lines=[];
+  if(sink&&progStart!=null){try{const r=await fetch('/log?lines='+n,{cache:'no-store'});if(r.ok)lines=(await r.text()).split('\n').filter(Boolean)}catch{}}
+  return (lines.length?lines.concat(OUT.map(fmt)):LOG.map(fmt)).sort((a,b)=>{const x=a.slice(0,23),y=b.slice(0,23);return x<y?-1:x>y?1:0}).slice(-n)}   // the page's lines not sent yet are added. Sorted by the time at the start of each line only: lines of the same millisecond keep the order they were written in
+const isKey=l=>{const t=l.split(' ',4)[3]||'';
+  return / level=(error|warn)\b/.test(l)||/^(sys|app|ui|board|note)(\.|$)/.test(t)||/^mqtt\.(connect|reconnect|close|offline|end|disconnect|hangup|sub|out_error|lib_missing)/.test(t)||/^relay\.(ws_|dial|end|stats)/.test(t)||t==='relay.pkt'&&/ type=(CONNECT|CONNACK|DISCONNECT)\b/.test(l)};
+async function buildExport(n=2000){
+  const lines=await mergedTail(n),key=lines.filter(isKey),i=INFO||{},c=db.conn,o=-new Date().getTimezoneOffset(),tz=`UTC${o>=0?'+':'-'}${pad(Math.floor(Math.abs(o)/60))}:${pad(Math.abs(o)%60)}`;
+  return [
+    '# MQTT Panel log, written to be read by an assistant',
+    `exported ${stamp(Date.now())} (${tz}) | ${lines.length} lines, ${key.length} of them key events | page hash ${i.page||'?'} | program run ${i.run||'?'} pid ${i.pid||'?'}`,
+    `machine ${i.host||'?'} user ${i.user||'?'} ${i.os||''} | program file ${i.exe||'?'} | log file ${i.logPath||'(only in the page)'}`,
+    `browser ${navigator.userAgent} | ${navigator.language} | online=${navigator.onLine}`,
+    `broker ${c?`${c.host}:${c.port} protocol=${c.protocol} user=${c.username||'-'} (the password is never logged)`:'(none configured)'}`,
+    'HOW TO READ: one event per line: "<local time> T+<seconds since the program started> <tag.event> key=value ...". Subtract the T+ values to get durations.',
+    '  sys.* the Windows program (start, browser, network changes, gaps where it did not run). relay.* the connection between the page and the broker as the program sees it: relay.pkt is each MQTT packet (dir=page>broker or broker>page; PINGREQ and PINGRESP are the keepalive), relay.end says who ended a connection, when and why.',
+    '  app.* the page itself (app.stall = the page did not run for gap_ms; app.error = a bug). ui.* what the user did (ui.press = a button, ui.click, ui.nav, ui.toast = a message shown to the user). mqtt.* the MQTT client of the page (conn=N is the connection attempt; mqtt.out and mqtt.in are messages; mqtt.pkt are control packets).',
+    '  board.* what the page concluded about a board (state changes, ip, diag = answers to Diagnose, held_command = a command the broker keeps and hands to the board at every connection). note = text the user typed about what they saw with their own eyes.',
+    '  level=error|warn marks a problem. retain=true on mqtt.in means the broker replayed a stored message (it is not live).',
+    '',
+    '## NOW',
+    `app connection: ${status} (attempt ${cn}) | page ${document.visibilityState}`,
+    boardsText()||'no boards seen',
+    ...(held.size?[heldText()]:[]),...(denied.length?['subscriptions the broker refused: '+denied.join(', ')]:[]),
+    `buttons (${db.panels.length}):`,...db.panels.map(p=>'  '+Object.entries(panelInfo(p)).filter(([,v])=>v!==undefined).map(([k,v])=>`${k}=${val(v)}`).join(' ')),
+    '',`## KEY EVENTS (${key.length})`,...key,
+    '',`## FULL TIMELINE (${lines.length} lines, oldest first)`,...lines].join('\n')}
+async function copyExport(){
+  const text=await buildExport();log('ui.export',{action:'copy',chars:text.length});
+  try{await navigator.clipboard.writeText(text);toast(`Copied ${Math.ceil(text.length/1024)} KB: paste it in the chat with Claude`)}
+  catch{const b=$('#logbox');if(b){b.hidden=false;b.value=text;b.select()}toast('Could not copy by itself: the text is at the bottom, select all and copy it')}}
+async function downloadExport(){
+  const text=await buildExport(20000),a=h('a',{href:URL.createObjectURL(new Blob([text],{type:'text/plain'})),download:`mqtt-panel-log-${stamp(Date.now()).replace(/[: ]/g,'-').slice(0,19)}.txt`});
+  document.body.append(a);a.click();a.remove();log('ui.export',{action:'download',chars:text.length});toast('Download started')}
+const QUICK=['Roller started','Roller stopped','Board dropped','Board came back','Pressed a button, nothing happened'];
+function addNote(x){const el=$('#note'),t=(typeof x==='string'?x:el?.value||'').trim();if(!t)return;log('note',{text:t});if(el)el.value='';toast('Noted: '+t)}
+let drawingLog=false;
+async function drawLog(){
+  const box=$('#logview');if(!box||drawingLog)return;drawingLog=true;
+  try{const lines=(await mergedTail(600)).filter(l=>logAll||isKey(l)).slice(-250),atEnd=box.scrollHeight-box.scrollTop-box.clientHeight<40;
+    box.textContent=lines.join('\n')||'(nothing yet)';if(atEnd)box.scrollTop=box.scrollHeight;
+    $('#logfile').textContent=INFO?.logPath?`Written to ${INFO.logPath}`:'Only in this page (no Windows program behind it)';
+    $('#lk').classList.toggle('gray',logAll);$('#la').classList.toggle('gray',!logAll)}finally{drawingLog=false}}
+setInterval(()=>{if(route.n==='logs')drawLog()},2000);
 function clearHeld(){   // deleting a kept message means publishing an empty one, and the broker also hands that to every board listening: for start, restart, teachin an empty message IS the command, so only for boards that are not connected
   if(!client?.connected)return toast('Not connected');
   const on=[...new Set([...held.keys()].map(t=>t.split('/')[0]))].filter(id=>boards.get(id)?.live&&boards.get(id).state!=='offline');
   if(on.length)return toast(`${on.join(', ')} ${on.length>1?'are':'is'} connected. Clearing makes the broker send an empty message to the board, and for start, restart and the like an empty message IS the command. Switch ${on.length>1?'them':'it'} off first, then clear.`);
   const n=held.size;if(!confirm(`Delete ${n} command${n>1?'s':''} kept by the broker? The boards are not connected, so they will not receive anything.`))return;
-  held.forEach((m,t)=>client.publish(t,'',{retain:true}));held.clear();toast(`Cleared ${n} command${n>1?'s':''} kept by the broker`);draw()}
+  log('ui.clear_kept',{topics:[...held.keys()].join(',')});held.forEach((m,t)=>pub(t,'',{retain:true},'clear kept command'));held.clear();toast(`Cleared ${n} command${n>1?'s':''} kept by the broker`);draw()}
 function draw(){
   const body=$('#stbody');if(!body||!db.conn)return;
   const all=[...boards.values()].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})),
@@ -299,13 +407,13 @@ function draw(){
   $('#stored').hidden=!stored.length;$('#storedsum').textContent=`Stored in the broker, no answer (${stored.length})`;   // what the broker remembers from boards that did not answer: possibly switched off or renamed
   $('#storedlist').textContent=stored.map(b=>[b.id,b.ip||'IP unknown',b.state&&'last state: '+b.state].filter(Boolean).join(' · ')).join('\n');
   $('#feed').textContent=feedText()}
-const chipClick=()=>{if(client&&status==='connected'){off=true;hangup()}else connect()};   // while it is trying again a click tries again, it does not switch it off
+const chipClick=()=>{const dis=client&&status==='connected';log('ui.chip',{status,action:dis?'disconnect':'connect'});if(dis){off=true;hangup()}else connect()};   // while it is trying again a click tries again, it does not switch it off
 const views={
 home(){
   if(db.conn&&!client&&!off)connect();
   const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:chipClick},status);
   return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
-    h('main',{},db.conn&&tabs('home'),!db.conn?h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn',onclick:()=>go({n:'conn'})},'Setup a connection'))
+    h('main',{},tabs('home'),!db.conn?h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn',onclick:()=>go({n:'conn'})},'Setup a connection'))
       :db.panels.length?h('div',{class:'panels'},visible().map((p,i,vis)=>card(p,i,vis)))
       :h('div',{class:'empty'},h('p',{},'No buttons yet'),h('button',{class:'btn',onclick:add},'Add a button')),
       db.conn&&db.panels.length?h('button',{class:'btn fab','aria-label':'Add',onclick:add},'+'):null))},
@@ -316,16 +424,34 @@ status(){
     h('main',{},tabs('status'),h('div',{id:'stbody'}),
       h('details',{class:'feed',id:'stored',hidden:true},h('summary',{id:'storedsum'}),h('pre',{id:'storedlist'})),
       h('details',{class:'feed'},h('summary',{},'Messages received'),h('pre',{id:'feed'}))))},
+logs(){
+  if(db.conn&&!client&&!off)connect();
+  const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:chipClick},status);
+  return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
+    h('main',{},tabs('logs'),
+      h('small',{class:'help'},'Everything the app and the program do is written down here, in order, so Claude can read what happened. Add a note whenever you see something with your own eyes: it is stamped with the time.'),
+      h('div',{class:'row2'},h('input',{id:'note',placeholder:'What did you see? e.g. roller stopped',onkeydown:e=>{if(e.key==='Enter')addNote()}}),h('button',{class:'btn sm',onclick:addNote},'Add note')),
+      h('div',{class:'btns2 quick'},QUICK.map(q=>h('button',{class:'btn sm gray',onclick:()=>addNote(q)},q))),
+      h('div',{class:'btns2'},h('button',{class:'btn',onclick:copyExport},'Copy for Claude'),h('button',{class:'btn gray',onclick:downloadExport},'Download')),
+      h('small',{class:'help',id:'logfile'}),
+      h('div',{class:'btns2'},h('button',{id:'lk',class:'btn sm',onclick:()=>{logAll=false;drawLog()}},'Key events'),h('button',{id:'la',class:'btn sm gray',onclick:()=>{logAll=true;drawLog()}},'Everything')),
+      h('pre',{id:'logview',class:'logview'}),
+      h('textarea',{id:'logbox',hidden:true,readonly:true,'aria-label':'Log text to copy'})))},
 conn(){
   const v=db.conn?structuredClone(db.conn):defaults(CONN,{host:location.protocol==='http:'&&!BRIDGE?location.hostname:''});   // served by the broker's http_dir: same host
-  return page(db.conn?'Edit Connection':'Add Connection',Form(CONN,v,{label:db.conn?'SAVE':'CREATE',cancel:()=>back(),save:x=>{db.conn=x;save();connect();back()}}))},
+  return page(db.conn?'Edit Connection':'Add Connection',Form(CONN,v,{label:db.conn?'SAVE':'CREATE',cancel:()=>back(),save:x=>{db.conn=x;log('ui.form',{what:'connection',host:x.host,port:x.port,protocol:x.protocol,user:x.username||null,path:x.path});save();connect();back()}}))},
 pick(){return page('Select panel type to add',Object.entries(PT).map(([k,t])=>h('div',{class:'pick',tabindex:0,role:'button',onclick:()=>go({n:'panel',type:k,pick:1})},h('b',{},t.label))))},
 panel({pid,type,pick}){
   const ex=pid&&db.panels.find(p=>p.id===pid),t=PT[ex?ex.type:type],v=ex?structuredClone(ex):defaults(t.fields,{id:uid(),type});
   return page((ex?'Edit ':'Add ')+t.label,Form(t.fields,v,{label:ex?'SAVE':'CREATE',cancel:()=>{if(pick)stack.pop();back()},
-    save:x=>{const i=db.panels.findIndex(p=>p.id===x.id);i<0?db.panels.push(x):db.panels[i]=x;save();if(pick)stack.pop();back()}}))}
+    save:x=>{const i=db.panels.findIndex(p=>p.id===x.id);log('ui.form',{what:x.type,new:i<0,...panelInfo(x)});i<0?db.panels.push(x):db.panels[i]=x;save();if(pick)stack.pop();back()}}))}
 };
-function render(){$('#app').replaceChildren(views[route.n](route));window.scrollTo(0,0);if(route.n==='status')draw()}
+function render(){log('ui.nav',{route:route.n,panel:route.pid,type:route.type});$('#app').replaceChildren(views[route.n](route));window.scrollTo(0,0);if(route.n==='status')draw();if(route.n==='logs')drawLog()}
+log('app.start',{ua:navigator.userAgent,lang:navigator.language,tz:Intl.DateTimeFormat().resolvedOptions().timeZone,screen:`${screen.width}x${screen.height}`,dpr:devicePixelRatio,online:navigator.onLine,
+  net:navigator.connection?`${navigator.connection.effectiveType} rtt=${navigator.connection.rtt} down=${navigator.connection.downlink}`:null,bridge:BRIDGE,url:location.href,visible:document.visibilityState,
+  storage:(()=>{try{return localStorage.length+' keys'}catch(e){return 'blocked: '+e.message}})()});
+if(db.conn)log('app.config',{host:db.conn.host,port:db.conn.port,protocol:db.conn.protocol,user:db.conn.username||null,path:db.conn.path,has_password:!!db.conn.password});
+db.panels.forEach(p=>log('app.panel',panelInfo(p)));
 render();
 </script>
 </body>

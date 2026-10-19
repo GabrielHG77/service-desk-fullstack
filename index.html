@@ -35,7 +35,7 @@ input[type=color]{padding:2px;height:40px}
 .panels{display:flex;flex-wrap:wrap;gap:8px}
 .panel{background:var(--card);border-radius:8px;padding:10px;position:relative;box-shadow:0 1px 3px #0003;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .panel>*{max-width:100%}.panel .menu{position:absolute;top:2px;right:2px}.pname{font-weight:600;font-size:14px;margin-right:24px}
-.pb{min-width:90px}.grp{display:flex;flex-wrap:wrap;gap:8px;width:100%}.grp .btn{flex:1 1 90px}
+.pb{min-width:90px}.pb[aria-pressed=true]{box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 5px var(--black)}.grp{display:flex;flex-wrap:wrap;gap:8px;width:100%}.grp .btn{flex:1 1 90px}
 .empty{text-align:center;padding:48px 0;color:var(--sub)}
 .st{border:0;border-radius:12px;padding:3px 10px;font:12px system-ui;cursor:pointer;color:#fff;background:var(--medium)}.st.connected{background:var(--success)}.st.connecting{background:var(--warning)}.st.error{background:var(--danger)}
 #toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:90vw;background:#000d;color:#fff;padding:8px 14px;border-radius:20px;z-index:50}
@@ -107,12 +107,12 @@ function connect(){
     .on('close',()=>{if(cl!==client)return;setStatus('disconnected');
       if(!opened&&!told){told=true;toast(c.protocol==='tcp'?'Could not connect. Check the address and port, and that this PC can reach the broker.':/^(1883|8883)$/.test(String(c.port))?"Port 1883/8883 is plain MQTT (TCP), which browsers can't use. Use your broker's Websocket port.":'Could not connect. Check the address, the Websocket port and that the broker is reachable.')}})
     .on('error',e=>{if(cl===client){told=true;setStatus('error');toast(e.message)}})}
-function send(p,payload){
+function send(p,payload){   // true when the message went out (a toggle button only flips when it did)
   const pl=String(payload);
-  if(p.confirm&&!confirm((p.confirmMsg||'<payload>').replaceAll('<payload>',pl)))return;
-  if(!client?.connected)return toast('Not connected');
+  if(p.confirm&&!confirm((p.confirmMsg||'<payload>').replaceAll('<payload>',pl)))return false;
+  if(!client?.connected){toast('Not connected');return false}
   const m=p.isJson&&p.jsonEnv&&pl!==''?p.jsonEnv.replaceAll('<payload>',pl):pl;
-  client.publish(p.topic,m,{qos:+p.qos||0,retain:!!p.retain},e=>toast(e?'Error: '+e.message:`Sent ${p.topic} ← ${m}`))}
+  client.publish(p.topic,m,{qos:+p.qos||0,retain:!!p.retain},e=>toast(e?'Error: '+e.message:`Sent ${p.topic} ← ${m}`));return true}
 
 /* ---------- generic form builder ---------- */
 const T=(k,label,o={})=>({k,label,...o}),N=(k,label,o={})=>T(k,label,{type:'number',...o}),C=(k,label,o={})=>T(k,label,{type:'check',...o}),
@@ -130,7 +130,7 @@ function leaf(f,v,change){
     const opts=f.src(v);
     add(h('div',{class:'lh'},f.label),...(opts.length?opts.map(o=>{const i=h('input',{type:'checkbox',id:id+o.id,checked:v[f.k].includes(o.id)});
       i.onchange=()=>{v[f.k]=i.checked?[...v[f.k],o.id]:v[f.k].filter(x=>x!==o.id);change()};
-      return h('label',{class:'chk pickrow',for:id+o.id},i,h('span',{},o.name,h('small',{class:'help'},`${o.topic} ← ${o.noPayload?'(empty)':o.payload}`)))})
+      return h('label',{class:'chk pickrow',for:id+o.id},i,h('span',{},o.name,h('small',{class:'help'},`${o.topic} ← ${o.toggle?o.payload+' / '+o.payloadOff:o.noPayload?'(empty)':o.payload}`)))})
       :[h('small',{class:'help'},'No buttons yet. Create buttons first, then group them here.')]))
   }else if(f.type==='list'){
     const box=h('div');
@@ -192,13 +192,18 @@ const QR=[{row:[S('qos','QoS',[[0,'0'],[1,'1'],[2,'2']],{def:0}),C('retain','Ret
 const JSN=[C('isJson','Payload is JSON Data'),T('jsonEnv','JSON pattern for publish',{show:v=>v.isJson,help:'Wrap published messages in JSON. Use <payload> where the value goes, e.g. {"state":"<payload>"}'})];
 const TAIL=[C('hideName','Hide label'),S('width','Panel Width',WIDTHS,{def:100})];
 const sz=p=>p.size==='large'?' lg':p.size==='small'?' sm':'';
+const tog=new Map();   // toggle buttons: on or off as this page last sent it, by panel id. shortcut: not read back from the board and forgotten on reload
 const PT={
   button:{label:'Button',fields:[NAME,TOPIC,T('payload','Payload',{req:1,err:'Payload is required',show:v=>!v.noPayload}),C('noPayload','No payload'),
+    C('toggle','Toggle: press again to send a second payload',{help:'The first press sends the payload, the next press sends the second payload, and so on. For a motor: payload 30 (speed), second payload 0 (stop). It replaces the hold options (second payload on release, repeat).'}),
+    T('payloadOff','Payload on the second press',{req:1,err:'The second payload is required',show:v=>v.toggle}),
     T('payloadRel','Separate payload on release',{help:'Publish a second payload when the button is released'}),C('repeat','Repeat publish until released'),
     N('repInt','Repeat interval in milliseconds',{def:1000,show:v=>v.repeat,req:1,err:'Repeat interval is required',val:x=>x>=100&&x<=10000?null:'100-10000 allowed'}),
     COLOR,SIZE,C('fit','Fit to panel width'),...QR,...JSN,...TAIL],
     body(p){const b=h('button',{class:'btn pb'+sz(p),style:`${fill(p.color)}${p.fit?';width:100%':''}`},p.name),pl=()=>p.noPayload?'':p.payload;
-      if((p.repeat||p.payloadRel)&&!p.confirm){let tm,down=false;   // hold behaviour needs pointer events; plain taps use click (keyboard friendly)
+      if(p.toggle){const paint=()=>{const on=!!tog.get(p.id);b.textContent=on?p.name+' · ON':p.name;b.setAttribute('aria-pressed',on)};
+        b.onclick=()=>{const on=!tog.get(p.id);if(send(p,on?pl():p.payloadOff)){tog.set(p.id,on);paint()}};paint()}
+      else if((p.repeat||p.payloadRel)&&!p.confirm){let tm,down=false;   // hold behaviour needs pointer events; plain taps use click (keyboard friendly)
         const up=()=>{if(!down)return;down=false;clearInterval(tm);if(p.payloadRel)send(p,p.payloadRel)};
         b.style.touchAction='none';b.oncontextmenu=e=>e.preventDefault();
         b.onpointerdown=()=>{down=true;send(p,pl());if(p.repeat)tm=setInterval(()=>send(p,pl()),+p.repInt||1000)};

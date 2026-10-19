@@ -104,7 +104,7 @@ addEventListener('pagehide',()=>{log('app.pagehide',{});while(OUT.length&&sink&&
 document.addEventListener('click',e=>{const el=e.target.closest?.('button,summary,a,[role=button],input[type=checkbox],select');   // never the value of a field: it may be a password
   if(el)log('ui.click',{el:el.id||el.className||el.tagName.toLowerCase(),text:el.matches('input,select')?undefined:(el.textContent||'').trim().slice(0,40),route:typeof route==='undefined'?null:route.n})},true);
 
-const panelInfo=p=>({name:p.name,id:p.id,topic:p.topic,payload:p.noPayload?'(empty)':p.payload,payload_off:p.toggle?p.payloadOff:undefined,toggle:p.toggle||undefined,payload_release:p.payloadRel||undefined,
+const panelInfo=p=>({name:p.name,id:p.id,action:kind(p)==='msg'?undefined:kind(p),motor:isSpin(p)?`${p.board}/${p.motorNo||'all'} at ${p.speed}%${p.dir==='back'?' backward':''}`:undefined,topic:nm(p)?p.topic:undefined,payload:nm(p)?(p.noPayload?'(empty)':p.payload):undefined,payload_off:p.toggle?p.payloadOff:undefined,toggle:p.toggle||undefined,payload_release:p.payloadRel||undefined,
   repeat_ms:p.repeat?p.repInt:undefined,qos:p.qos,retain:p.retain||undefined,confirm:p.confirm||undefined,json:p.isJson||undefined,members:p.members?.join(',')});
 
 /* ---------- MQTT ---------- */
@@ -188,6 +188,27 @@ function send(p,payload){   // true when the message went out (a toggle button o
   pub(p.topic,m,{qos:+p.qos||0,retain:!!p.retain},'button '+p.name,e=>toast(e?'Error: '+e.message:`Sent ${p.topic} ← ${m}`+(keep&&m!==''?'  (RETAINED: the broker gives it to the board again every time it connects)':'')));
   if(keep){m===''?held.delete(p.topic):held.set(p.topic,m);touch()}
   return true}
+// The messages of a spin or a stop. With MCP PLAY on, a board ignores speed commands unless it is in manual mode (manual 13 and "speedrel"), so a spin sets manual mode and then the speed, and a stop sets speed 0 and then leaves manual mode.
+// Spaced out: a board has little MQTT capacity and must be in manual mode before the speed counts. Never retained: a kept speed would be handed to the board again every time it connects.
+function spinMotors(id,motor,speed,on,why,keepManual){
+  const sp=`${id}/motors/${motor}/speedrel/set`,mm=`${id}/manualmode/set`,seq=on?[[mm,'true'],[sp,String(speed)]]:[[sp,'0'],...(keepManual?[]:[[mm,'false']])];
+  seq.forEach(([t,m],i)=>setTimeout(()=>client?.connected&&pub(t,m,{},why),i*600))}
+// A motor button: press to spin the motors of a board at the chosen speed, press again to stop. A stop leaves manual mode only when no other motor button of the same board is still on.
+function motorPress(p,on){   // true when the messages went out
+  const id=p.board,motor=p.motorNo||'all',back=p.dir==='back',speed=(back?-1:1)*Math.abs(+p.speed),what=on?`${id}: ${motor==='all'?'motors':'motor '+motor} at ${p.speed}%${back?' backward':''}`:`${id}: stop`;
+  log('ui.press',{name:p.name,id:p.id,mode:'motor',board:id,motor,speed,action:on?'spin':'stop',connected:!!client?.connected});
+  if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:p.name,reason:'not connected'});return false}
+  if(on&&p.confirm&&!confirm((p.confirmMsg||'<payload>').replaceAll('<payload>',what))){log('ui.press_blocked',{level:'warn',name:p.name,reason:'confirmation dismissed'});return false}   // a stop is never held back by a question
+  const keep=!on&&db.panels.some(q=>q.id!==p.id&&isSpin(q)&&q.board===id&&tog.get(q.id));
+  spinMotors(id,motor,speed,on,'button '+p.name,keep);
+  toast(on?`${what}: manual mode on, then the speed`:`${id}: speed 0${keep?'':', then manual mode off'}`);return true}
+// Start all boards: an empty message on network_broadcast/start starts every MultiControl (manual 12.2). A board then moves a motor only when it has a box to move, apart from a short move after a reset. It asks first and never retains
+function startAll(p){   // true when the message went out
+  const by=p?.name?'button '+p.name:'Start all';
+  log('ui.press',{name:p?.name,id:p?.id,mode:'start_all',connected:!!client?.connected});
+  if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:p?.name,reason:'not connected'});return false}
+  if(!confirm('Start all boards? Every MultiControl on this broker gets the start command.')){log('ui.press_blocked',{level:'warn',name:p?.name,reason:'confirmation dismissed'});return false}
+  pub('network_broadcast/start','',{},by,e=>toast(e?'Error: '+e.message:'Sent network_broadcast/start: all boards'));return true}
 
 /* ---------- generic form builder ---------- */
 const T=(k,label,o={})=>({k,label,...o}),N=(k,label,o={})=>T(k,label,{type:'number',...o}),C=(k,label,o={})=>T(k,label,{type:'check',...o}),
@@ -205,7 +226,7 @@ function leaf(f,v,change){
     const opts=f.src(v);
     add(h('div',{class:'lh'},f.label),...(opts.length?opts.map(o=>{const i=h('input',{type:'checkbox',id:id+o.id,checked:v[f.k].includes(o.id)});
       i.onchange=()=>{v[f.k]=i.checked?[...v[f.k],o.id]:v[f.k].filter(x=>x!==o.id);change()};
-      return h('label',{class:'chk pickrow',for:id+o.id},i,h('span',{},o.name,h('small',{class:'help'},`${o.topic} ← ${o.toggle?o.payload+' / '+o.payloadOff:o.noPayload?'(empty)':o.payload}`)))})
+      return h('label',{class:'chk pickrow',for:id+o.id},i,h('span',{},o.name,h('small',{class:'help'},isSpin(o)?`${o.board} motors at ${o.speed}%${o.dir==='back'?' backward':''}`:kind(o)==='start'?'start all boards':`${o.topic} ← ${o.toggle?o.payload+' / '+o.payloadOff:o.noPayload?'(empty)':o.payload}`)))})
       :[h('small',{class:'help'},'No buttons yet. Create buttons first, then group them here.')]))
   }else if(f.type==='list'){
     const box=h('div');
@@ -214,12 +235,13 @@ function leaf(f,v,change){
       h('button',{type:'button',class:'btn sm',onclick:()=>{v[f.k].push(defaults(f.of));draw();change()}},f.addLabel))};
     draw();add(h('div',{class:'lh'},f.label),box)
   }else{
-    let i;
+    let i,dl;
     if(f.type==='select'){i=h('select',{id},f.opts.map(([val,l])=>h('option',{value:val,selected:String(val)===String(v[f.k])},l)));
       i.onchange=()=>{v[f.k]=f.opts.find(o=>String(o[0])===i.value)[0];change()}}
-    else{i=h('input',{id,type:f.type||'text',value:v[f.k]??'',step:f.type==='number'?'any':null,autocomplete:f.type==='password'?'current-password':'off'});
-      i.oninput=()=>{v[f.k]=f.type==='number'?(i.value===''?'':+i.value):i.value;change()}}
-    add(h('div',{class:'lh'},h('label',{for:id},f.label,f.req&&h('span',{class:'req'},' *')),qm),help,i)
+    else{i=h('input',{id,type:f.type||'text',value:v[f.k]??'',step:f.type==='number'?'any':null,autocomplete:f.type==='password'?'current-password':'off',list:f.suggest?id+'dl':null});
+      i.oninput=()=>{v[f.k]=f.type==='number'?(i.value===''?'':+i.value):i.value;change()};
+      if(f.suggest){dl=h('datalist',{id:id+'dl'});const fill=()=>dl.replaceChildren(...f.suggest(v).map(x=>h('option',{value:x})));fill();i.onfocus=fill}}   // suggest: names to pick from while typing, as they are when the field gets the focus
+    add(h('div',{class:'lh'},h('label',{for:id},f.label,f.req&&h('span',{class:'req'},' *')),qm),help,i,dl)
   }
   return{el,sync:()=>{el.hidden=!!f.show&&!f.show(v)},
     check:()=>{if(f.show&&!f.show(v))return[];const x=v[f.k],e=[];
@@ -259,25 +281,35 @@ const CONN=[
   T('path','Path',{def:'/mqtt',show:v=>v.protocol!=='tcp',help:'Websocket path of the broker, usually /mqtt'}),
   {row:[T('username','Username'),T('password','Password',{type:'password'})]}];
 const noWild=x=>/[+#]/.test(x)?'Wildcards are not allowed':null;
-const NAME=T('name','Panel name',{req:1}),TOPIC=T('topic','Topic',{req:1,val:noWild});
+const kind=v=>v.action||'msg',nm=v=>kind(v)==='msg',isSpin=v=>kind(v)==='spin',   // what a button does: send a message (topic and payload), spin the motors of a board (board, motor, speed, direction) or start all boards (nothing more to say)
+  NAME=T('name','Panel name',{req:1}),TOPIC=T('topic','Topic',{req:1,val:noWild,show:nm});
 const WIDTHS=[[100,'Full screen'],[75,'3/4 screen width'],[66,'2/3 screen width'],[50,'1/2 screen width'],[33,'1/3 screen width'],[25,'1/4 screen width']];
 const COLOR=S('color','Button color',COLS,{def:'primary'}),SIZE=S('size','Button size',[['small','Small'],['medium','Medium'],['large','Large']],{def:'medium'});
-const QR=[{row:[S('qos','QoS',[[0,'0'],[1,'1'],[2,'2']],{def:0}),C('retain','Retain')]},C('confirm','Confirm before publish'),
+const QR=[{row:[S('qos','QoS',[[0,'0'],[1,'1'],[2,'2']],{def:0,show:nm}),C('retain','Retain',{show:nm})]},C('confirm','Confirm before publish'),
   T('confirmMsg','Confirmation message',{def:'<payload>',show:v=>v.confirm})];
-const JSN=[C('isJson','Payload is JSON Data'),T('jsonEnv','JSON pattern for publish',{show:v=>v.isJson,help:'Wrap published messages in JSON. Use <payload> where the value goes, e.g. {"state":"<payload>"}'})];
+const JSN=[C('isJson','Payload is JSON Data',{show:nm}),T('jsonEnv','JSON pattern for publish',{show:v=>nm(v)&&v.isJson,help:'Wrap published messages in JSON. Use <payload> where the value goes, e.g. {"state":"<payload>"}'})];
 const TAIL=[C('hideName','Hide label'),S('width','Panel Width',WIDTHS,{def:100})];
 const sz=p=>p.size==='large'?' lg':p.size==='small'?' sm':'';
 const tog=new Map();   // toggle buttons: on or off as this page last sent it, by panel id. shortcut: not read back from the board and forgotten on reload
 const PT={
-  button:{label:'Button',fields:[NAME,TOPIC,T('payload','Payload',{req:1,err:'Payload is required',show:v=>!v.noPayload}),C('noPayload','No payload'),
-    C('toggle','Toggle: press again to send a second payload',{help:'The first press sends the payload, the next press sends the second payload, and so on. For a motor: payload 30 (speed), second payload 0 (stop). It replaces the hold options (second payload on release, repeat).'}),
-    T('payloadOff','Payload on the second press',{req:1,err:'The second payload is required',show:v=>v.toggle}),
-    T('payloadRel','Separate payload on release',{help:'Publish a second payload when the button is released'}),C('repeat','Repeat publish until released'),
-    N('repInt','Repeat interval in milliseconds',{def:1000,show:v=>v.repeat,req:1,err:'Repeat interval is required',val:x=>x>=100&&x<=10000?null:'100-10000 allowed'}),
+  button:{label:'Button',fields:[NAME,
+    S('action','What it does',[['msg','Send a message'],['spin',"Spin a board's motors"],['start','Start all boards']],{def:'msg',
+      help:"Send a message: the usual button. Spin a board's motors: press to spin the motors of one board at the speed and direction you choose, press again to stop. A board ignores speed commands unless it is in manual mode, so this sets manual mode first and leaves it when it stops. Start all boards: sends the start command to every board, after asking."}),
+    T('board','Board',{req:1,err:'The board name is required',show:isSpin,suggest:()=>[...boards.values()].filter(b=>b.live).map(b=>b.id),help:'The name of the board, e.g. mc7. The boards that answered are offered while you type.',
+      val:x=>/^[\w.-]+$/.test(x)?null:'Use the name of the board only, e.g. mc7'}),
+    {row:[S('motorNo','Motor',[['all','All motors'],['1','Motor 1'],['2','Motor 2'],['3','Motor 3'],['4','Motor 4']],{def:'all',show:isSpin}),
+      S('dir','Direction',[['fwd','Forward'],['back','Backward']],{def:'fwd',show:isSpin,help:"Forward sends the speed as it is, backward sends it with a minus sign, which reverses the motor. The direction saved in the board's configuration is not changed."})]},
+    N('speed','Speed in %',{def:30,show:isSpin,req:1,err:'The speed is required',help:'Percent of the normal speed of the motor, 1 to 100.',val:x=>x>=1&&x<=100?null:'Speed: 1 to 100'}),
+    TOPIC,T('payload','Payload',{req:1,err:'Payload is required',show:v=>nm(v)&&!v.noPayload}),C('noPayload','No payload',{show:nm}),
+    C('toggle','Toggle: press again to send a second payload',{show:nm,help:'The first press sends the payload, the next press sends the second payload, and so on. It replaces the hold options (second payload on release, repeat). To turn a motor use "Spin a board\'s motors" above: a speed alone is ignored outside manual mode.'}),
+    T('payloadOff','Payload on the second press',{req:1,err:'The second payload is required',show:v=>nm(v)&&v.toggle}),
+    T('payloadRel','Separate payload on release',{show:nm,help:'Publish a second payload when the button is released'}),C('repeat','Repeat publish until released',{show:nm}),
+    N('repInt','Repeat interval in milliseconds',{def:1000,show:v=>nm(v)&&v.repeat,req:1,err:'Repeat interval is required',val:x=>x>=100&&x<=10000?null:'100-10000 allowed'}),
     COLOR,SIZE,C('fit','Fit to panel width'),...QR,...JSN,...TAIL],
     body(p){const b=h('button',{class:'btn pb'+sz(p),style:`${fill(p.color)}${p.fit?';width:100%':''}`},p.name),pl=()=>p.noPayload?'':p.payload;
-      if(p.toggle){const paint=()=>{const on=!!tog.get(p.id);b.textContent=on?p.name+' · ON':p.name;b.setAttribute('aria-pressed',on)};
-        b.onclick=()=>{const on=!tog.get(p.id);if(send(p,on?pl():p.payloadOff)){tog.set(p.id,on);paint()}};paint()}
+      if(p.toggle&&nm(p)||isSpin(p)){const paint=()=>{const on=!!tog.get(p.id);b.textContent=on?p.name+' · ON':p.name;b.setAttribute('aria-pressed',on)};
+        b.onclick=()=>{const on=!tog.get(p.id);if(isSpin(p)?motorPress(p,on):send(p,on?pl():p.payloadOff)){tog.set(p.id,on);paint()}};paint()}
+      else if(kind(p)==='start')b.onclick=()=>startAll(p);
       else if((p.repeat||p.payloadRel)&&!p.confirm){let tm,down=false;   // hold behaviour needs pointer events; plain taps use click (keyboard friendly)
         const up=()=>{if(!down)return;down=false;clearInterval(tm);if(p.payloadRel)send(p,p.payloadRel)};
         b.style.touchAction='none';b.oncontextmenu=e=>e.preventDefault();
@@ -325,9 +357,9 @@ function diagnose(){
 function motorTest(b,spin){
   if(!client?.connected)return toast('Not connected');
   if(spin&&!confirm(`${b.id}: all its motors will turn at 30% until you press Stop. Manual mode switches the zone logic of this board off. Go on?`))return;
-  const id=b.id,why='motor test '+(spin?'spin':'stop'),seq=spin?[[id+'/manualmode/set','true'],[id+'/motors/all/speedrel/set','30']]:[[id+'/motors/all/speedrel/set','0'],[id+'/manualmode/set','false']];
+  const id=b.id,why='motor test '+(spin?'spin':'stop');
   log('ui.motor_test',{id,action:spin?'spin':'stop'});
-  seq.forEach(([t,p],i)=>setTimeout(()=>client?.connected&&pub(t,p,{},why),i*600));
+  spinMotors(id,'all',30,spin,why);
   [1300,3500].forEach(ms=>setTimeout(()=>{if(client?.connected){pub(id+'/manualmode/get','',{},why);pub(id+'/motors/get','',{},why)}},ms));
   [1900,4200].forEach(ms=>setTimeout(()=>route.n==='status'&&draw(),ms));
   toast(spin?`${id}: manual mode on, then 30%`:`${id}: speed 0, then manual mode off`)}
@@ -416,7 +448,7 @@ function draw(){
     denied.length&&h('div',{class:'err'},'The broker does not let this app listen to: '+denied.join(', ')),
     held.size&&h('div',{class:'err'},h('b',{},'The broker keeps these commands and hands them to a board every time it connects: '),[...held].map(([t,m])=>`${t} ← ${m}`).join(' · '),' ',h('button',{class:'btn sm',onclick:clearHeld},'Clear them')),
     h('div',{class:'row2'},h('b',{},`Devices (${list.length})`),
-      h('div',{class:'btns2'},h('button',{class:'btn sm',onclick:ask},'Refresh'),h('button',{class:'btn sm',onclick:diagnose},'Diagnose'),h('button',{class:'btn sm gray',onclick:copyReport},'Copy report'))),
+      h('div',{class:'btns2'},h('button',{class:'btn sm',onclick:ask},'Refresh'),h('button',{class:'btn sm',onclick:diagnose},'Diagnose'),h('button',{class:'btn sm',onclick:()=>startAll()},'Start all'),h('button',{class:'btn sm gray',onclick:copyReport},'Copy report'))),
     ...(list.length?list.map(card):[h('div',{class:'empty'},h('p',{},'No board has answered yet'),h('small',{class:'help'},'A board is listed here only after it publishes on <name>/status or answers Refresh. If nothing shows up, no board is talking to this broker, or this app is not allowed to listen.'))])
   ].filter(Boolean));
   $('#stored').hidden=!stored.length;$('#storedsum').textContent=`Stored in the broker, no answer (${stored.length})`;   // what the broker remembers from boards that did not answer: possibly switched off or renamed

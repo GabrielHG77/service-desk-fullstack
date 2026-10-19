@@ -320,6 +320,17 @@ function diagnose(){
   live.forEach((b,i)=>DIAG.forEach((s,j)=>setTimeout(()=>client?.connected&&pub(`${b.id}/${s}/get`,'',{},'diagnose'),(i*DIAG.length+j)*300)));
   log('ui.diagnose',{boards:live.map(b=>b.id).join(','),requests:DIAG.length});
   const ms=live.length*DIAG.length*300;toast(`Asking ${live.map(b=>b.id).join(', ')}, about ${Math.ceil(ms/1000)} s`);setTimeout(()=>route.n==='status'&&draw(),ms+1500)}
+// Motor test, one click, for a board that is on. With MCP PLAY on, a board ignores speed commands unless it is in manual mode (manual 13 and "speedrel"), and start only moves a motor for a box (12.2).
+// Spin sets manual mode and then the speed; Stop sets speed 0 and then leaves manual mode. Both ask the board back afterwards, so its card shows what it accepted.
+function motorTest(b,spin){
+  if(!client?.connected)return toast('Not connected');
+  if(spin&&!confirm(`${b.id}: all its motors will turn at 30% until you press Stop. Manual mode switches the zone logic of this board off. Go on?`))return;
+  const id=b.id,why='motor test '+(spin?'spin':'stop'),seq=spin?[[id+'/manualmode/set','true'],[id+'/motors/all/speedrel/set','30']]:[[id+'/motors/all/speedrel/set','0'],[id+'/manualmode/set','false']];
+  log('ui.motor_test',{id,action:spin?'spin':'stop'});
+  seq.forEach(([t,p],i)=>setTimeout(()=>client?.connected&&pub(t,p,{},why),i*600));
+  [1300,3500].forEach(ms=>setTimeout(()=>{if(client?.connected){pub(id+'/manualmode/get','',{},why);pub(id+'/motors/get','',{},why)}},ms));
+  [1900,4200].forEach(ms=>setTimeout(()=>route.n==='status'&&draw(),ms));
+  toast(spin?`${id}: manual mode on, then 30%`:`${id}: speed 0, then manual mode off`)}
 const clock=t=>new Date(t).toLocaleTimeString(),
   vis=s=>s.replace(CTRL,c=>'\\x'+c.charCodeAt(0).toString(16).padStart(2,'0')),   // what is copied never holds a zero byte or the like: on Windows the pasted text would stop there
   feedText=()=>feed.map(f=>`${clock(f.at)}  ${f.t}  ${f.m}${f.stored?'  (stored in the broker)':''}`).join('\n')||'(nothing yet)',
@@ -395,6 +406,7 @@ function draw(){
       h('div',{},b.ip||'IP unknown'),h('small',{class:'help'},[b.host,b.mac,b.sw].filter(Boolean).join(' · ')),
       b.at?h('small',{class:'help'},'status at '+clock(b.at)):null,
       diagLines(b).length?h('small',{class:'help diag'},diagLines(b).join('\n')):null,
+      h('div',{class:'btns2'},h('button',{class:'btn sm',onclick:()=>motorTest(b,true)},'Spin 30%'),h('button',{class:'btn sm gray',onclick:()=>motorTest(b,false)},'Stop')),
       b.asked&&Date.now()-b.asked>2500&&(b.at||0)<b.asked?h('small',{class:'err'},'No answer to the status request, probably offline'):null,
       b.asked&&Date.now()-b.asked>2500&&!b.ip?h('small',{class:'err'},`No IP yet: nothing came back on ${b.id}/network/ip`):null);
   body.replaceChildren(...[

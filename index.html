@@ -75,15 +75,19 @@ const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch{toast('Co
 /* ---------- MQTT ---------- */
 const BRIDGE=false;   // the Windows program serves this page with true: it relays Websocket <-> plain TCP, so the broker's normal port 1883 works
 let client=null,status='disconnected',off=false;
-const setStatus=s=>{status=s;const e=$('#st');if(e){e.className='st '+s;e.textContent=s}touch()};
+const setStatus=s=>{if(s!==status)note('app','connection '+s);status=s;const e=$('#st');if(e){e.className='st '+s;e.textContent=s}touch()};
 // what the boards say about themselves (MCP PLAY manual 18.6): <name>/discovery (JSON, published once at boot and kept by the broker, so it can be gone), <name>/status (offline, online, ready, running)
 // and <name>/network/ip, the live answer to <name>/network/ip/get (18.6.4), which is where the IP comes from when discovery is missing.
 // Everything else (answers to Diagnose, events, watchdogs) comes through the "#" filter and is listed raw. shortcut: a busy shared broker would flood this page, filter by board name then
 const SUBS=['#','$SYS/broker/clients/connected','$SYS/broker/version'];
-const boards=new Map(),feed=[];let sys={},denied=[],dirty=false;
+const boards=new Map(),feed=[],held=new Map();let sys={},denied=[],dirty=false;
+const note=(t,m)=>{feed.unshift({t,m,at:Date.now()});feed.length=Math.min(feed.length,300)};   // the app's own events sit in the list of messages, next to what the boards said
+// a command kept (retained) by the broker is handed to a board again every time it connects: held lists the ones seen, to show and clear them
+const CMD=/\/command\/|\/set$|\/(stopflow|continue)$|^network_broadcast\//;
 const touch=()=>{if(dirty)return;dirty=true;setTimeout(()=>{dirty=false;if(route.n==='status')draw()},250)};   // at most 4 redraws a second, retained messages arrive in bursts
 function onMsg(t,m,stored){   // stored: the broker replays a retained message = the board spoke once, not proof it is there now. Only a live message or an answer makes a board "live"
   if(!t.startsWith('$SYS/')){feed.unshift({t,m:m.slice(0,2000),at:Date.now(),stored});feed.length=Math.min(feed.length,300)}
+  if(stored&&m!==''&&CMD.test(t))held.set(t,m);
   let x;const dev=id=>{if(!boards.has(id))boards.set(id,{id});const b=boards.get(id);if(!stored)b.live=true;return b};
   if(t==='$SYS/broker/clients/connected')sys.clients=m;
   else if(t==='$SYS/broker/version')sys.version=m;
@@ -96,7 +100,7 @@ function onMsg(t,m,stored){   // stored: the broker replays a retained message =
   touch()}
 function hangup(){if(client){const c=client;client=null;c.end(true)}setStatus('disconnected')}
 function connect(){
-  hangup();off=false;boards.clear();feed.length=0;sys={};denied=[];const c=db.conn;
+  hangup();off=false;boards.clear();held.clear();sys={};denied=[];const c=db.conn;   // the list of messages stays: it is the story of what happened
   if(typeof mqtt==='undefined'){setStatus('error');return toast('MQTT library failed to load (check internet)')}
   setStatus('connecting');let cl;
   const url=c.protocol==='tcp'?`ws://${location.host}/tcp/${c.host}/${c.port}`:`${c.protocol==='wss'?'wss':'ws'}://${c.host}:${c.port}/${String(c.path||'mqtt').replace(/^\/+/,'')}`;
@@ -114,10 +118,13 @@ function connect(){
     .on('error',e=>{if(cl===client){told=true;setStatus('error');toast(e.message)}})}
 function send(p,payload){   // true when the message went out (a toggle button only flips when it did)
   const pl=String(payload);
+  if(/\/command\/teachin$/.test(p.topic)&&!confirm('Teach-in deletes the IP configuration of the board (manual, 18.8.7), and the board may not come back. Send it anyway?'))return false;
   if(p.confirm&&!confirm((p.confirmMsg||'<payload>').replaceAll('<payload>',pl)))return false;
   if(!client?.connected){toast('Not connected');return false}
-  const m=p.isJson&&p.jsonEnv&&pl!==''?p.jsonEnv.replaceAll('<payload>',pl):pl;
-  client.publish(p.topic,m,{qos:+p.qos||0,retain:!!p.retain},e=>toast(e?'Error: '+e.message:`Sent ${p.topic} ← ${m}`));return true}
+  const m=p.isJson&&p.jsonEnv&&pl!==''?p.jsonEnv.replaceAll('<payload>',pl):pl,keep=p.retain&&CMD.test(p.topic);
+  client.publish(p.topic,m,{qos:+p.qos||0,retain:!!p.retain},e=>toast(e?'Error: '+e.message:`Sent ${p.topic} ← ${m}`+(keep&&m!==''?'  (RETAINED: the broker gives it to the board again every time it connects)':'')));
+  if(keep){m===''?held.delete(p.topic):held.set(p.topic,m);touch()}
+  return true}
 
 /* ---------- generic form builder ---------- */
 const T=(k,label,o={})=>({k,label,...o}),N=(k,label,o={})=>T(k,label,{type:'number',...o}),C=(k,label,o={})=>T(k,label,{type:'check',...o}),
@@ -246,7 +253,9 @@ const DIAG=['manualmode','mcpplayenable','eventhandler','eventhandler/log','moto
 function diagnose(){
   if(!client?.connected)return toast('Not connected');
   const live=[...boards.values()].filter(b=>b.live);if(!live.length)return toast('No board has answered yet');
-  live.forEach(b=>DIAG.forEach(s=>client.publish(`${b.id}/${s}/get`,'')));toast('Asked '+live.map(b=>b.id).join(', '));setTimeout(()=>route.n==='status'&&draw(),1500)}
+  // spaced out: a board has little MQTT capacity (manual 18.6.5) and its event log can be long
+  live.forEach((b,i)=>DIAG.forEach((s,j)=>setTimeout(()=>client?.connected&&client.publish(`${b.id}/${s}/get`,''),(i*DIAG.length+j)*300)));
+  const ms=live.length*DIAG.length*300;toast(`Asking ${live.map(b=>b.id).join(', ')}, about ${Math.ceil(ms/1000)} s`);setTimeout(()=>route.n==='status'&&draw(),ms+1500)}
 const clock=t=>new Date(t).toLocaleTimeString(),
   feedText=()=>feed.map(f=>`${clock(f.at)}  ${f.t}  ${f.m}${f.stored?'  (stored in the broker)':''}`).join('\n')||'(nothing yet)',
   diagLines=b=>{const L=[],e=b.eventhandler,mo=b.motors,ty=mo?.config?.type;
@@ -257,8 +266,15 @@ const clock=t=>new Date(t).toLocaleTimeString(),
     if(e)L.push(`event handler: ${e.state}, active event: ${e['active event']||'none'}, last event: ${e['last event']||'none'}`,
       `on events: network ${e.network}, overvoltage ${e.overvoltage}, undervoltage ${e.undervoltage}, motor ${e.motor}, general control ${e.generalcontrol}, sensor ${e.sensor}`);
     return L},
-  report=()=>[...boards.values()].map(b=>[`${b.id} ${b.state||'no status'} ${b.ip||'IP unknown'}${b.live?'':' (stored, no answer)'}`,...diagLines(b).map(l=>'  '+l)].join('\n')).join('\n')+'\n--- messages, newest first ---\n'+feedText(),
+  report=()=>[...boards.values()].map(b=>[`${b.id} ${b.state||'no status'} ${b.ip||'IP unknown'}${b.live?'':' (stored, no answer)'}`,...diagLines(b).map(l=>'  '+l)].join('\n')).join('\n')
+    +(held.size?'\ncommands kept by the broker: '+[...held].map(([t,m])=>`${t} ← ${m}`).join(', '):'')+'\n--- messages, newest first ---\n'+feedText(),
   copyReport=()=>Promise.resolve().then(()=>navigator.clipboard.writeText(report())).then(()=>toast('Copied: paste it in the chat'),()=>toast('Could not copy: open "Messages received", select the text and copy it'));
+function clearHeld(){   // deleting a kept message means publishing an empty one, and the broker also hands that to every board listening: for start, restart, teachin an empty message IS the command, so only for boards that are not connected
+  if(!client?.connected)return toast('Not connected');
+  const on=[...new Set([...held.keys()].map(t=>t.split('/')[0]))].filter(id=>boards.get(id)?.live&&boards.get(id).state!=='offline');
+  if(on.length)return toast(`${on.join(', ')} ${on.length>1?'are':'is'} connected. Clearing makes the broker send an empty message to the board, and for start, restart and the like an empty message IS the command. Switch ${on.length>1?'them':'it'} off first, then clear.`);
+  const n=held.size;if(!confirm(`Delete ${n} command${n>1?'s':''} kept by the broker? The boards are not connected, so they will not receive anything.`))return;
+  held.forEach((m,t)=>client.publish(t,'',{retain:true}));held.clear();toast(`Cleared ${n} command${n>1?'s':''} kept by the broker`);draw()}
 function draw(){
   const body=$('#stbody');if(!body||!db.conn)return;
   const all=[...boards.values()].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})),
@@ -275,6 +291,7 @@ function draw(){
       h('small',{class:'help'},sys.clients?`${sys.clients} clients connected to the broker${sys.version?' · '+sys.version:''}`:'The broker has not said how many clients are connected')),
     status!=='connected'&&h('div',{class:'err'},'Not connected.'+(all.length?' Showing the last data received.':'')),
     denied.length&&h('div',{class:'err'},'The broker does not let this app listen to: '+denied.join(', ')),
+    held.size&&h('div',{class:'err'},h('b',{},'The broker keeps these commands and hands them to a board every time it connects: '),[...held].map(([t,m])=>`${t} ← ${m}`).join(' · '),' ',h('button',{class:'btn sm',onclick:clearHeld},'Clear them')),
     h('div',{class:'row2'},h('b',{},`Devices (${list.length})`),
       h('div',{class:'btns2'},h('button',{class:'btn sm',onclick:ask},'Refresh'),h('button',{class:'btn sm',onclick:diagnose},'Diagnose'),h('button',{class:'btn sm gray',onclick:copyReport},'Copy report'))),
     ...(list.length?list.map(card):[h('div',{class:'empty'},h('p',{},'No board has answered yet'),h('small',{class:'help'},'A board is listed here only after it publishes on <name>/status or answers Refresh. If nothing shows up, no board is talking to this broker, or this app is not allowed to listen.'))])
@@ -282,10 +299,11 @@ function draw(){
   $('#stored').hidden=!stored.length;$('#storedsum').textContent=`Stored in the broker, no answer (${stored.length})`;   // what the broker remembers from boards that did not answer: possibly switched off or renamed
   $('#storedlist').textContent=stored.map(b=>[b.id,b.ip||'IP unknown',b.state&&'last state: '+b.state].filter(Boolean).join(' · ')).join('\n');
   $('#feed').textContent=feedText()}
+const chipClick=()=>{if(client&&status==='connected'){off=true;hangup()}else connect()};   // while it is trying again a click tries again, it does not switch it off
 const views={
 home(){
   if(db.conn&&!client&&!off)connect();
-  const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:()=>{if(client){off=true;hangup()}else connect()}},status);
+  const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:chipClick},status);
   return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
     h('main',{},db.conn&&tabs('home'),!db.conn?h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn',onclick:()=>go({n:'conn'})},'Setup a connection'))
       :db.panels.length?h('div',{class:'panels'},visible().map((p,i,vis)=>card(p,i,vis)))
@@ -293,7 +311,7 @@ home(){
       db.conn&&db.panels.length?h('button',{class:'btn fab','aria-label':'Add',onclick:add},'+'):null))},
 status(){
   if(db.conn&&!client&&!off)connect();
-  const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:()=>{if(client){off=true;hangup()}else connect()}},status);
+  const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:chipClick},status);
   return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
     h('main',{},tabs('status'),h('div',{id:'stbody'}),
       h('details',{class:'feed',id:'stored',hidden:true},h('summary',{id:'storedsum'}),h('pre',{id:'storedlist'})),

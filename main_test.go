@@ -93,3 +93,63 @@ func TestRelay(t *testing.T) {
 		t.Fatal("relay stayed open although the broker is unreachable")
 	}
 }
+
+// the console says who ended a connection, so a drop of the broker or the network can be told from the page closing
+func TestRelayLogsWhoEndedIt(t *testing.T) {
+	broker, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer broker.Close()
+	hangUp := make(chan bool, 1)
+	go func() {
+		for i := 0; i < 2; i++ {
+			c, err := broker.Accept()
+			if err != nil {
+				return
+			}
+			if i == 0 { // first connection: the page says something and the broker hangs up
+				c.Read(make([]byte, 1))
+				c.Close()
+			} else { // second: the broker keeps it open until the test is over
+				<-hangUp
+				c.Close()
+			}
+		}
+	}()
+	_, bport, _ := net.SplitHostPort(broker.Addr().String())
+	ws := "ws" + strings.TrimPrefix(start(t), "http") + "/tcp/127.0.0.1/"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	out := capture(func() {
+		c, _, err := websocket.Dial(ctx, ws+bport, &websocket.DialOptions{Subprotocols: []string{"mqtt"}})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		c.Write(ctx, websocket.MessageBinary, []byte("x"))
+		if _, _, err := c.Read(ctx); err == nil {
+			t.Error("page stayed open after the broker hung up")
+		}
+		time.Sleep(200 * time.Millisecond)
+	})
+	if !strings.Contains(out, "ended by the broker or the network after") {
+		t.Errorf("a broker hang-up was not logged as such:\n%s", out)
+	}
+
+	out = capture(func() {
+		c, _, err := websocket.Dial(ctx, ws+bport, &websocket.DialOptions{Subprotocols: []string{"mqtt"}})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+		c.Close(websocket.StatusNormalClosure, "bye")
+		time.Sleep(300 * time.Millisecond)
+	})
+	hangUp <- true
+	if !strings.Contains(out, "ended by the page after") {
+		t.Errorf("the page closing was not logged as such:\n%s", out)
+	}
+}

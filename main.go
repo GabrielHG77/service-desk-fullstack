@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -79,16 +80,26 @@ func relay(w http.ResponseWriter, r *http.Request, host, port string) {
 	up, down := &pktLog{who: "-> " + conn.RemoteAddr().String(), want: 1}, &pktLog{who: "<- " + conn.RemoteAddr().String(), want: 2}
 	ctx, stop := context.WithCancel(r.Context())
 	defer stop()
+	start, once := time.Now(), sync.Once{}
+	end := func(by string, err error) { // says who ended it and when: a broker or network drop looks different from the page closing
+		once.Do(func() {
+			log.Printf("connection to %s ended by %s after %s: %v", conn.RemoteAddr(), by, time.Since(start).Round(time.Second), err)
+		})
+	}
 	go func() { // broker -> page
 		defer stop()
 		buf := make([]byte, 32<<10)
 		for {
 			n, err := conn.Read(buf)
 			down.feed(buf[:n])
-			if n > 0 && ws.Write(ctx, websocket.MessageBinary, buf[:n]) != nil {
-				return
+			if n > 0 {
+				if werr := ws.Write(ctx, websocket.MessageBinary, buf[:n]); werr != nil {
+					end("the page", werr)
+					return
+				}
 			}
 			if err != nil {
+				end("the broker or the network", err)
 				return
 			}
 		}
@@ -96,10 +107,12 @@ func relay(w http.ResponseWriter, r *http.Request, host, port string) {
 	for { // page -> broker
 		_, data, err := ws.Read(ctx)
 		if err != nil {
+			end("the page", err)
 			return
 		}
 		up.feed(data)
 		if _, err := conn.Write(data); err != nil {
+			end("the broker or the network", err)
 			return
 		}
 	}

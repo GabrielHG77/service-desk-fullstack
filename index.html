@@ -193,22 +193,37 @@ function send(p,payload){   // true when the message went out (a toggle button o
 function spinMotors(id,motor,speed,on,why,keepManual){
   const sp=`${id}/motors/${motor}/speedrel/set`,mm=`${id}/manualmode/set`,seq=on?[[mm,'true'],[sp,String(speed)]]:[[sp,'0'],...(keepManual?[]:[[mm,'false']])];
   seq.forEach(([t,m],i)=>setTimeout(()=>client?.connected&&pub(t,m,{},why),i*600))}
+// The motor of a transfer that lifts (type "vdcposition") is not a roller and must not get a speed. This gives its number (1 to 4) when the motors asked for include one, else 0. Types not known yet (no answer from the board) are let through
+const posMotor=(id,motor)=>{const T=boards.get(id)?.motors?.config?.type||[];return(motor==='all'?[1,2,3,4]:[+motor]).find(n=>/position/i.test(T[n-1]||''))||0};
+// Asks the board what it accepted and says it, so a button that seems to do nothing tells why: manual mode and the speed of each motor, as the board reports them
+const checks=new Map();   // the pending check of each board: a newer press replaces it, so an old one never reports on a state that has already changed
+function checkSpin(id,motor,speed,on,keep){
+  const b0=boards.get(id);(checks.get(id)||[]).forEach(clearTimeout);
+  const t1=setTimeout(()=>{if(!client?.connected)return;if(b0){delete b0.manualmode;delete b0.motors}pub(id+'/manualmode/get','',{},'check '+id);pub(id+'/motors/get','',{},'check '+id)},1300),
+    t2=setTimeout(()=>{const b=boards.get(id),sp=b?.motors?.speedrel,mm=b?.manualmode;if(!client?.connected)return;
+    if(!sp||mm==null){log('board.check',{level:'warn',id,action:on?'spin':'stop',answered:false});return toast(`${id} did not answer: is the PC on the Wi-Fi of the boards, and is the board on?`)}
+    const mine=motor==='all'?sp:[sp[motor-1]],ok=on?mm==='true'&&mine.some(x=>Math.abs(x-speed)<1):mine.every(x=>Math.abs(x)<1)&&(keep||mm==='false');
+    log('board.check',{level:ok?undefined:'warn',id,action:on?'spin':'stop',manual_mode:mm,speedrel:sp.join(','),ok});
+    toast(ok?`${id}: ${on?'turning':'stopped'} (manual mode ${mm}, speed ${sp.join(' / ')}%)`:`${id} did not do it: manual mode ${mm}, speed ${sp.join(' / ')}%`)},2600);
+  checks.set(id,[t1,t2])}
 // A motor button: press to spin the motors of a board at the chosen speed, press again to stop. A stop leaves manual mode only when no other motor button of the same board is still on.
 function motorPress(p,on){   // true when the messages went out
   const id=p.board,motor=p.motorNo||'all',back=p.dir==='back',speed=(back?-1:1)*Math.abs(+p.speed),what=on?`${id}: ${motor==='all'?'motors':'motor '+motor} at ${p.speed}%${back?' backward':''}`:`${id}: stop`;
   log('ui.press',{name:p.name,id:p.id,mode:'motor',board:id,motor,speed,action:on?'spin':'stop',connected:!!client?.connected});
   if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:p.name,reason:'not connected'});return false}
+  const pm=on&&posMotor(id,motor);
+  if(pm){toast(`${id}: motor ${pm} is a position motor (it lifts), not a roller, so no speed is sent. Pick the roller motor by its number instead of "All motors".`);log('ui.press_blocked',{level:'warn',name:p.name,reason:`motor ${pm} is a position motor`});return false}
   if(on&&p.confirm&&!confirm((p.confirmMsg||'<payload>').replaceAll('<payload>',what))){log('ui.press_blocked',{level:'warn',name:p.name,reason:'confirmation dismissed'});return false}   // a stop is never held back by a question
   const keep=!on&&db.panels.some(q=>q.id!==p.id&&isSpin(q)&&q.board===id&&tog.get(q.id));
-  spinMotors(id,motor,speed,on,'button '+p.name,keep);
+  spinMotors(id,motor,speed,on,'button '+p.name,keep);checkSpin(id,motor,speed,on,keep);
   toast(on?`${what}: manual mode on, then the speed`:`${id}: speed 0${keep?'':', then manual mode off'}`);return true}
 // Start all boards: an empty message on network_broadcast/start starts every MultiControl (manual 12.2). A board then moves a motor only when it has a box to move, apart from a short move after a reset. It asks first and never retains
 function startAll(p){   // true when the message went out
   const by=p?.name?'button '+p.name:'Start all';
   log('ui.press',{name:p?.name,id:p?.id,mode:'start_all',connected:!!client?.connected});
   if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:p?.name,reason:'not connected'});return false}
-  if(!confirm('Start all boards? Every MultiControl on this broker gets the start command.')){log('ui.press_blocked',{level:'warn',name:p?.name,reason:'confirmation dismissed'});return false}
-  pub('network_broadcast/start','',{},by,e=>toast(e?'Error: '+e.message:'Sent network_broadcast/start: all boards'));return true}
+  if(!confirm('Start all boards? Every MultiControl on this broker gets the start command. It does not turn the rollers by itself: a board moves a motor only when it has a box to move (use Spin to turn a roller).')){log('ui.press_blocked',{level:'warn',name:p?.name,reason:'confirmation dismissed'});return false}
+  pub('network_broadcast/start','',{},by,e=>toast(e?'Error: '+e.message:'Sent network_broadcast/start to all boards. Rollers only turn when a box arrives.'));return true}
 
 /* ---------- generic form builder ---------- */
 const T=(k,label,o={})=>({k,label,...o}),N=(k,label,o={})=>T(k,label,{type:'number',...o}),C=(k,label,o={})=>T(k,label,{type:'check',...o}),
@@ -294,7 +309,7 @@ const tog=new Map();   // toggle buttons: on or off as this page last sent it, b
 const PT={
   button:{label:'Button',fields:[NAME,
     S('action','What it does',[['msg','Send a message'],['spin',"Spin a board's motors"],['start','Start all boards']],{def:'msg',
-      help:"Send a message: the usual button. Spin a board's motors: press to spin the motors of one board at the speed and direction you choose, press again to stop. A board ignores speed commands unless it is in manual mode, so this sets manual mode first and leaves it when it stops. Start all boards: sends the start command to every board, after asking."}),
+      help:"Send a message: the usual button. Spin a board's motors: press to spin the motors of one board at the speed and direction you choose, press again to stop. A board ignores speed commands unless it is in manual mode, so this sets manual mode first and leaves it when it stops. Start all boards: sends the start command to every board, after asking. It does not turn the rollers by itself: a board moves a motor only when it has a box to move."}),
     T('board','Board',{req:1,err:'The board name is required',show:isSpin,suggest:()=>[...boards.values()].filter(b=>b.live).map(b=>b.id),help:'The name of the board, e.g. mc7. The boards that answered are offered while you type.',
       val:x=>/^[\w.-]+$/.test(x)?null:'Use the name of the board only, e.g. mc7'}),
     {row:[S('motorNo','Motor',[['all','All motors'],['1','Motor 1'],['2','Motor 2'],['3','Motor 3'],['4','Motor 4']],{def:'all',show:isSpin}),
@@ -356,6 +371,8 @@ function diagnose(){
 // Spin sets manual mode and then the speed; Stop sets speed 0 and then leaves manual mode. Both ask the board back afterwards, so its card shows what it accepted.
 function motorTest(b,spin){
   if(!client?.connected)return toast('Not connected');
+  const pm=spin&&posMotor(b.id,'all');
+  if(pm){log('ui.press_blocked',{level:'warn',name:'motor test '+b.id,reason:`motor ${pm} is a position motor`});return toast(`${b.id}: motor ${pm} is a position motor (it lifts), not a roller, so SPIN sends no speed. Use a button "Spin a board's motors" with the roller motor picked by its number.`)}
   if(spin&&!confirm(`${b.id}: all its motors will turn at 30% until you press Stop. Manual mode switches the zone logic of this board off. Go on?`))return;
   const id=b.id,why='motor test '+(spin?'spin':'stop');
   log('ui.motor_test',{id,action:spin?'spin':'stop'});

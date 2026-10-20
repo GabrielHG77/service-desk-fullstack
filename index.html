@@ -5,67 +5,95 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MQTT Panel</title>
 <style>
-:root{--primary:#f2d740;--black:#0c0e0f;--secondary:#3dc2ff;--tertiary:#5260ff;--success:#2dd36f;--warning:#ffc409;--danger:#eb445a;--medium:#92949c;
-  --bg:#f4f5f8;--card:#fff;--fg:#1c1c1e;--line:#d7d8da;--sub:#666}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#121212;--card:#1e1e1e;--fg:#f2f2f2;--line:#3a3a3a;--sub:#aaa;color-scheme:dark}}
-:root[data-theme=dark]{--bg:#121212;--card:#1e1e1e;--fg:#f2f2f2;--line:#3a3a3a;--sub:#aaa;color-scheme:dark}
+:root{--primary:#f2d740;--ink:#0c0e0f;--black:#0c0e0f;--secondary:#3dc2ff;--tertiary:#5260ff;--success:#2dd36f;--warning:#ffc409;--danger:#eb445a;--medium:#92949c;
+  --bg:#eceff2;--card:#fff;--card2:#f3f5f7;--fg:#16191c;--line:#dcdfe3;--sub:#5f666e;--shadow:0 1px 2px #0000000d,0 8px 24px #00000010}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0d0f11;--card:#16191c;--card2:#1e2226;--fg:#eceef0;--line:#2a3035;--sub:#98a0a8;--shadow:0 1px 2px #0008,0 8px 24px #0004;color-scheme:dark}}
+:root[data-theme=dark]{--bg:#0d0f11;--card:#16191c;--card2:#1e2226;--fg:#eceef0;--line:#2a3035;--sub:#98a0a8;--shadow:0 1px 2px #0008,0 8px 24px #0004;color-scheme:dark}
 *{box-sizing:border-box}[hidden]{display:none!important}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px system-ui,sans-serif}
-.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--black);color:#fff;border-bottom:3px solid var(--primary)}
-.bar h1{font-size:18px;margin:0;font-weight:500}.sp{flex:1}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,"Segoe UI",sans-serif}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;align-items:center;gap:12px;padding:10px 24px;background:var(--black);color:#fff;border-bottom:3px solid var(--primary)}
+.bar h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.02em}.sp{flex:1}
+.logo{flex:none;width:26px;height:26px;border-radius:6px;background:var(--primary);position:relative}.logo::after{content:"";position:absolute;inset:7px;border-radius:2px;background:var(--black)}
+.broker{font:12px ui-monospace,Consolas,monospace;color:#c9ced4;background:#ffffff17;border-radius:6px;padding:4px 10px}
 .ic{background:none;border:0;color:inherit;font-size:20px;cursor:pointer;padding:4px 8px}
-main{max-width:720px;margin:0 auto;padding:12px 16px 96px}
-.btn{border:0;border-radius:4px;padding:12px 16px;font:inherit;font-weight:600;text-transform:uppercase;cursor:pointer;background:var(--primary);color:var(--black)}
-.btn{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}.btn:active{filter:brightness(.8)}.btn.gray{background:var(--medium);color:#fff}.btn.sm{padding:5px 10px;font-size:12px}.btn.lg{padding:16px 24px;font-size:17px}
+main{max-width:720px;margin:0 auto;padding:16px 16px 96px}main.wide{max-width:1680px;padding:20px 28px 56px}
+.btn{border:0;border-radius:8px;padding:11px 16px;font:inherit;font-weight:700;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;background:var(--primary);color:var(--ink);transition:filter .12s}
+.btn{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}.btn:hover{filter:brightness(1.07)}.btn:active{filter:brightness(.82)}.btn.gray{background:#7b8088;color:#fff}.btn.sm{padding:6px 12px;font-size:12px}.btn.lg{padding:16px 24px;font-size:17px}
+.btn.stop{background:var(--danger);color:#fff}.btn.alt{background:transparent;color:var(--fg);box-shadow:inset 0 0 0 2px var(--primary)}.btn.alt:hover{background:#f2d7401f}
+.btn.soft{background:var(--card2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}.btn.soft:hover{box-shadow:inset 0 0 0 1px var(--sub)}
 .fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;font-size:30px;padding:0;box-shadow:0 3px 8px #0006;z-index:6}
 .fld{margin:0 0 12px}.lh{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);margin-bottom:3px}
 .fld label{font-size:13px;color:var(--sub)}.fld .chk{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--fg)}.chk input{width:auto}
-input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--fg);font:inherit;font-size:16px}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);font:inherit;font-size:16px}
 input[type=color]{padding:2px;height:40px}
 .row{display:flex;gap:8px}.row>*{flex:1;min-width:0}.req{color:var(--danger)}
 .q{border:0;border-radius:50%;width:18px;height:18px;font-size:11px;background:var(--primary);color:var(--black);cursor:pointer;padding:0}
 .help{color:var(--sub);display:block;margin-top:3px}.err{white-space:pre-line;color:var(--danger);margin:8px 0}
 .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
 .pickrow{margin:6px 0}.pickrow .help{margin:0}
-.item{border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:8px}
-.pick{background:var(--card);border-radius:8px;padding:16px;margin-bottom:8px;cursor:pointer}
+.item{border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px}
+.pick{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:8px;cursor:pointer}
 .menu{position:relative;display:inline-block}.menu summary{list-style:none;cursor:pointer;padding:2px 8px;font-size:20px}.menu summary::-webkit-details-marker{display:none}
-.pop{position:absolute;right:0;top:100%;background:var(--card);color:var(--fg);box-shadow:0 2px 8px #0005;border-radius:6px;z-index:10;min-width:150px;display:flex;flex-direction:column}
+.pop{position:absolute;right:0;top:100%;background:var(--card);color:var(--fg);box-shadow:0 2px 12px #0006;border-radius:8px;z-index:10;min-width:160px;display:flex;flex-direction:column;border:1px solid var(--line)}
 .pop button{background:none;border:0;text-align:left;padding:10px 14px;font:inherit;color:inherit;cursor:pointer}.pop .dng{color:var(--danger)}
 .panels{display:flex;flex-wrap:wrap;gap:8px}
-.panel{background:var(--card);border-radius:8px;padding:10px;position:relative;box-shadow:0 1px 3px #0003;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;position:relative;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .panel>*{max-width:100%}.panel .menu{position:absolute;top:2px;right:2px}.pname{font-weight:600;font-size:14px;margin-right:24px}
 .pb{min-width:90px}.pb[aria-pressed=true]{box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 5px var(--black)}.grp{display:flex;flex-wrap:wrap;gap:8px;width:100%}.grp .btn{flex:1 1 90px}
 .empty{text-align:center;padding:48px 0;color:var(--sub)}
-.st{border:0;border-radius:12px;padding:3px 10px;font:12px system-ui;cursor:pointer;color:#fff;background:var(--medium)}.st.connected{background:var(--success)}.st.connecting{background:var(--warning)}.st.error{background:var(--danger)}
-#toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:90vw;background:#000d;color:#fff;padding:8px 14px;border-radius:20px;z-index:50}
-.tabs{display:flex;margin:0 0 12px;border-bottom:2px solid var(--line)}
-.tabs button{flex:1;background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:10px 0;font:inherit;font-weight:600;text-transform:uppercase;color:var(--sub);cursor:pointer}
-.tabs .on{color:var(--fg);border-bottom-color:var(--primary)}
-.box{margin-bottom:8px;align-items:stretch}.row2{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}.box .row2{margin:0}
-.pill{border-radius:12px;padding:2px 10px;font-size:12px;font-weight:600;background:var(--medium);color:#fff}
-.pill.ready,.pill.running{background:var(--success)}.pill.online{background:var(--warning);color:var(--black)}.pill.offline{background:var(--danger)}
+.st{border:0;border-radius:999px;padding:4px 12px;font:600 12px system-ui;cursor:pointer;color:#fff;background:var(--medium)}.st.connected{background:var(--success);color:var(--ink)}.st.connecting{background:var(--warning);color:var(--ink)}.st.error{background:var(--danger)}
+#toast{position:fixed;left:50%;bottom:calc(30px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:min(90vw,820px);background:#000e;color:#fff;padding:10px 18px;border-radius:12px;z-index:50;box-shadow:0 6px 24px #0007;border:1px solid #ffffff22}
+.shell{display:block}.side{margin-bottom:14px}.sideinfo{display:none}.content{min-width:0}
+.tabs{display:flex;border-bottom:2px solid var(--line)}
+.tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:11px 0;font:inherit;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);cursor:pointer}
+.tabs .on{color:var(--fg);border-bottom-color:var(--primary)}.ti{font-size:11px;opacity:.8}
+.box{margin-bottom:10px;align-items:stretch}.row2{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}.box .row2{margin:0}
+.pill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 11px;font-size:12px;font-weight:700;background:var(--medium);color:#fff;white-space:nowrap}.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px}
+.pill.ready{background:var(--secondary);color:var(--ink)}.pill.running{background:var(--success);color:var(--ink)}.pill.online{background:var(--warning);color:var(--ink)}.pill.offline{background:var(--danger)}
 .btns2{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.diag{display:block;white-space:pre-line;word-break:break-word;margin-top:4px}
-.logview{white-space:pre-wrap;word-break:break-all;font-size:11px;line-height:1.35;max-height:48vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px;margin:8px 0}
+.logview{white-space:pre-wrap;word-break:break-all;font:11.5px/1.45 ui-monospace,Consolas,monospace;max-height:48vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}
 #logbox{width:100%;height:30vh;font-size:11px;margin-top:8px}.quick{justify-content:flex-start;margin:6px 0}#note{flex:1}
-.feed{margin-top:12px}.feed summary{cursor:pointer;color:var(--sub)}.feed pre{white-space:pre-wrap;word-break:break-all;font-size:12px;margin:8px 0}
-.sect{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--sub);margin:18px 0 8px}
-.allrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}.allrow .btn{padding:16px 8px;font-size:15px}
-.btn.alt{background:transparent;color:var(--fg);box-shadow:inset 0 0 0 2px var(--primary)}.allstart{width:100%;margin-top:8px;padding:14px 8px;font-size:15px}.trow1{margin-top:8px}.trow1 .btn{width:100%;padding:10px 8px}
-.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
-.tile,.bcard{background:var(--card);border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px #0003;border-left:4px solid var(--medium)}
-.tile.run,.bcard.run{border-left-color:var(--primary);box-shadow:0 0 0 2px var(--primary)}.bcard.on{border-left-color:var(--success)}.bcard.off{border-left-color:var(--danger)}
-.thead,.bhead{display:flex;align-items:center;justify-content:space-between;gap:8px}.tname,.bname{font-size:20px}
-.tsub{display:flex;align-items:center;gap:8px;color:var(--sub);font-size:13px;margin:2px 0 10px;min-height:22px}
-.trow{display:grid;grid-template-columns:1fr 1fr;gap:8px}.trow .btn{padding:12px 8px}
-.bcard{margin-bottom:10px}.bsub{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:4px 0 8px;color:var(--sub);font-size:13px}.bip{color:var(--fg);font-weight:600;font-size:16px;margin-right:4px}
-.tag{background:var(--line);border-radius:4px;padding:1px 6px;font-size:12px;color:var(--fg)}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.chip{border-radius:12px;padding:2px 10px;font-size:12px;font-weight:600;background:var(--line);color:var(--fg)}
-.chip.good{background:var(--success);color:#fff}.chip.bad{background:var(--danger);color:#fff}.chip.live{background:var(--primary);color:var(--black)}
+.feed{margin-top:14px}.feed summary{cursor:pointer;color:var(--sub)}.feed pre{white-space:pre-wrap;word-break:break-all;font-size:12px;margin:8px 0}
+.sect{display:flex;align-items:center;gap:12px;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);margin:26px 0 12px}.sect::after{content:"";flex:1;height:1px;background:var(--line)}
+.toolbar{display:flex;flex-wrap:wrap;align-items:stretch;justify-content:space-between;gap:14px}
+.stats{display:flex;flex-wrap:wrap;gap:10px}.stat{display:flex;flex-direction:column;gap:2px;min-width:104px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 18px;box-shadow:var(--shadow)}
+.stat b{font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}.stat span{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--sub)}
+.stat.ok b{color:var(--success)}.stat.run b{color:var(--primary)}.stat.warn b{color:var(--warning)}
+.tact{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.tact .btn{padding:14px 22px;font-size:14px}
+.gcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}.gall{margin-top:12px}.gall .btn{padding:12px 22px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:12px}
+.tile,.bcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow)}.tile{display:flex;flex-direction:column}.tile .trow{margin-top:auto}
+.tile.run,.bcard.run{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary),var(--shadow)}.bcard.on{border-left:4px solid var(--success)}.bcard.off{border-left:4px solid var(--danger)}
+.thead,.bhead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.tname,.bname{font-size:20px;font-weight:700;line-height:1.2}.gtile .tname{font-size:24px}
+.tcount{display:block;color:var(--sub);font-size:13px;font-weight:400}
+.tsub{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;color:var(--sub);font-size:13px;margin:4px 0 10px;min-height:22px}
+.mdots{display:flex;gap:6px;margin:0 0 12px}.md{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--card2);border:1px solid var(--line);color:var(--sub)}
+.md.run{background:var(--primary);color:var(--ink);border-color:var(--primary)}.md.bad{background:var(--danger);color:#fff;border-color:var(--danger)}
+.trow{display:grid;grid-template-columns:1fr 1fr;gap:8px}.trow .btn{padding:10px 8px;font-size:13px}
+.trow1{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.trow1 .btn{padding:14px 8px;font-size:15px}
+.topics{display:block;margin-top:10px;font:12px ui-monospace,Consolas,monospace;color:var(--sub);word-break:break-all}.warnline{display:block;margin-top:8px;color:var(--warning);font-size:13px}
+.bcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px;align-items:start}.bcard{margin:0}
+.bsub{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:4px 0 8px;color:var(--sub);font-size:13px}.bip{color:var(--fg);font-weight:600;font-size:16px;margin-right:4px}
+.tag{background:var(--card2);border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:12px;color:var(--fg)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.chip{border-radius:999px;padding:3px 11px;font-size:12px;font-weight:600;background:var(--card2);color:var(--fg);border:1px solid var(--line)}
+.chip.good{background:var(--success);color:var(--ink);border-color:transparent}.chip.bad{background:var(--danger);color:#fff;border-color:transparent}.chip.live{background:var(--primary);color:var(--ink);border-color:transparent}.chip.warn{background:var(--warning);color:var(--ink);border-color:transparent}
 .mrows{margin:8px 0 4px}.mrow{display:grid;grid-template-columns:22px 1fr auto auto;gap:3px 10px;align-items:center;padding:7px 0 5px;border-top:1px solid var(--line);font-size:14px}
-.mn{font-weight:700}.mt{color:var(--sub)}.mst{font-size:12px;font-weight:600;padding:1px 8px;border-radius:10px;background:var(--success);color:#fff}.mst.bad{background:var(--danger)}
+.mn{font-weight:700}.mt{color:var(--sub)}.mst{font-size:12px;font-weight:600;padding:1px 8px;border-radius:10px;background:var(--success);color:var(--ink)}.mst.bad{background:var(--danger);color:#fff}
 .msp{font-size:13px;font-variant-numeric:tabular-nums}.sbar{grid-column:1/-1;height:5px;border-radius:3px;background:var(--line);overflow:hidden}.sbar i{display:block;height:100%;background:var(--primary)}
 .evt{margin:6px 0 2px}.evt summary{cursor:pointer;color:var(--sub);font-size:13px}.bact{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}.bact .btn{padding:9px 20px;font-size:13px}
+.logwrap{display:grid;gap:16px}.logside .row2{margin:10px 0 0}.logside .btns2{justify-content:flex-start;margin-top:10px}
+@media (min-width:760px){
+  .shell{display:grid;grid-template-columns:200px minmax(0,1fr);gap:28px;align-items:start}
+  .side{position:sticky;top:88px;margin:0;display:flex;flex-direction:column;gap:20px}
+  .tabs{flex-direction:column;border:0;gap:4px}
+  .tabs button{flex:none;justify-content:flex-start;padding:12px 14px;border:0;border-radius:10px;margin:0;font-size:14px}
+  .tabs button:hover{background:var(--card2)}.tabs .on{background:var(--card);box-shadow:inset 3px 0 0 var(--primary),var(--shadow)}
+  .sideinfo{display:block;padding:0 4px}.sideinfo .sect{margin:0 0 6px}.sideinfo .sect::after{display:none}.sideinfo b{font:600 13px ui-monospace,Consolas,monospace;word-break:break-all}
+}
+@media (min-width:1100px){
+  .logwrap{grid-template-columns:380px minmax(0,1fr);align-items:start}.logview{max-height:none;height:calc(100vh - 230px);min-height:320px;margin:0}
+}
+@media (max-width:759px){.bar{padding:10px 14px}.broker{display:none}.stat{min-width:0;flex:1 1 40%}.tact{width:100%}.tact .btn{flex:1}.gcards{grid-template-columns:1fr}.bcards{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -136,7 +164,7 @@ const boards=new Map(),feed=[],held=new Map();let sys={},denied=[],dirty=false;
 const note=(t,m)=>{feed.unshift({t,m,at:Date.now()});feed.length=Math.min(feed.length,300)};   // the app's own events sit in the list of messages, next to what the boards said
 // a command kept (retained) by the broker is handed to a board again every time it connects: held lists the ones seen, to show and clear them
 const CMD=/\/command\/|\/set$|\/(stopflow|continue)$|^network_broadcast\//;
-const touch=()=>{if(dirty)return;dirty=true;setTimeout(()=>{dirty=false;if(route.n==='status')draw();else if(route.n==='home')drawHome()},250)};   // at most 4 redraws a second, retained messages arrive in bursts
+const touch=()=>{if(dirty)return;dirty=true;setTimeout(()=>{dirty=false;drawSide();if(route.n==='status')draw();else if(route.n==='home')drawHome()},250)};   // at most 4 redraws a second, retained messages arrive in bursts
 const CTRL=/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 function onMsg(t,raw,stored,pk){   // stored: the broker replays a retained message = the board spoke once, not proof it is there now. Only a live message or an answer makes a board "live"
   const m=raw.replace(CTRL,'');   // a board may end its text with a zero byte ("ready\0"): that is not "ready", and pasted on Windows the text stops at that byte. The log keeps the original
@@ -232,34 +260,37 @@ function verdict(it){const b=boards.get(it.id),sp=b?.motors?.speedrel,mm=b?.manu
   const mine=(it.target==='all'?[1,2,3,4]:[].concat(it.target)).map(n=>sp[n-1]),
     ok=it.on?mm==='true'&&mine.some(x=>Math.abs(x-NORMAL)<1):mine.every(x=>Math.abs(x)<1)&&(it.keep||mm==='false');
   return{...it,answered:true,ok,mm,sp}}
-function checkSpin(items,step=120){
+function checkSpin(items,step=120,quiet=false){   // quiet: the caller reports
   items.forEach((it,k)=>{clearTimeout(checks.get(it.id)?.timer);
     checks.set(it.id,{item:it,timer:setTimeout(()=>{if(!client?.connected)return;it.t0=Date.now();pub(it.id+'/manualmode/get','',{},'check '+it.id);pub(it.id+'/motors/get','',{},'check '+it.id)},1300+k*step)})});
   setTimeout(()=>{if(!client?.connected)return;
     const R=items.filter(it=>checks.get(it.id)?.item===it&&it.t0).map(verdict);
     R.forEach(r=>log('board.check',r.answered?{level:r.ok?undefined:'warn',id:r.id,action:r.on?'spin':'stop',manual_mode:r.mm,speedrel:r.sp.join(','),ok:r.ok}:{level:'warn',id:r.id,action:r.on?'spin':'stop',answered:false}));
-    if(R.length===1){const r=R[0];toast(!r.answered?`${r.id} did not answer: is the PC on the Wi-Fi of the boards, and is the board on?`:r.ok?`${r.id}: ${r.on?'turning':'stopped'} (manual mode ${r.mm}, speed ${r.sp.join(' / ')}%)`:`${r.id} did not do it: manual mode ${r.mm}, speed ${r.sp.join(' / ')}%`)}
+    if(quiet);
+    else if(R.length===1){const r=R[0];toast(!r.answered?`${r.id} did not answer: is the PC on the Wi-Fi of the boards, and is the board on?`:r.ok?`${r.id}: ${r.on?'turning':'stopped'} (manual mode ${r.mm}, speed ${r.sp.join(' / ')}%)`:`${r.id} did not do it: manual mode ${r.mm}, speed ${r.sp.join(' / ')}%`)}
     else if(R.length){const bad=R.filter(r=>!r.ok),on=R[0].on;toast(bad.length?`${R.length-bad.length} of ${R.length} boards ${on?'turning':'stopped'}. Not: ${bad.map(r=>r.id+(r.answered?'':' (no answer)')).join(', ')}`:`All ${R.length} boards ${on?'turning':'stopped'}`)}},1300+(items.length-1)*step+1300)}
 // Turn or stop the rollers of one board at normal speed, and check what it accepted. true when the messages went out
-function spin(id,on,motor,why,o={}){   // o.keep: a stop does not leave manual mode; o.check=false: the caller reports for several boards
+function spin(id,on,motor,why,o={}){   // o.keep: a stop does not leave manual mode; o.release: a stop always gives the board back to its logic; o.hold: decided by the caller (what the board said when the button was pressed); o.check=false: the caller reports for several boards
   if(!client?.connected){toast('Not connected');return false}
   if(!rollers(id)){toast(`${id}: it has not told its motors yet. Press Refresh in the Status tab, then try again.`);return false}
   const pm=on&&motor!=='all'&&posMotor(id,motor);
   if(pm){toast(`${id}: motor ${pm} is a position motor (it lifts), not a roller, so no speed is sent.`);return false}
   const target=spinTarget(id,motor);
   if(![].concat(target).length){toast(`${id}: it has no roller motor to turn`);return false}
-  spinMotors(id,target,NORMAL,on,why,o.keep);
-  if(o.check!==false){checkSpin([{id,target,on,keep:o.keep}]);toast(on?`${id}: manual mode on, then the normal speed`:`${id}: speed 0${o.keep?'':', then manual mode off'}`)}
+  // a board whose logic runs (it says "running") would move its motors again as soon as it left manual mode, and with MCP PLAY on it ignores a speed outside manual mode: stopping it sets manual mode and speed 0 and keeps it there ("held"). Start gives it back
+  const hold=!on&&!o.keep&&!o.release&&(o.hold??boards.get(id)?.state==='running');
+  hold?spinMotors(id,target,0,true,why):spinMotors(id,target,NORMAL,on,why,o.keep);
+  if(o.check!==false){checkSpin([{id,target,on,keep:o.keep||hold}]);toast(on?`${id}: manual mode on, then the normal speed`:hold?`${id}: manual mode on and speed 0: its logic is running, so it stays held`:`${id}: speed 0${o.keep?'':', then manual mode off'}`)}
   return true}
-// All rollers: every board that has told its motors gets the same, one after the other. It asks first when it turns them
-function spinAll(on){
+// All rollers: every board that has told its motors gets the same, one after the other. It asks first
+function spinAll(){
   if(!client?.connected)return toast('Not connected');
   const L=[...boards.values()].filter(b=>b.live&&rollers(b.id)?.length).sort(byId);
   if(!L.length)return toast('No board has told its motors yet. Press Refresh in the Status tab.');
-  log('ui.press',{mode:'all_rollers',action:on?'spin':'stop',boards:L.map(b=>b.id).join(','),connected:true});
-  if(on&&!confirm(`Spin all rollers? The rollers of ${L.length} boards (${L.map(b=>b.id).join(', ')}) will turn at normal speed until you press Stop all. Manual mode switches the zone logic of these boards off. Lifting motors are left alone.`)){log('ui.press_blocked',{level:'warn',name:'all rollers',reason:'confirmation dismissed'});return}
-  const items=L.map((b,i)=>{setTimeout(()=>spin(b.id,on,'all','all rollers',{check:false}),i*150);return{id:b.id,target:spinTarget(b.id,'all'),on,keep:false}});
-  checkSpin(items,150);toast(on?`Turning the rollers of ${L.length} boards…`:`Stopping the rollers of ${L.length} boards…`)}
+  log('ui.press',{mode:'all_rollers',action:'spin',boards:L.map(b=>b.id).join(','),connected:true});
+  if(!confirm(`Spin all rollers? The rollers of ${L.length} boards (${L.map(b=>b.id).join(', ')}) will turn at normal speed until you press Stop all. Manual mode switches the zone logic of these boards off. Lifting motors are left alone.`)){log('ui.press_blocked',{level:'warn',name:'all rollers',reason:'confirmation dismissed'});return}
+  const items=L.map((b,i)=>{setTimeout(()=>spin(b.id,true,'all','all rollers',{check:false}),i*150);return{id:b.id,target:spinTarget(b.id,'all'),on:true,keep:false}});
+  checkSpin(items,150);toast(`Turning the rollers of ${L.length} boards…`)}
 // A button of your own that turns the rollers of a board (or one motor): press to turn, press again to stop. A stop leaves manual mode only when no other such button of the same board is still on
 function motorPress(p,on){   // true when the messages went out
   const id=p.board,motor=p.motorNo||'all',what=on?`${id}: ${motor==='all'?'rollers':'motor '+motor} at normal speed`:`${id}: stop`;
@@ -276,7 +307,7 @@ function motorPress(p,on){   // true when the messages went out
 // answers on its own topic), on group<number>, then on the names, then on the number, and keeps the topic the boards answer on
 const wait=ms=>new Promise(r=>setTimeout(r,ms)),GT=new Map(),gkey=g=>String(g.id),nBoards=n=>n+(n===1?' board':' boards'),   // GT: group number > the topic that reached its boards
   ownName=(b,g)=>b.groups?.find(x=>gkey(x)===gkey(g))?.name;
-let startForm='';   // what the boards took as the start: '' is the empty message of the manual, 'true' is tried when the empty one changed nothing
+let cmdForm=db.form||'';   // what the boards took as the start and the stop: '' is the empty message of the manual, 'true' is tried when the empty one changes nothing. Kept between runs
 function flowGroups(){const m=new Map();   // by number: the name is only a label, and it may differ from board to board
   for(const b of boards.values())if(b.live)for(const g of b.groups||[]){const k=gkey(g);if(!m.has(k))m.set(k,{id:g.id,names:new Map(),live:[]});const G=m.get(k);G.live.push(b);G.names.set(g.name,(G.names.get(g.name)||0)+1)}
   return[...m.values()].map(G=>({...G,name:[...G.names].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],undefined,{numeric:true}))[0][0]})).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}))}
@@ -287,31 +318,53 @@ async function groupTopic(g){   // the topic of the group that its boards answer
     const n=g.live.filter(b=>b.manualAt>=t0).length;log('board.group_topic',{level:n?undefined:'warn',group:g.name,id:g.id,topic:c,answered:n,of:g.live.length});
     if(n){GT.set(k,c);touch();return c}}
   return null}
-// The start goes out, and about 3 s later the app looks at what the boards say: "running" means they took it, and so does a motor that started (<board>/motors/N/info/startstops). If nothing changed with the first form
-// of the message the same start goes out once with the other one (empty, or "true", which the first start buttons of this app sent), and the form that works is kept for the next start
-function startRound(tp,items,label,by,forms){
-  const form=forms[0],t0=Date.now();tp.forEach(c=>pub(`${c}/command/start`,form,{},by+(form?` (${form})`:'')));
+// A command goes to each group topic and about 3 s later the app looks at what the boards say: after a start they say "running" (a motor that starts, <board>/motors/N/info/startstops, counts too) and after a stop "ready" (manual 18.6.7:
+// "a stop command reverts the state back to Ready". The manual does not say on which topic, so it is <group>/command/stop, like the start). If nothing changed with the first form of the message the same command goes out once with the other one
+function cmdRound(verb,tp,items,label,by,forms,t0=Date.now()){
+  const want=verb==='start'?'running':'ready',form=forms[0],tc=Date.now();
+  tp.forEach(c=>pub(`${c}/command/${verb}`,form,{},by+(form?` (${form})`:'')));
   setTimeout(()=>{if(!client?.connected)return;
-    const R=items.map(it=>{const b=boards.get(it.id);return{...it,state:b?.state,ok:b?.state==='running',moved:b?.motorAt>=t0,manual:b?.manualmode==='true'}}),
-      due=R.filter(r=>r.was!=='running'&&r.was!=='offline'&&!r.manual),got=due.filter(r=>r.ok),bad=R.filter(r=>!r.ok),moved=R.filter(r=>r.moved);   // due: the boards that had to change
-    R.forEach(r=>log('board.check',{level:r.ok?undefined:'warn',id:r.id,action:'start',group:label,form:form||'empty',was:r.was,state:r.state,moved:r.moved||undefined,ok:r.ok}));
-    if(due.length&&!got.length&&!moved.length&&forms.length>1){toast(`${label}: ${form?'"true"':'the empty message'} changed nothing, trying ${form?'the empty message':'"true"'}…`);return startRound(tp,items,label,by,forms.slice(1))}
-    if(got.length&&startForm!==form){startForm=form;log('board.start_form',{group:label,form:form||'empty'})}
-    const n=R.length,same=R.every(r=>r.was==='running'),see=moved.length?` Motors started on ${moved.map(r=>r.id).join(', ')}.`:'';
-    const unchanged=due.length&&!got.length&&!moved.length;   // the boards that had to change did not
+    const R=items.map(it=>{const b=boards.get(it.id);return{...it,state:b?.state,ok:b?.state===want,moved:b?.motorAt>=tc,manual:b?.manualmode==='true',zero:b?.motorsAt>=t0&&!!b.motors?.speedrel?.every(x=>Math.abs(x)<1)}}),
+      due=R.filter(r=>r.was!==want&&r.was!=='offline'&&(verb==='stop'||!r.manual)),got=due.filter(r=>r.ok),bad=R.filter(r=>!r.ok),moved=verb==='start'?R.filter(r=>r.moved):[];   // due: the boards that had to change
+    R.forEach(r=>log('board.check',{level:r.ok?undefined:'warn',id:r.id,action:verb,group:label,form:form||'empty',was:r.was,state:r.state,moved:r.moved||undefined,ok:r.ok}));
+    if(tp.length&&due.length&&!got.length&&!moved.length&&forms.length>1){toast(`${label}: ${form?'"true"':'the empty message'} changed nothing, trying ${form?'the empty message':'"true"'}…`);return cmdRound(verb,tp,items,label,by,forms.slice(1),t0)}
+    if(got.length&&cmdForm!==form){cmdForm=form;db.form=form;save();log('board.cmd_form',{group:label,verb,form:form||'empty'})}
+    const n=R.length,unchanged=tp.length&&due.length&&!got.length&&!moved.length;   // unchanged: the boards that had to change did not
+    if(verb==='stop'){const z=R.filter(r=>r.zero).length,m=R.filter(r=>r.manual).length;
+      return toast(`${label}: ${z} of ${n} boards at speed 0${m?`, ${m} held in manual mode`:''}. `+(!tp.length?'':got.length?`The stop command sent ${got.length===due.length?'them':got.length+' of them'} back to ready.`:unchanged?'The stop command changed nothing: they still say running.':'They say ready.'))}
+    const same=R.every(r=>r.was===want),see=moved.length?` Motors started on ${moved.map(r=>r.id).join(', ')}.`:'';
     toast(!bad.length?`${label}: ${n===1?R[0].id+' says':'all '+n+' boards say'} running${same?' (they already did)':''}.`+see
       :`${label}: ${n-bad.length} of ${n} boards say running. Still: ${bad.slice(0,4).map(r=>`${r.id} ${r.state||'?'}`).join(', ')}${bad.length>4?` and ${bad.length-4} more`:''}.`+see
-        +(unchanged?` The boards that were not running did not change with the empty message or with "true". Put a box on a zone: if its roller starts, the start works and the boards do not say so.`:''))},3000)}
+        +(unchanged?` The boards that were not running did not change with the empty message or with "true". Put a box on a zone: if its roller starts, the start works and the boards do not say so.`:''))},verb==='stop'?4500:3000)}
+// a board that is in manual mode ignores the start: it is given back to its logic first (speed 0, then manual mode off)
+function release(id,why){const b=boards.get(id);if(b)b.manualmode='false';return rollers(id)?spin(id,false,'all',why,{check:false,release:true}):pub(id+'/manualmode/set','false',{},why)}
 // the start of each group in L, never retained. true when the messages went out
 async function startGroups(L,label,by){
   if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:label,reason:'not connected'});return false}
-  const items=[...new Map(L.flatMap(g=>g.live).map(b=>[b.id,{id:b.id,was:b.state}])).values()],man=items.filter(it=>boards.get(it.id)?.manualmode==='true').map(it=>it.id),tp=[];
+  const items=[...new Map(L.flatMap(g=>g.live).map(b=>[b.id,{id:b.id,was:b.state}])).values()],man=items.map(it=>it.id).filter(id=>boards.get(id)?.manualmode==='true'),tp=[];
+  if(man.length){toast(`${label}: giving ${man.join(', ')} back to their logic first`);man.forEach((id,i)=>setTimeout(()=>client?.connected&&release(id,by||'group '+label),i*150));await wait(1700+man.length*150)}
   if(L.some(g=>!GT.has(gkey(g))))toast(`${label}: finding the topic its boards answer on…`);
   for(const g of L){tp.push(await groupTopic(g)??`group${g.id}`);   // no answer on any: group<number>, the form that answered on the real boards
     if(!client?.connected){toast('Not connected');return false}}
-  startRound(tp,items,label,by||'group '+label,startForm==='true'?['true','']:['','true']);
-  toast(`${label}: start sent`+(man.length?`. In manual mode they ignore it until their Stop: ${man.join(', ')}`:''));return true}
+  cmdRound('start',tp,items,label,by||'group '+label,cmdForm==='true'?['true','']:['','true']);
+  toast(`${label}: start sent`);return true}
 function startGroup(g){log('ui.press',{name:g.name,mode:'start_group',id:g.id,boards:g.live.map(b=>b.id).join(','),connected:!!client?.connected});return startGroups([g],g.name)}
+// Stop: the rollers of the boards stop at once (speed 0 in manual mode, which a board whose logic runs keeps, see spin) and the stop command goes to each group. only: the boards to stop (all of them for Stop all)
+function stopGroups(L,label,by,only){
+  if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:label,reason:'not connected'});return false}
+  const B=[...new Map((only||L.flatMap(g=>g.live)).map(b=>[b.id,b])).values()].sort(byId),R=B.filter(b=>rollers(b.id)?.length),t0=Date.now();
+  const run=new Set(R.filter(b=>b.state==='running').map(b=>b.id));   // decided now: the stop command may already have sent a board back to ready when its turn comes
+  R.forEach((b,i)=>setTimeout(()=>spin(b.id,false,'all',by,{check:false,hold:run.has(b.id)}),i*150));
+  checkSpin(R.map(b=>({id:b.id,target:spinTarget(b.id,'all'),on:false,keep:run.has(b.id)})),150,true);
+  cmdRound('stop',L.map(g=>GT.get(gkey(g))??`group${g.id}`),B.map(b=>({id:b.id,was:b.state})),label,by,cmdForm==='true'?['true','']:['','true'],t0);
+  toast(`${label}: stopping…`);return true}
+function stopGroup(g){log('ui.press',{name:g.name,mode:'stop_group',id:g.id,boards:g.live.map(b=>b.id).join(','),connected:!!client?.connected});return stopGroups([g],g.name,'group '+g.name)}
+function stopAll(){   // a stop never asks
+  const G=flowGroups(),L=[...boards.values()].filter(b=>b.live).sort(byId);
+  log('ui.press',{mode:'stop_all',groups:G.map(g=>g.name).join(',')||null,boards:L.map(b=>b.id).join(',')||null,connected:!!client?.connected});
+  if(!client?.connected)return toast('Not connected');
+  if(!L.length)return toast('No board has answered yet');
+  return stopGroups(G,'Stop all','Stop all',L)}
 function startAll(p){   // it asks first: it reaches every flow group
   const L=flowGroups();log('ui.press',{name:p?.name,id:p?.id,mode:'start_all',groups:L.map(g=>g.name).join(',')||null,connected:!!client?.connected});
   if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:p?.name,reason:'not connected'});return false}
@@ -378,7 +431,7 @@ const menu=items=>h('details',{class:'menu'},h('summary',{'aria-label':'Menu'},'
   h('div',{class:'pop'},items.map(i=>h('button',{type:'button',class:i.danger?'dng':'',onclick:e=>{e.target.closest('details').open=false;i.fn()}},i.label))));
 document.addEventListener('click',e=>document.querySelectorAll('details.menu[open]').forEach(d=>{if(!d.contains(e.target))d.open=false}));
 const bar=(title,{back:b=true,right}={})=>h('header',{class:'bar'},
-  b?h('button',{class:'ic','aria-label':'Back',onclick:()=>back()},'←'):null,h('h1',{},title),h('span',{class:'sp'}),right);
+  b?h('button',{class:'ic','aria-label':'Back',onclick:()=>back()},'←'):h('span',{class:'logo','aria-hidden':'true'}),h('h1',{},title),h('span',{class:'sp'}),right);
 const page=(title,body)=>h('div',{},bar(title),h('main',{},body));
 
 /* ---------- forms ---------- */
@@ -444,8 +497,11 @@ function card(p,i,vis){
       {label:'Delete',danger:1,fn:()=>{if(confirm(`Delete "${p.name}"?`)){log('ui.panel',{action:'delete',name:p.name,id:p.id});db.panels=db.panels.filter(x=>x!==p);db.panels.forEach(g=>{if(g.members)g.members=g.members.filter(id=>id!==p.id)});save();render()}}}]),
     p.hideName?null:h('div',{class:'pname'},p.name),PT[p.type].body(p))}
 const add=()=>go({n:'pick'});
-const tabs=cur=>h('nav',{class:'tabs'},[['home','Buttons'],['status','Status'],['logs','Log']].map(([n,l])=>
-  h('button',{type:'button',class:n===cur?'on':'','aria-current':n===cur?'page':null,onclick:()=>{if(n!==cur){route={n};render()}}},l)));
+const tabs=cur=>h('aside',{class:'side'},h('nav',{class:'tabs'},[['home','Buttons','▶'],['status','Status','◉'],['logs','Log','☰']].map(([n,l,i])=>
+  h('button',{type:'button',class:n===cur?'on':'','aria-current':n===cur?'page':null,onclick:()=>{if(n!==cur){route={n};render()}}},h('span',{class:'ti','aria-hidden':'true'},i),l))),h('div',{id:'sideinfo',class:'sideinfo'}));
+const shell=(cur,...kids)=>h('main',{class:'wide'},h('div',{class:'shell'},tabs(cur),h('div',{class:'content'},kids)));   // a column of tabs on the left and the page on the right; on a narrow window the tabs go on top
+function drawSide(){const e=$('#sideinfo');if(!e||!db.conn)return;
+  e.replaceChildren(h('div',{class:'sect'},'Broker'),h('b',{},`${db.conn.host}:${db.conn.port}`),h('small',{class:'help'},sys.clients?`${sys.clients} clients${sys.version?' · '+sys.version.replace('mosquitto version ','mosquitto '):''}`:status==='connected'?'':'not connected'))}
 function ask(){   // the manual: an empty message on <name>/status/get (18.6.7) makes a board repeat its state, no answer within 2 s means it is probably offline; on <name>/network/ip/get (18.6.4) it answers its IP on <name>/network/ip. Never <name>/network/ip/set: that changes the IP
   if(!client?.connected)return toast('Not connected');
   const t=Date.now();log('ui.refresh',{boards:[...boards.keys()].join(',')||null});boards.forEach(b=>{b.asked=t;pub(b.id+'/status/get','',{},'refresh');pub(b.id+'/network/ip/get','',{},'refresh')});
@@ -547,6 +603,7 @@ function bcard(b,open){
       b.mcpplayenable!=null?chip('MCP PLAY '+(b.mcpplayenable==='true'?'on':'off'),b.mcpplayenable==='true'?'good':''):null,
       b.manualmode!=null?chip('manual mode '+(b.manualmode==='true'?'on':'off'),b.manualmode==='true'?'live':''):null,
       turning(b)?chip('turning','live'):null,
+      ...(b.groups||[]).map(g=>chip('group '+g.name)),
       e&&e.state!=='Operational'?chip('event handler: '+e.state,'bad'):null),
     rows.length?h('div',{class:'mrows'},rows):ty.length&&ty.every(t=>t==='disabled')?h('small',{class:'help'},'no motor is enabled in the configuration'):null,
     e?h('details',{class:'evt','data-id':b.id,open:open.has(b.id)},h('summary',{},`Events · active: ${e['active event']||'none'}`),
@@ -566,70 +623,80 @@ function draw(){
     held.size&&h('div',{class:'err'},h('b',{},'The broker keeps these commands and hands them to a board every time it connects: '),[...held].map(([t,m])=>`${t} ← ${m}`).join(' · '),' ',h('button',{class:'btn sm',onclick:clearHeld},'Clear them')),
     h('div',{class:'row2'},h('b',{},`Devices (${list.length})`),
       h('div',{class:'btns2'},h('button',{class:'btn sm',onclick:ask},'Refresh'),h('button',{class:'btn sm',onclick:diagnose},'Diagnose'),h('button',{class:'btn sm gray',onclick:copyReport},'Copy report'))),
-    ...(list.length?list.map(b=>bcard(b,open)):[h('div',{class:'empty'},h('p',{},'No board has answered yet'),h('small',{class:'help'},'A board is listed here only after it publishes on <name>/status or answers Refresh. If nothing shows up, no board is talking to this broker, or this app is not allowed to listen.'))])
+    ...(list.length?[h('div',{class:'bcards'},list.map(b=>bcard(b,open)))]:[h('div',{class:'empty'},h('p',{},'No board has answered yet'),h('small',{class:'help'},'A board is listed here only after it publishes on <name>/status or answers Refresh. If nothing shows up, no board is talking to this broker, or this app is not allowed to listen.'))])
   ].filter(Boolean);
   const html=nodes.map(n=>n.outerHTML).join('');if(html!==drawn.status){drawn.status=html;body.replaceChildren(...nodes)}
   $('#stored').hidden=!stored.length;$('#storedsum').textContent=`Stored in the broker, no answer (${stored.length})`;   // what the broker remembers from boards that did not answer: possibly switched off or renamed
   $('#storedlist').textContent=stored.map(b=>[b.id,b.ip||'IP unknown',b.state&&'last state: '+b.state].filter(Boolean).join(' · ')).join('\n');
   $('#feed').textContent=feedText()}
-// the Buttons tab: a Spin and a Stop for every board that answered, at normal speed and forward, and the same for all of them; the flow groups with their Start. Nothing to create
+// the Buttons tab: the numbers of the boards, a Spin and a Stop for every board that answered (normal speed, forward) and for all of them, and the flow groups with their Start and Stop. Nothing to create
+const stat=(n,label,cls)=>h('div',{class:'stat'+(cls?' '+cls:'')},h('b',{},n),h('span',{},label));
+const mdots=b=>{const mo=b.motors,ty=mo?.config?.type;if(!ty||ty.every(t=>!t||t==='disabled'))return null;   // one square per motor in use: red when it reports a fault, yellow while it turns
+  return h('div',{class:'mdots'},ty.map((t,i)=>{if(!t||t==='disabled')return null;const st=mo.info?.status?.[i],sp=Math.abs(+mo.speedrel?.[i]||0);
+    return h('span',{class:'md'+(st&&st!=='ok'&&st!=='n/c'?' bad':turning(b)&&sp>=1?' run':''),title:`motor ${i+1}: ${t}, ${st??'?'}, speed ${sp}%`},i+1)}))};
 const tile=b=>h('section',{class:'tile'+(turning(b)?' run':'')},
   h('div',{class:'thead'},h('b',{class:'tname'},b.id),h('span',{class:'pill '+(b.state||'')},b.state||'?')),
-  h('div',{class:'tsub'},h('span',{},b.ip||'IP unknown'),turning(b)?h('span',{class:'chip live'},'turning'):null),
-  h('div',{class:'trow'},h('button',{class:'btn',onclick:()=>tileAct(b,true)},'▶ Spin'),h('button',{class:'btn gray',onclick:()=>tileAct(b,false)},'■ Stop')));
+  h('div',{class:'tsub'},h('span',{},b.ip||'IP unknown'),turning(b)?h('span',{class:'chip live'},'turning'):null,b.manualmode==='true'?h('span',{class:'chip warn'},'manual mode'):null),
+  mdots(b),
+  h('div',{class:'trow'},h('button',{class:'btn alt',onclick:()=>tileAct(b,true)},'▶ Spin'),h('button',{class:'btn soft',onclick:()=>tileAct(b,false)},'■ Stop')));
 function tileAct(b,on){log('ui.press',{name:b.id,mode:'board',action:on?'spin':'stop',connected:!!client?.connected});spin(b.id,on,'all','button '+b.id)}
-const gtile=g=>{const n=g.live.length,run=g.live.filter(b=>b.state==='running').length;
-  return h('section',{class:'tile'},
-    h('div',{class:'thead'},h('b',{class:'tname'},g.name),h('span',{class:'pill '+(run===n?'running':run?'online':'')},`${run} of ${n} running`)),
+const gtile=g=>{const n=g.live.length,run=g.live.filter(b=>b.state==='running').length,man=g.live.filter(b=>b.manualmode==='true').map(b=>b.id),t=GT.get(gkey(g))??'group'+g.id;
+  return h('section',{class:'tile gtile'},
+    h('div',{class:'thead'},h('div',{},h('b',{class:'tname'},g.name),h('small',{class:'tcount'},nBoards(n))),h('span',{class:'pill '+(run===n?'running':run?'online':'')},`${run} of ${n} running`)),
     h('div',{class:'chips'},[...g.live].sort(byId).map(b=>{const nm=ownName(b,g),odd=nm!==g.name;return h('span',{class:'chip'+(b.state==='running'?' good':''),title:odd?`this board calls its group ${nm}`:null},b.id+(odd?` (${nm})`:''))})),
-    h('div',{class:'trow1'},h('button',{class:'btn alt',title:'The start command to the whole group: its boards run their own logic (MCP PLAY)',onclick:()=>startGroup(g)},'Start')),
-    h('small',{class:'help'},`${GT.get(gkey(g))??'group'+g.id}/command/start`))};
+    h('div',{class:'trow1'},h('button',{class:'btn',title:'The start command to the whole group: its boards run their own logic (MCP PLAY)',onclick:()=>startGroup(g)},'▶ Start'),
+      h('button',{class:'btn stop',title:'Stops the rollers of the group at once (speed 0 in manual mode) and sends the stop command',onclick:()=>stopGroup(g)},'■ Stop')),
+    man.length?h('small',{class:'warnline'},`Manual mode on: ${man.join(', ')}. Start gives them back to their logic.`):null,
+    h('small',{class:'topics'},`${t}/command/start · ${t}/command/stop`))};
 function drawHome(){
   const box=$('#boardbtns');if(!box||!db.conn)return;
-  const list=[...boards.values()].filter(b=>b.live&&b.motors?.config?.type).sort(byId),G=flowGroups();
+  const live=[...boards.values()].filter(b=>b.live),list=live.filter(b=>b.motors?.config?.type).sort(byId),G=flowGroups(),
+    run=live.filter(b=>b.state==='running').length,turn=live.filter(turning).length,man=live.filter(b=>b.manualmode==='true').length;
   const nodes=[
-    h('div',{class:'sect'},'All boards'),
-    h('div',{class:'allrow'},h('button',{class:'btn lg',onclick:()=>spinAll(true)},'▶ Spin all rollers'),h('button',{class:'btn lg gray',onclick:()=>spinAll(false)},'■ Stop all')),
-    h('small',{class:'help'},'Spin and Stop turn the rollers by hand.'),
+    h('div',{class:'toolbar'},
+      h('div',{class:'stats'},stat(live.length,'Boards'),stat(run,'Running',run?'ok':''),stat(turn,'Turning',turn?'run':''),stat(man,'Manual mode',man?'warn':'')),
+      h('div',{class:'tact'},h('button',{class:'btn alt',title:'Turns the rollers of every board at normal speed, by hand (manual mode)',onclick:()=>spinAll()},'▶ Spin all rollers'),
+        h('button',{class:'btn stop',title:'Stops every board (speed 0 in manual mode) and sends the stop command to every flow group',onclick:()=>stopAll()},'■ Stop all'))),
     h('div',{class:'sect'},`Flow groups (${G.length})`),
-    G.length?h('div',{class:'tiles'},G.map(gtile)):h('small',{class:'help'},'No flow group yet: every board says its groups on <board>/group.'),
-    G.length>1?h('button',{class:'btn alt allstart',title:'The start command to every flow group: their boards run their own logic (MCP PLAY)',onclick:()=>startAll()},'Start all groups'):null,
-    G.length?h('small',{class:'help'},'Start gives the start command to the whole group: its boards run their own logic (MCP PLAY).'):null,
+    G.length?h('div',{class:'gcards'},G.map(gtile)):h('small',{class:'help'},'No flow group yet: every board says its groups on <board>/group.'),
+    G.length>1?h('div',{class:'gall'},h('button',{class:'btn alt',title:'The start command to every flow group: their boards run their own logic (MCP PLAY)',onclick:()=>startAll()},'Start all groups')):null,
+    G.length?h('small',{class:'help'},'Start gives the start command to the whole group: its boards run their own logic (MCP PLAY). Stop holds the rollers at speed 0 and sends the stop command.'):null,
     h('div',{class:'sect'},`Boards (${list.length})`),
-    list.length?h('div',{class:'tiles'},list.map(tile)):h('div',{class:'empty'},h('p',{},status==='connected'?'Waiting for the boards…':'Not connected'),h('small',{class:'help'},'Every board that answers gets its own Spin and Stop here. If none shows up, press Refresh in the Status tab.'))].filter(Boolean);
+    list.length?h('div',{class:'tiles'},list.map(tile)):h('div',{class:'empty'},h('p',{},status==='connected'?'Waiting for the boards…':'Not connected'),h('small',{class:'help'},'Every board that answers gets its own Spin and Stop here. If none shows up, press Refresh in the Status tab.')),
+    list.length?h('small',{class:'help'},'Spin and Stop turn the rollers by hand. A board whose logic is running stays in manual mode after its Stop, so the logic cannot move it again; Start gives it back.'):null].filter(Boolean);
   const html=nodes.map(n=>n.outerHTML).join('');if(html!==drawn.home){drawn.home=html;box.replaceChildren(...nodes)}}
 const chipClick=()=>{const dis=client&&status==='connected';log('ui.chip',{status,action:dis?'disconnect':'connect'});if(dis){off=true;hangup()}else connect()};   // while it is trying again a click tries again, it does not switch it off
+const dashBar=()=>{const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:chipClick},status);
+  return bar('MQTT Panel',{back:false,right:[db.conn&&h('span',{class:'broker'},`${db.conn.host}:${db.conn.port}`),chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]})};
 const views={
 home(){
   if(db.conn&&!client&&!off)connect();
-  const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:chipClick},status);
-  return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
-    h('main',{},tabs('home'),!db.conn?h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn',onclick:()=>go({n:'conn'})},'Setup a connection'))
+  return h('div',{},dashBar(),
+    shell('home',!db.conn?h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn',onclick:()=>go({n:'conn'})},'Setup a connection'))
       :h('div',{},h('div',{id:'boardbtns'}),
         db.panels.length?h('div',{class:'sect'},'My buttons'):null,
         db.panels.length?h('div',{class:'panels'},visible().map((p,i,vis)=>card(p,i,vis)))
-          :h('div',{},h('div',{class:'sect'},'My buttons'),h('small',{class:'help'},'Optional: a button of your own for any message. Every board already has its Spin and Stop above, and every flow group its Start.'),h('div',{},h('button',{class:'btn sm gray',onclick:add},'Add a button')))),
+          :h('div',{},h('div',{class:'sect'},'My buttons'),h('small',{class:'help'},'Optional: a button of your own for any message. Every board already has its Spin and Stop above, and every flow group its Start and Stop.'),h('div',{},h('button',{class:'btn sm gray',onclick:add},'Add a button')))),
       db.conn&&db.panels.length?h('button',{class:'btn fab','aria-label':'Add',onclick:add},'+'):null))},
 status(){
   if(db.conn&&!client&&!off)connect();
-  const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:chipClick},status);
-  return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
-    h('main',{},tabs('status'),h('div',{id:'stbody'}),
+  return h('div',{},dashBar(),
+    shell('status',h('div',{id:'stbody'}),
       h('details',{class:'feed',id:'stored',hidden:true},h('summary',{id:'storedsum'}),h('pre',{id:'storedlist'})),
       h('details',{class:'feed'},h('summary',{},'Messages received'),h('pre',{id:'feed'}))))},
 logs(){
   if(db.conn&&!client&&!off)connect();
-  const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:chipClick},status);
-  return h('div',{},bar('MQTT Panel',{back:false,right:[chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]}),
-    h('main',{},tabs('logs'),
-      h('small',{class:'help'},'Everything the app and the program do is written down here, in order, so Claude can read what happened. Add a note whenever you see something with your own eyes: it is stamped with the time.'),
-      h('div',{class:'row2'},h('input',{id:'note',placeholder:'What did you see? e.g. roller stopped',onkeydown:e=>{if(e.key==='Enter')addNote()}}),h('button',{class:'btn sm',onclick:addNote},'Add note')),
-      h('div',{class:'btns2 quick'},QUICK.map(q=>h('button',{class:'btn sm gray',onclick:()=>addNote(q)},q))),
-      h('div',{class:'btns2'},h('button',{class:'btn',onclick:copyExport},'Copy for Claude'),h('button',{class:'btn gray',onclick:downloadExport},'Download')),
-      h('small',{class:'help',id:'logfile'}),
-      h('div',{class:'btns2'},h('button',{id:'lk',class:'btn sm',onclick:()=>{logAll=false;drawLog()}},'Key events'),h('button',{id:'la',class:'btn sm gray',onclick:()=>{logAll=true;drawLog()}},'Everything')),
-      h('pre',{id:'logview',class:'logview'}),
-      h('textarea',{id:'logbox',hidden:true,readonly:true,'aria-label':'Log text to copy'})))},
+  return h('div',{},dashBar(),
+    shell('logs',h('div',{class:'logwrap'},
+      h('div',{class:'logside'},
+        h('small',{class:'help'},'Everything the app and the program do is written down here, in order, so Claude can read what happened. Add a note whenever you see something with your own eyes: it is stamped with the time.'),
+        h('div',{class:'row2'},h('input',{id:'note',placeholder:'What did you see? e.g. roller stopped',onkeydown:e=>{if(e.key==='Enter')addNote()}}),h('button',{class:'btn sm',onclick:addNote},'Add note')),
+        h('div',{class:'btns2 quick'},QUICK.map(q=>h('button',{class:'btn sm gray',onclick:()=>addNote(q)},q))),
+        h('div',{class:'btns2'},h('button',{class:'btn',onclick:copyExport},'Copy for Claude'),h('button',{class:'btn gray',onclick:downloadExport},'Download')),
+        h('small',{class:'help',id:'logfile'}),
+        h('div',{class:'btns2'},h('button',{id:'lk',class:'btn sm',onclick:()=>{logAll=false;drawLog()}},'Key events'),h('button',{id:'la',class:'btn sm gray',onclick:()=>{logAll=true;drawLog()}},'Everything'))),
+      h('div',{class:'logmain'},h('pre',{id:'logview',class:'logview'}),
+        h('textarea',{id:'logbox',hidden:true,readonly:true,'aria-label':'Log text to copy'})))))},
 conn(){
   const v=db.conn?structuredClone(db.conn):defaults(CONN,{host:location.protocol==='http:'&&!BRIDGE?location.hostname:''});   // served by the broker's http_dir: same host
   return page(db.conn?'Edit Connection':'Add Connection',Form(CONN,v,{label:db.conn?'SAVE':'CREATE',cancel:()=>back(),save:x=>{db.conn=x;log('ui.form',{what:'connection',host:x.host,port:x.port,protocol:x.protocol,user:x.username||null,path:x.path});save();connect();back()}}))},
@@ -639,7 +706,7 @@ panel({pid,type,pick}){
   return page((ex?'Edit ':'Add ')+t.label,Form(t.fields,v,{label:ex?'SAVE':'CREATE',cancel:()=>{if(pick)stack.pop();back()},
     save:x=>{const i=db.panels.findIndex(p=>p.id===x.id);log('ui.form',{what:x.type,new:i<0,...panelInfo(x)});i<0?db.panels.push(x):db.panels[i]=x;save();if(pick)stack.pop();back()}}))}
 };
-function render(){log('ui.nav',{route:route.n,panel:route.pid,type:route.type});drawn.home=drawn.status='';$('#app').replaceChildren(views[route.n](route));window.scrollTo(0,0);if(route.n==='status')draw();if(route.n==='logs')drawLog();if(route.n==='home')drawHome()}
+function render(){log('ui.nav',{route:route.n,panel:route.pid,type:route.type});drawn.home=drawn.status='';$('#app').replaceChildren(views[route.n](route));window.scrollTo(0,0);drawSide();if(route.n==='status')draw();if(route.n==='logs')drawLog();if(route.n==='home')drawHome()}
 log('app.start',{ua:navigator.userAgent,lang:navigator.language,tz:Intl.DateTimeFormat().resolvedOptions().timeZone,screen:`${screen.width}x${screen.height}`,dpr:devicePixelRatio,online:navigator.onLine,
   net:navigator.connection?`${navigator.connection.effectiveType} rtt=${navigator.connection.rtt} down=${navigator.connection.downlink}`:null,bridge:BRIDGE,url:location.href,visible:document.visibilityState,
   storage:(()=>{try{return localStorage.length+' keys'}catch(e){return 'blocked: '+e.message}})()});

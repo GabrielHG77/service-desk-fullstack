@@ -187,7 +187,7 @@ func open(url string) {
 		}
 		for _, exe := range []string{`Microsoft\Edge\Application\msedge.exe`, `Google\Chrome\Application\chrome.exe`} {
 			p := filepath.Join(dir, exe)
-			if _, err := os.Stat(p); err == nil && exec.Command(p, "--app="+url).Start() == nil {
+			if _, err := os.Stat(p); err == nil && exec.Command(p, "--app="+url, "--window-size=1360,860").Start() == nil {
 				evlog("sys.browser", "how", "app window", "path", p)
 				return // its own window, without tabs or address bar
 			}

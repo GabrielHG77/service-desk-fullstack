@@ -158,6 +158,8 @@ function onMsg(t,raw,stored,pk){   // stored: the broker replays a retained mess
     log('board.diag',x[2]==='eventhandler'?{id:x[1],what:'eventhandler',state:d.state,active_event:d['active event'],last_event:d['last event'],network:d.network,overvoltage:d.overvoltage,undervoltage:d.undervoltage,motor:d.motor}:
       {id:x[1],what:'motors',types:d.config?.type?.join(','),status:d.info?.status?.join(','),speedrel:d.speedrel?.join(','),normspeed:d.config?.normspeed?.join(',')})}catch(e){log('board.bad_json',{level:'warn',topic:t,err:e.message})}}
   else if(x=/^([^/]+)\/motors\/(\d)\/info\/startstops$/.exec(t)){const b=dev(x[1]);(b.startstops||(b.startstops={}))[x[2]]=m.trim();log('board.diag',{id:x[1],what:'startstops',motor:x[2],value:m.trim()})}
+  else if(x=/^([^/]+)\/group$/.exec(t)){try{const d=JSON.parse(m);if(Array.isArray(d.group)){const b=dev(x[1]),g=d.group.map(o=>({name:String(o.name??o.id),id:o.id})),key=a=>a.map(o=>`${o.name}#${o.id}`).join(','),was=key(b.groups||[]);b.groups=g;   // the flow groups of a board: {"group":[{"name":"group1","id":1}]}
+    if(key(g)!==was)log('board.group',{id:b.id,groups:key(g)||'none',stored})}}catch(e){log('board.bad_json',{level:'warn',topic:t,err:e.message})}}
   touch()}
 let cn=0;   // number of the connection attempt, to follow one through the log
 function hangup(){if(client){const c=client;client=null;log('mqtt.hangup',{conn:cn,by:'the app'});c.end(true)}setStatus('disconnected')}
@@ -268,28 +270,43 @@ function motorPress(p,on){   // true when the messages went out
   const ok=spin(id,on,motor,'button '+p.name,{keep});
   if(!ok)log('ui.press_blocked',{level:'warn',name:p.name,reason:'the board could not be told'});
   return ok}
-// The start command (manual 12.2): an empty message on <board>/command/start, or on network_broadcast/start for every board, makes a MultiControl run its own logic (MCP PLAY). A board then moves a motor
-// only when it has a box to move, apart from a short move after a reset. It says "running" when it took the command: about 3 s later the app looks and says it. Never retained
-function checkStart(items){   // items: [{id,was}], was = the state before
+// The start command (manual 12.2) makes a MultiControl run its own logic (MCP PLAY): it then moves a motor only when it has a box to move, apart from a short move after a reset. The boards are started by flow group:
+// a board says the groups it is in on <board>/group, as {"group":[{"name":"group1","id":1}]}, and an empty message on <groupid>/command/start starts every board of the group. The manual does not say whether <groupid> is the
+// name or the number: the first start of a group asks, read-only (<groupid>/manualmode/get, 13.2: each board answers on its own topic), on the name and then on the number, and keeps the one the boards answer on
+const wait=ms=>new Promise(r=>setTimeout(r,ms)),GT=new Map(),gkey=g=>g.name+'\n'+g.id,nBoards=n=>n+(n===1?' board':' boards');   // GT: group > the topic that reached its boards
+function flowGroups(){const m=new Map();   // the groups that have a board answering now, with those boards
+  for(const b of boards.values())if(b.live)for(const g of b.groups||[]){const k=gkey(g);if(!m.has(k))m.set(k,{...g,live:[]});m.get(k).live.push(b)}
+  return[...m.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}))}
+async function groupTopic(g){   // the topic of the group the boards answer on, or null
+  const k=gkey(g);if(GT.has(k))return GT.get(k);
+  for(const c of new Set([g.name,String(g.id)])){if(!c||/[+#]/.test(c)||!client?.connected)continue;
+    const t0=Date.now();pub(`${c}/manualmode/get`,'',{},`group ${g.name}: which topic do its boards answer on`);await wait(1200);
+    const n=g.live.filter(b=>b.manualAt>=t0).length;log('board.group_topic',{level:n?undefined:'warn',group:g.name,id:g.id,topic:c,answered:n,of:g.live.length});
+    if(n){GT.set(k,c);touch();return c}}
+  return null}
+// A board that took the start says "running": about 3 s later the app looks and says it
+function checkStart(items,label){   // items: [{id,was}], was = the state before
   setTimeout(()=>{if(!client?.connected)return;
-    const R=items.map(it=>{const st=boards.get(it.id)?.state;return{...it,state:st,ok:st==='running'}});
-    R.forEach(r=>log('board.check',{level:r.ok?undefined:'warn',id:r.id,action:'start',was:r.was,state:r.state,ok:r.ok}));
-    if(R.length===1){const r=R[0];toast(r.ok?`${r.id}: running${r.was==='running'?' (it already was)':''}`:`${r.id} did not start: it still says ${r.state||'nothing'}`)}
-    else{const bad=R.filter(r=>!r.ok);toast(bad.length?`${R.length-bad.length} of ${R.length} boards running. Not: ${bad.map(r=>`${r.id} (${r.state||'?'})`).join(', ')}`:`All ${R.length} boards running`)}},3000)}
-function startBoard(id){   // true when the message went out
-  log('ui.press',{name:id,mode:'start',connected:!!client?.connected});
-  if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:id,reason:'not connected'});return false}
-  const b=boards.get(id);
-  pub(`${id}/command/start`,'',{},'button '+id);checkStart([{id,was:b?.state}]);
-  toast(`${id}: start command sent`+(b?.manualmode==='true'?'. It is in manual mode: press Stop to give it back to its logic':''));return true}
-function startAll(p){   // true when the message went out. It asks first: it reaches every board
-  const by=p?.name?'button '+p.name:'Start all';
-  log('ui.press',{name:p?.name,id:p?.id,mode:'start_all',connected:!!client?.connected});
+    const R=items.map(it=>{const st=boards.get(it.id)?.state;return{...it,state:st,ok:st==='running'}}),bad=R.filter(r=>!r.ok);
+    R.forEach(r=>log('board.check',{level:r.ok?undefined:'warn',id:r.id,action:'start',group:label,was:r.was,state:r.state,ok:r.ok}));
+    const was=R.every(r=>r.was==='running');   // they said running before the start too: the answer proves nothing
+    toast(R.length===1?`${label}: ${R[0].id} ${R[0].ok?'says running'+(was?' (it already did)':''):'still says '+(R[0].state||'nothing')}`:bad.length?`${label}: ${R.length-bad.length} of ${R.length} boards say running. Still: ${bad.map(r=>`${r.id} ${r.state||'?'}`).join(', ')}`:`${label}: all ${R.length} boards say running`+(was?' (they already did)':''))},3000)}
+// the start of each group in L, never retained. true when the messages went out
+async function startGroups(L,label,by){
+  if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:label,reason:'not connected'});return false}
+  const items=[...new Map(L.flatMap(g=>g.live).map(b=>[b.id,{id:b.id,was:b.state}])).values()],man=items.filter(it=>boards.get(it.id)?.manualmode==='true').map(it=>it.id);
+  if(L.some(g=>!GT.has(gkey(g))))toast(`${label}: finding the topic its boards answer on…`);
+  for(const g of L){const c=await groupTopic(g)??g.name;   // no answer on either: the name, as the manual writes it
+    if(!client?.connected){toast('Not connected');return false}
+    pub(`${c}/command/start`,'',{},by||'group '+g.name)}
+  checkStart(items,label);toast(`${label}: start sent`+(man.length?`. In manual mode they ignore it until their Stop: ${man.join(', ')}`:''));return true}
+function startGroup(g){log('ui.press',{name:g.name,mode:'start_group',id:g.id,boards:g.live.map(b=>b.id).join(','),connected:!!client?.connected});return startGroups([g],g.name)}
+function startAll(p){   // it asks first: it reaches every flow group
+  const L=flowGroups();log('ui.press',{name:p?.name,id:p?.id,mode:'start_all',groups:L.map(g=>g.name).join(',')||null,connected:!!client?.connected});
   if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:p?.name,reason:'not connected'});return false}
-  if(!confirm('Start all boards? Every MultiControl on this broker gets the start command and runs its own logic.')){log('ui.press_blocked',{level:'warn',name:p?.name,reason:'confirmation dismissed'});return false}
-  const L=[...boards.values()].filter(b=>b.live).sort(byId);
-  pub('network_broadcast/start','',{},by);if(L.length)checkStart(L.map(b=>({id:b.id,was:b.state})));
-  toast('Start command sent to all boards');return true}
+  if(!L.length){toast('No board has told its flow group yet');log('ui.press_blocked',{level:'warn',name:p?.name,reason:'no flow group known'});return false}
+  if(!confirm(`Start all flow groups? ${L.map(g=>`${g.name} (${nBoards(g.live.length)})`).join(', ')} get the start command and run their own logic.`)){log('ui.press_blocked',{level:'warn',name:p?.name,reason:'confirmation dismissed'});return false}
+  return startGroups(L,'All groups',p?.name?'button '+p.name:'Start all')}
 
 /* ---------- generic form builder ---------- */
 const T=(k,label,o={})=>({k,label,...o}),N=(k,label,o={})=>T(k,label,{type:'number',...o}),C=(k,label,o={})=>T(k,label,{type:'check',...o}),
@@ -362,7 +379,7 @@ const CONN=[
   T('path','Path',{def:'/mqtt',show:v=>v.protocol!=='tcp',help:'Websocket path of the broker, usually /mqtt'}),
   {row:[T('username','Username'),T('password','Password',{type:'password'})]}];
 const noWild=x=>/[+#]/.test(x)?'Wildcards are not allowed':null;
-const kind=v=>v.action||'msg',nm=v=>kind(v)==='msg',isSpin=v=>kind(v)==='spin',   // what a button does: send a message (topic and payload), spin the motors of a board (board, motor, speed, direction) or start all boards (nothing more to say)
+const kind=v=>v.action||'msg',nm=v=>kind(v)==='msg',isSpin=v=>kind(v)==='spin',   // what a button does: send a message (topic and payload), spin the motors of a board (board, motor, speed, direction) or start all flow groups (nothing more to say)
   NAME=T('name','Panel name',{req:1}),TOPIC=T('topic','Topic',{req:1,val:noWild,show:nm});
 const WIDTHS=[[100,'Full screen'],[75,'3/4 screen width'],[66,'2/3 screen width'],[50,'1/2 screen width'],[33,'1/3 screen width'],[25,'1/4 screen width']];
 const COLOR=S('color','Button color',COLS,{def:'primary'}),SIZE=S('size','Button size',[['small','Small'],['medium','Medium'],['large','Large']],{def:'medium'});
@@ -374,8 +391,8 @@ const sz=p=>p.size==='large'?' lg':p.size==='small'?' sm':'';
 const tog=new Map();   // toggle buttons: on or off as this page last sent it, by panel id. shortcut: not read back from the board and forgotten on reload
 const PT={
   button:{label:'Button',fields:[NAME,
-    S('action','What it does',[['msg','Send a message'],['spin',"Spin a board's motors"],['start','Start all boards']],{def:'msg',
-      help:"Send a message: the usual button. Spin a board's motors: press to turn the rollers of one board at the normal speed, press again to stop. A board ignores speed commands unless it is in manual mode, so this sets manual mode first and leaves it when it stops. Start all boards: sends the start command to every board, after asking. It does not turn the rollers by itself: a board moves a motor only when it has a box to move."}),
+    S('action','What it does',[['msg','Send a message'],['spin',"Spin a board's motors"],['start','Start all flow groups']],{def:'msg',
+      help:"Send a message: the usual button. Spin a board's motors: press to turn the rollers of one board at the normal speed, press again to stop. A board ignores speed commands unless it is in manual mode, so this sets manual mode first and leaves it when it stops. Start all flow groups: sends the start command to every flow group (the boards say theirs on <board>/group), after asking. It does not turn the rollers by itself: a board moves a motor only when it has a box to move."}),
     T('board','Board',{req:1,err:'The board name is required',show:isSpin,suggest:()=>[...boards.values()].filter(b=>b.live).map(b=>b.id),help:'The name of the board, e.g. mc7. The boards that answered are offered while you type.',
       val:x=>/^[\w.-]+$/.test(x)?null:'Use the name of the board only, e.g. mc7'}),
     S('motorNo','Motor',[['all','All rollers of the board'],['1','Motor 1'],['2','Motor 2'],['3','Motor 3'],['4','Motor 4']],{def:'all',show:isSpin,help:'Always at the normal speed of the motor, forward. A lifting motor (a transfer) is never given a speed.'}),
@@ -500,7 +517,7 @@ async function drawLog(){
 setInterval(()=>{if(route.n==='logs')drawLog()},2000);
 function clearHeld(){   // deleting a kept message means publishing an empty one, and the broker also hands that to every board listening: for start, restart, teachin an empty message IS the command, so only for boards that are not connected
   if(!client?.connected)return toast('Not connected');
-  const on=[...new Set([...held.keys()].map(t=>t.split('/')[0]))].filter(id=>boards.get(id)?.live&&boards.get(id).state!=='offline');
+  const on=[...new Set([...held.keys()].map(t=>t.split('/')[0]))].filter(id=>boards.get(id)?.live&&boards.get(id).state!=='offline'||flowGroups().some(g=>id===g.name||id===String(g.id)));
   if(on.length)return toast(`${on.join(', ')} ${on.length>1?'are':'is'} connected. Clearing makes the broker send an empty message to the board, and for start, restart and the like an empty message IS the command. Switch ${on.length>1?'them':'it'} off first, then clear.`);
   const n=held.size;if(!confirm(`Delete ${n} command${n>1?'s':''} kept by the broker? The boards are not connected, so they will not receive anything.`))return;
   log('ui.clear_kept',{topics:[...held.keys()].join(',')});held.forEach((m,t)=>pub(t,'',{retain:true},'clear kept command'));held.clear();toast(`Cleared ${n} command${n>1?'s':''} kept by the broker`);draw()}
@@ -544,23 +561,31 @@ function draw(){
   $('#stored').hidden=!stored.length;$('#storedsum').textContent=`Stored in the broker, no answer (${stored.length})`;   // what the broker remembers from boards that did not answer: possibly switched off or renamed
   $('#storedlist').textContent=stored.map(b=>[b.id,b.ip||'IP unknown',b.state&&'last state: '+b.state].filter(Boolean).join(' · ')).join('\n');
   $('#feed').textContent=feedText()}
-// the Buttons tab: a Spin and a Stop for every board that answered, at normal speed and forward, and the same for all of them. Nothing to create
+// the Buttons tab: a Spin and a Stop for every board that answered, at normal speed and forward, and the same for all of them; the flow groups with their Start. Nothing to create
 const tile=b=>h('section',{class:'tile'+(turning(b)?' run':'')},
   h('div',{class:'thead'},h('b',{class:'tname'},b.id),h('span',{class:'pill '+(b.state||'')},b.state||'?')),
   h('div',{class:'tsub'},h('span',{},b.ip||'IP unknown'),turning(b)?h('span',{class:'chip live'},'turning'):null),
-  h('div',{class:'trow'},h('button',{class:'btn',onclick:()=>tileAct(b,true)},'▶ Spin'),h('button',{class:'btn gray',onclick:()=>tileAct(b,false)},'■ Stop')),
-  h('div',{class:'trow1'},h('button',{class:'btn alt',title:'The start command: the board runs its own logic (MCP PLAY)',onclick:()=>startBoard(b.id)},'Start')));
+  h('div',{class:'trow'},h('button',{class:'btn',onclick:()=>tileAct(b,true)},'▶ Spin'),h('button',{class:'btn gray',onclick:()=>tileAct(b,false)},'■ Stop')));
 function tileAct(b,on){log('ui.press',{name:b.id,mode:'board',action:on?'spin':'stop',connected:!!client?.connected});spin(b.id,on,'all','button '+b.id)}
+const gtile=g=>{const n=g.live.length,run=g.live.filter(b=>b.state==='running').length;
+  return h('section',{class:'tile'},
+    h('div',{class:'thead'},h('b',{class:'tname'},g.name),h('span',{class:'pill '+(run===n?'running':run?'online':'')},`${run} of ${n} running`)),
+    h('div',{class:'chips'},[...g.live].sort(byId).map(b=>h('span',{class:'chip'+(b.state==='running'?' good':'')},b.id))),
+    h('div',{class:'trow1'},h('button',{class:'btn alt',title:'The start command to the whole group: its boards run their own logic (MCP PLAY)',onclick:()=>startGroup(g)},'Start')),
+    h('small',{class:'help'},`${GT.get(gkey(g))??g.name}/command/start`))};
 function drawHome(){
   const box=$('#boardbtns');if(!box||!db.conn)return;
-  const list=[...boards.values()].filter(b=>b.live&&b.motors?.config?.type).sort(byId);
+  const list=[...boards.values()].filter(b=>b.live&&b.motors?.config?.type).sort(byId),G=flowGroups();
   const nodes=[
     h('div',{class:'sect'},'All boards'),
     h('div',{class:'allrow'},h('button',{class:'btn lg',onclick:()=>spinAll(true)},'▶ Spin all rollers'),h('button',{class:'btn lg gray',onclick:()=>spinAll(false)},'■ Stop all')),
-    h('button',{class:'btn alt allstart',title:'The start command to every board: each one runs its own logic (MCP PLAY)',onclick:()=>startAll()},'Start all boards'),
-    h('small',{class:'help'},'Spin and Stop turn the rollers by hand. Start gives the start command: the board runs its own logic (MCP PLAY).'),
+    h('small',{class:'help'},'Spin and Stop turn the rollers by hand.'),
+    h('div',{class:'sect'},`Flow groups (${G.length})`),
+    G.length?h('div',{class:'tiles'},G.map(gtile)):h('small',{class:'help'},'No flow group yet: every board says its groups on <board>/group.'),
+    G.length>1?h('button',{class:'btn alt allstart',title:'The start command to every flow group: their boards run their own logic (MCP PLAY)',onclick:()=>startAll()},'Start all groups'):null,
+    G.length?h('small',{class:'help'},'Start gives the start command to the whole group: its boards run their own logic (MCP PLAY).'):null,
     h('div',{class:'sect'},`Boards (${list.length})`),
-    list.length?h('div',{class:'tiles'},list.map(tile)):h('div',{class:'empty'},h('p',{},status==='connected'?'Waiting for the boards…':'Not connected'),h('small',{class:'help'},'Every board that answers gets its own Spin and Stop here. If none shows up, press Refresh in the Status tab.'))];
+    list.length?h('div',{class:'tiles'},list.map(tile)):h('div',{class:'empty'},h('p',{},status==='connected'?'Waiting for the boards…':'Not connected'),h('small',{class:'help'},'Every board that answers gets its own Spin and Stop here. If none shows up, press Refresh in the Status tab.'))].filter(Boolean);
   const html=nodes.map(n=>n.outerHTML).join('');if(html!==drawn.home){drawn.home=html;box.replaceChildren(...nodes)}}
 const chipClick=()=>{const dis=client&&status==='connected';log('ui.chip',{status,action:dis?'disconnect':'connect'});if(dis){off=true;hangup()}else connect()};   // while it is trying again a click tries again, it does not switch it off
 const views={
@@ -572,7 +597,7 @@ home(){
       :h('div',{},h('div',{id:'boardbtns'}),
         db.panels.length?h('div',{class:'sect'},'My buttons'):null,
         db.panels.length?h('div',{class:'panels'},visible().map((p,i,vis)=>card(p,i,vis)))
-          :h('div',{},h('div',{class:'sect'},'My buttons'),h('small',{class:'help'},'Optional: a button of your own for any message. Every board already has its Spin, Stop and Start above.'),h('div',{},h('button',{class:'btn sm gray',onclick:add},'Add a button')))),
+          :h('div',{},h('div',{class:'sect'},'My buttons'),h('small',{class:'help'},'Optional: a button of your own for any message. Every board already has its Spin and Stop above, and every flow group its Start.'),h('div',{},h('button',{class:'btn sm gray',onclick:add},'Add a button')))),
       db.conn&&db.panels.length?h('button',{class:'btn fab','aria-label':'Add',onclick:add},'+'):null))},
 status(){
   if(db.conn&&!client&&!off)connect();

@@ -51,7 +51,7 @@ input[type=color]{padding:2px;height:40px}
 .feed{margin-top:12px}.feed summary{cursor:pointer;color:var(--sub)}.feed pre{white-space:pre-wrap;word-break:break-all;font-size:12px;margin:8px 0}
 .sect{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--sub);margin:18px 0 8px}
 .allrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}.allrow .btn{padding:16px 8px;font-size:15px}
-.linkbtn{background:none;border:0;color:var(--sub);text-decoration:underline;font:inherit;font-size:13px;cursor:pointer;padding:10px 0}
+.btn.alt{background:transparent;color:var(--fg);box-shadow:inset 0 0 0 2px var(--primary)}.allstart{width:100%;margin-top:8px;padding:14px 8px;font-size:15px}.trow1{margin-top:8px}.trow1 .btn{width:100%;padding:10px 8px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
 .tile,.bcard{background:var(--card);border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px #0003;border-left:4px solid var(--medium)}
 .tile.run,.bcard.run{border-left-color:var(--primary);box-shadow:0 0 0 2px var(--primary)}.bcard.on{border-left-color:var(--success)}.bcard.off{border-left-color:var(--danger)}
@@ -268,13 +268,28 @@ function motorPress(p,on){   // true when the messages went out
   const ok=spin(id,on,motor,'button '+p.name,{keep});
   if(!ok)log('ui.press_blocked',{level:'warn',name:p.name,reason:'the board could not be told'});
   return ok}
-// Start all boards: an empty message on network_broadcast/start starts every MultiControl (manual 12.2). A board then moves a motor only when it has a box to move, apart from a short move after a reset. It asks first and never retains
-function startAll(p){   // true when the message went out
+// The start command (manual 12.2): an empty message on <board>/command/start, or on network_broadcast/start for every board, makes a MultiControl run its own logic (MCP PLAY). A board then moves a motor
+// only when it has a box to move, apart from a short move after a reset. It says "running" when it took the command: about 3 s later the app looks and says it. Never retained
+function checkStart(items){   // items: [{id,was}], was = the state before
+  setTimeout(()=>{if(!client?.connected)return;
+    const R=items.map(it=>{const st=boards.get(it.id)?.state;return{...it,state:st,ok:st==='running'}});
+    R.forEach(r=>log('board.check',{level:r.ok?undefined:'warn',id:r.id,action:'start',was:r.was,state:r.state,ok:r.ok}));
+    if(R.length===1){const r=R[0];toast(r.ok?`${r.id}: running${r.was==='running'?' (it already was)':''}`:`${r.id} did not start: it still says ${r.state||'nothing'}`)}
+    else{const bad=R.filter(r=>!r.ok);toast(bad.length?`${R.length-bad.length} of ${R.length} boards running. Not: ${bad.map(r=>`${r.id} (${r.state||'?'})`).join(', ')}`:`All ${R.length} boards running`)}},3000)}
+function startBoard(id){   // true when the message went out
+  log('ui.press',{name:id,mode:'start',connected:!!client?.connected});
+  if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:id,reason:'not connected'});return false}
+  const b=boards.get(id);
+  pub(`${id}/command/start`,'',{},'button '+id);checkStart([{id,was:b?.state}]);
+  toast(`${id}: start command sent`+(b?.manualmode==='true'?'. It is in manual mode: press Stop to give it back to its logic':''));return true}
+function startAll(p){   // true when the message went out. It asks first: it reaches every board
   const by=p?.name?'button '+p.name:'Start all';
   log('ui.press',{name:p?.name,id:p?.id,mode:'start_all',connected:!!client?.connected});
   if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:p?.name,reason:'not connected'});return false}
-  if(!confirm('Start all boards? Every MultiControl on this broker gets the start command. It does not turn the rollers by itself: a board moves a motor only when it has a box to move (use Spin to turn a roller).')){log('ui.press_blocked',{level:'warn',name:p?.name,reason:'confirmation dismissed'});return false}
-  pub('network_broadcast/start','',{},by,e=>toast(e?'Error: '+e.message:'Sent network_broadcast/start to all boards. Rollers only turn when a box arrives.'));return true}
+  if(!confirm('Start all boards? Every MultiControl on this broker gets the start command and runs its own logic.')){log('ui.press_blocked',{level:'warn',name:p?.name,reason:'confirmation dismissed'});return false}
+  const L=[...boards.values()].filter(b=>b.live).sort(byId);
+  pub('network_broadcast/start','',{},by);if(L.length)checkStart(L.map(b=>({id:b.id,was:b.state})));
+  toast('Start command sent to all boards');return true}
 
 /* ---------- generic form builder ---------- */
 const T=(k,label,o={})=>({k,label,...o}),N=(k,label,o={})=>T(k,label,{type:'number',...o}),C=(k,label,o={})=>T(k,label,{type:'check',...o}),
@@ -522,7 +537,7 @@ function draw(){
     denied.length&&h('div',{class:'err'},'The broker does not let this app listen to: '+denied.join(', ')),
     held.size&&h('div',{class:'err'},h('b',{},'The broker keeps these commands and hands them to a board every time it connects: '),[...held].map(([t,m])=>`${t} ← ${m}`).join(' · '),' ',h('button',{class:'btn sm',onclick:clearHeld},'Clear them')),
     h('div',{class:'row2'},h('b',{},`Devices (${list.length})`),
-      h('div',{class:'btns2'},h('button',{class:'btn sm',onclick:ask},'Refresh'),h('button',{class:'btn sm',onclick:diagnose},'Diagnose'),h('button',{class:'btn sm',onclick:()=>startAll()},'Start all'),h('button',{class:'btn sm gray',onclick:copyReport},'Copy report'))),
+      h('div',{class:'btns2'},h('button',{class:'btn sm',onclick:ask},'Refresh'),h('button',{class:'btn sm',onclick:diagnose},'Diagnose'),h('button',{class:'btn sm gray',onclick:copyReport},'Copy report'))),
     ...(list.length?list.map(b=>bcard(b,open)):[h('div',{class:'empty'},h('p',{},'No board has answered yet'),h('small',{class:'help'},'A board is listed here only after it publishes on <name>/status or answers Refresh. If nothing shows up, no board is talking to this broker, or this app is not allowed to listen.'))])
   ].filter(Boolean);
   const html=nodes.map(n=>n.outerHTML).join('');if(html!==drawn.status){drawn.status=html;body.replaceChildren(...nodes)}
@@ -533,7 +548,8 @@ function draw(){
 const tile=b=>h('section',{class:'tile'+(turning(b)?' run':'')},
   h('div',{class:'thead'},h('b',{class:'tname'},b.id),h('span',{class:'pill '+(b.state||'')},b.state||'?')),
   h('div',{class:'tsub'},h('span',{},b.ip||'IP unknown'),turning(b)?h('span',{class:'chip live'},'turning'):null),
-  h('div',{class:'trow'},h('button',{class:'btn',onclick:()=>tileAct(b,true)},'▶ Spin'),h('button',{class:'btn gray',onclick:()=>tileAct(b,false)},'■ Stop')));
+  h('div',{class:'trow'},h('button',{class:'btn',onclick:()=>tileAct(b,true)},'▶ Spin'),h('button',{class:'btn gray',onclick:()=>tileAct(b,false)},'■ Stop')),
+  h('div',{class:'trow1'},h('button',{class:'btn alt',title:'The start command: the board runs its own logic (MCP PLAY)',onclick:()=>startBoard(b.id)},'Start')));
 function tileAct(b,on){log('ui.press',{name:b.id,mode:'board',action:on?'spin':'stop',connected:!!client?.connected});spin(b.id,on,'all','button '+b.id)}
 function drawHome(){
   const box=$('#boardbtns');if(!box||!db.conn)return;
@@ -541,7 +557,8 @@ function drawHome(){
   const nodes=[
     h('div',{class:'sect'},'All boards'),
     h('div',{class:'allrow'},h('button',{class:'btn lg',onclick:()=>spinAll(true)},'▶ Spin all rollers'),h('button',{class:'btn lg gray',onclick:()=>spinAll(false)},'■ Stop all')),
-    h('button',{class:'linkbtn',onclick:()=>startAll()},'Start all boards (the zone logic, not the rollers)'),
+    h('button',{class:'btn alt allstart',title:'The start command to every board: each one runs its own logic (MCP PLAY)',onclick:()=>startAll()},'Start all boards'),
+    h('small',{class:'help'},'Spin and Stop turn the rollers by hand. Start gives the start command: the board runs its own logic (MCP PLAY).'),
     h('div',{class:'sect'},`Boards (${list.length})`),
     list.length?h('div',{class:'tiles'},list.map(tile)):h('div',{class:'empty'},h('p',{},status==='connected'?'Waiting for the boards…':'Not connected'),h('small',{class:'help'},'Every board that answers gets its own Spin and Stop here. If none shows up, press Refresh in the Status tab.'))];
   const html=nodes.map(n=>n.outerHTML).join('');if(html!==drawn.home){drawn.home=html;box.replaceChildren(...nodes)}}
@@ -555,7 +572,7 @@ home(){
       :h('div',{},h('div',{id:'boardbtns'}),
         db.panels.length?h('div',{class:'sect'},'My buttons'):null,
         db.panels.length?h('div',{class:'panels'},visible().map((p,i,vis)=>card(p,i,vis)))
-          :h('div',{},h('div',{class:'sect'},'My buttons'),h('small',{class:'help'},'Optional: a button of your own for any message. Every board already has its Spin and Stop above.'),h('div',{},h('button',{class:'btn sm gray',onclick:add},'Add a button')))),
+          :h('div',{},h('div',{class:'sect'},'My buttons'),h('small',{class:'help'},'Optional: a button of your own for any message. Every board already has its Spin, Stop and Start above.'),h('div',{},h('button',{class:'btn sm gray',onclick:add},'Add a button')))),
       db.conn&&db.panels.length?h('button',{class:'btn fab','aria-label':'Add',onclick:add},'+'):null))},
 status(){
   if(db.conn&&!client&&!off)connect();

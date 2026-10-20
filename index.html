@@ -157,7 +157,7 @@ function onMsg(t,raw,stored,pk){   // stored: the broker replays a retained mess
   else if(x=/^([^/]+)\/(eventhandler|motors)$/.exec(t)){try{const b=dev(x[1]),d=b[x[2]]=JSON.parse(m);if(!stored&&x[2]==='motors')b.motorsAt=Date.now();
     log('board.diag',x[2]==='eventhandler'?{id:x[1],what:'eventhandler',state:d.state,active_event:d['active event'],last_event:d['last event'],network:d.network,overvoltage:d.overvoltage,undervoltage:d.undervoltage,motor:d.motor}:
       {id:x[1],what:'motors',types:d.config?.type?.join(','),status:d.info?.status?.join(','),speedrel:d.speedrel?.join(','),normspeed:d.config?.normspeed?.join(',')})}catch(e){log('board.bad_json',{level:'warn',topic:t,err:e.message})}}
-  else if(x=/^([^/]+)\/motors\/(\d)\/info\/startstops$/.exec(t)){const b=dev(x[1]);(b.startstops||(b.startstops={}))[x[2]]=m.trim();log('board.diag',{id:x[1],what:'startstops',motor:x[2],value:m.trim()})}
+  else if(x=/^([^/]+)\/motors\/(\d)\/info\/startstops$/.exec(t)){const b=dev(x[1]);(b.startstops||(b.startstops={}))[x[2]]=m.trim();if(!stored)b.motorAt=Date.now();log('board.diag',{id:x[1],what:'startstops',motor:x[2],value:m.trim()})}
   else if(x=/^([^/]+)\/group$/.exec(t)){try{const d=JSON.parse(m);if(Array.isArray(d.group)){const b=dev(x[1]),g=d.group.map(o=>({name:String(o.name??o.id),id:o.id})),key=a=>a.map(o=>`${o.name}#${o.id}`).join(','),was=key(b.groups||[]);b.groups=g;   // the flow groups of a board: {"group":[{"name":"group1","id":1}]}
     if(key(g)!==was)log('board.group',{id:b.id,groups:key(g)||'none',stored})}}catch(e){log('board.bad_json',{level:'warn',topic:t,err:e.message})}}
   touch()}
@@ -271,35 +271,46 @@ function motorPress(p,on){   // true when the messages went out
   if(!ok)log('ui.press_blocked',{level:'warn',name:p.name,reason:'the board could not be told'});
   return ok}
 // The start command (manual 12.2) makes a MultiControl run its own logic (MCP PLAY): it then moves a motor only when it has a box to move, apart from a short move after a reset. The boards are started by flow group:
-// a board says the groups it is in on <board>/group, as {"group":[{"name":"group1","id":1}]}, and an empty message on <groupid>/command/start starts every board of the group. The manual does not say whether <groupid> is the
-// name or the number: the first start of a group asks, read-only (<groupid>/manualmode/get, 13.2: each board answers on its own topic), on the name and then on the number, and keeps the one the boards answer on
-const wait=ms=>new Promise(r=>setTimeout(r,ms)),GT=new Map(),gkey=g=>g.name+'\n'+g.id,nBoards=n=>n+(n===1?' board':' boards');   // GT: group > the topic that reached its boards
-function flowGroups(){const m=new Map();   // the groups that have a board answering now, with those boards
-  for(const b of boards.values())if(b.live)for(const g of b.groups||[]){const k=gkey(g);if(!m.has(k))m.set(k,{...g,live:[]});m.get(k).live.push(b)}
-  return[...m.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}))}
-async function groupTopic(g){   // the topic of the group the boards answer on, or null
+// a board says the groups it is in on <board>/group, as {"group":[{"name":"group1","id":1}]}, and an empty message on <groupid>/command/start starts every board of the group. The manual does not say what <groupid> is. On the real
+// boards a group of number 1 answered on "group1", also on a board that calls its group "group12": the topic is made from the number. So the first start of a group asks, read-only (<groupid>/manualmode/get, 13.2: each board
+// answers on its own topic), on group<number>, then on the names, then on the number, and keeps the topic the boards answer on
+const wait=ms=>new Promise(r=>setTimeout(r,ms)),GT=new Map(),gkey=g=>String(g.id),nBoards=n=>n+(n===1?' board':' boards'),   // GT: group number > the topic that reached its boards
+  ownName=(b,g)=>b.groups?.find(x=>gkey(x)===gkey(g))?.name;
+let startForm='';   // what the boards took as the start: '' is the empty message of the manual, 'true' is tried when the empty one changed nothing
+function flowGroups(){const m=new Map();   // by number: the name is only a label, and it may differ from board to board
+  for(const b of boards.values())if(b.live)for(const g of b.groups||[]){const k=gkey(g);if(!m.has(k))m.set(k,{id:g.id,names:new Map(),live:[]});const G=m.get(k);G.live.push(b);G.names.set(g.name,(G.names.get(g.name)||0)+1)}
+  return[...m.values()].map(G=>({...G,name:[...G.names].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],undefined,{numeric:true}))[0][0]})).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}))}
+async function groupTopic(g){   // the topic of the group that its boards answer on, or null
   const k=gkey(g);if(GT.has(k))return GT.get(k);
-  for(const c of new Set([g.name,String(g.id)])){if(!c||/[+#]/.test(c)||!client?.connected)continue;
+  for(const c of new Set([`group${g.id}`,...g.names.keys(),String(g.id)])){if(!c||/[+#]/.test(c)||!client?.connected)continue;
     const t0=Date.now();pub(`${c}/manualmode/get`,'',{},`group ${g.name}: which topic do its boards answer on`);await wait(1200);
     const n=g.live.filter(b=>b.manualAt>=t0).length;log('board.group_topic',{level:n?undefined:'warn',group:g.name,id:g.id,topic:c,answered:n,of:g.live.length});
     if(n){GT.set(k,c);touch();return c}}
   return null}
-// A board that took the start says "running": about 3 s later the app looks and says it
-function checkStart(items,label){   // items: [{id,was}], was = the state before
+// The start goes out, and about 3 s later the app looks at what the boards say: "running" means they took it, and so does a motor that started (<board>/motors/N/info/startstops). If nothing changed with the first form
+// of the message the same start goes out once with the other one (empty, or "true", which the first start buttons of this app sent), and the form that works is kept for the next start
+function startRound(tp,items,label,by,forms){
+  const form=forms[0],t0=Date.now();tp.forEach(c=>pub(`${c}/command/start`,form,{},by+(form?` (${form})`:'')));
   setTimeout(()=>{if(!client?.connected)return;
-    const R=items.map(it=>{const st=boards.get(it.id)?.state;return{...it,state:st,ok:st==='running'}}),bad=R.filter(r=>!r.ok);
-    R.forEach(r=>log('board.check',{level:r.ok?undefined:'warn',id:r.id,action:'start',group:label,was:r.was,state:r.state,ok:r.ok}));
-    const was=R.every(r=>r.was==='running');   // they said running before the start too: the answer proves nothing
-    toast(R.length===1?`${label}: ${R[0].id} ${R[0].ok?'says running'+(was?' (it already did)':''):'still says '+(R[0].state||'nothing')}`:bad.length?`${label}: ${R.length-bad.length} of ${R.length} boards say running. Still: ${bad.map(r=>`${r.id} ${r.state||'?'}`).join(', ')}`:`${label}: all ${R.length} boards say running`+(was?' (they already did)':''))},3000)}
+    const R=items.map(it=>{const b=boards.get(it.id);return{...it,state:b?.state,ok:b?.state==='running',moved:b?.motorAt>=t0,manual:b?.manualmode==='true'}}),
+      due=R.filter(r=>r.was!=='running'&&r.was!=='offline'&&!r.manual),got=due.filter(r=>r.ok),bad=R.filter(r=>!r.ok),moved=R.filter(r=>r.moved);   // due: the boards that had to change
+    R.forEach(r=>log('board.check',{level:r.ok?undefined:'warn',id:r.id,action:'start',group:label,form:form||'empty',was:r.was,state:r.state,moved:r.moved||undefined,ok:r.ok}));
+    if(due.length&&!got.length&&!moved.length&&forms.length>1){toast(`${label}: ${form?'"true"':'the empty message'} changed nothing, trying ${form?'the empty message':'"true"'}…`);return startRound(tp,items,label,by,forms.slice(1))}
+    if(got.length&&startForm!==form){startForm=form;log('board.start_form',{group:label,form:form||'empty'})}
+    const n=R.length,same=R.every(r=>r.was==='running'),see=moved.length?` Motors started on ${moved.map(r=>r.id).join(', ')}.`:'';
+    const unchanged=due.length&&!got.length&&!moved.length;   // the boards that had to change did not
+    toast(!bad.length?`${label}: ${n===1?R[0].id+' says':'all '+n+' boards say'} running${same?' (they already did)':''}.`+see
+      :`${label}: ${n-bad.length} of ${n} boards say running. Still: ${bad.slice(0,4).map(r=>`${r.id} ${r.state||'?'}`).join(', ')}${bad.length>4?` and ${bad.length-4} more`:''}.`+see
+        +(unchanged?` The boards that were not running did not change with the empty message or with "true". Put a box on a zone: if its roller starts, the start works and the boards do not say so.`:''))},3000)}
 // the start of each group in L, never retained. true when the messages went out
 async function startGroups(L,label,by){
   if(!client?.connected){toast('Not connected');log('ui.press_blocked',{level:'warn',name:label,reason:'not connected'});return false}
-  const items=[...new Map(L.flatMap(g=>g.live).map(b=>[b.id,{id:b.id,was:b.state}])).values()],man=items.filter(it=>boards.get(it.id)?.manualmode==='true').map(it=>it.id);
+  const items=[...new Map(L.flatMap(g=>g.live).map(b=>[b.id,{id:b.id,was:b.state}])).values()],man=items.filter(it=>boards.get(it.id)?.manualmode==='true').map(it=>it.id),tp=[];
   if(L.some(g=>!GT.has(gkey(g))))toast(`${label}: finding the topic its boards answer on…`);
-  for(const g of L){const c=await groupTopic(g)??g.name;   // no answer on either: the name, as the manual writes it
-    if(!client?.connected){toast('Not connected');return false}
-    pub(`${c}/command/start`,'',{},by||'group '+g.name)}
-  checkStart(items,label);toast(`${label}: start sent`+(man.length?`. In manual mode they ignore it until their Stop: ${man.join(', ')}`:''));return true}
+  for(const g of L){tp.push(await groupTopic(g)??`group${g.id}`);   // no answer on any: group<number>, the form that answered on the real boards
+    if(!client?.connected){toast('Not connected');return false}}
+  startRound(tp,items,label,by||'group '+label,startForm==='true'?['true','']:['','true']);
+  toast(`${label}: start sent`+(man.length?`. In manual mode they ignore it until their Stop: ${man.join(', ')}`:''));return true}
 function startGroup(g){log('ui.press',{name:g.name,mode:'start_group',id:g.id,boards:g.live.map(b=>b.id).join(','),connected:!!client?.connected});return startGroups([g],g.name)}
 function startAll(p){   // it asks first: it reaches every flow group
   const L=flowGroups();log('ui.press',{name:p?.name,id:p?.id,mode:'start_all',groups:L.map(g=>g.name).join(',')||null,connected:!!client?.connected});
@@ -517,7 +528,7 @@ async function drawLog(){
 setInterval(()=>{if(route.n==='logs')drawLog()},2000);
 function clearHeld(){   // deleting a kept message means publishing an empty one, and the broker also hands that to every board listening: for start, restart, teachin an empty message IS the command, so only for boards that are not connected
   if(!client?.connected)return toast('Not connected');
-  const on=[...new Set([...held.keys()].map(t=>t.split('/')[0]))].filter(id=>boards.get(id)?.live&&boards.get(id).state!=='offline'||flowGroups().some(g=>id===g.name||id===String(g.id)));
+  const on=[...new Set([...held.keys()].map(t=>t.split('/')[0]))].filter(id=>boards.get(id)?.live&&boards.get(id).state!=='offline'||flowGroups().some(g=>id===`group${g.id}`||id===String(g.id)||g.names.has(id)));
   if(on.length)return toast(`${on.join(', ')} ${on.length>1?'are':'is'} connected. Clearing makes the broker send an empty message to the board, and for start, restart and the like an empty message IS the command. Switch ${on.length>1?'them':'it'} off first, then clear.`);
   const n=held.size;if(!confirm(`Delete ${n} command${n>1?'s':''} kept by the broker? The boards are not connected, so they will not receive anything.`))return;
   log('ui.clear_kept',{topics:[...held.keys()].join(',')});held.forEach((m,t)=>pub(t,'',{retain:true},'clear kept command'));held.clear();toast(`Cleared ${n} command${n>1?'s':''} kept by the broker`);draw()}
@@ -570,9 +581,9 @@ function tileAct(b,on){log('ui.press',{name:b.id,mode:'board',action:on?'spin':'
 const gtile=g=>{const n=g.live.length,run=g.live.filter(b=>b.state==='running').length;
   return h('section',{class:'tile'},
     h('div',{class:'thead'},h('b',{class:'tname'},g.name),h('span',{class:'pill '+(run===n?'running':run?'online':'')},`${run} of ${n} running`)),
-    h('div',{class:'chips'},[...g.live].sort(byId).map(b=>h('span',{class:'chip'+(b.state==='running'?' good':'')},b.id))),
+    h('div',{class:'chips'},[...g.live].sort(byId).map(b=>{const nm=ownName(b,g),odd=nm!==g.name;return h('span',{class:'chip'+(b.state==='running'?' good':''),title:odd?`this board calls its group ${nm}`:null},b.id+(odd?` (${nm})`:''))})),
     h('div',{class:'trow1'},h('button',{class:'btn alt',title:'The start command to the whole group: its boards run their own logic (MCP PLAY)',onclick:()=>startGroup(g)},'Start')),
-    h('small',{class:'help'},`${GT.get(gkey(g))??g.name}/command/start`))};
+    h('small',{class:'help'},`${GT.get(gkey(g))??'group'+g.id}/command/start`))};
 function drawHome(){
   const box=$('#boardbtns');if(!box||!db.conn)return;
   const list=[...boards.values()].filter(b=>b.live&&b.motors?.config?.type).sort(byId),G=flowGroups();

@@ -164,12 +164,13 @@ function abrirApp(url) {
     try { spawn(cmd[0], cmd[1], { detached: true, stdio: 'ignore' }).unref() } catch { /* abre na mão */ }
     return
   }
-  const exe = [
-    [process.env['PROGRAMFILES(X86)'], 'Microsoft\\Edge\\Application\\msedge.exe'],
-    [process.env.PROGRAMFILES, 'Microsoft\\Edge\\Application\\msedge.exe'],
-    [process.env.PROGRAMFILES, 'Google\\Chrome\\Application\\chrome.exe'],
-    [process.env['PROGRAMFILES(X86)'], 'Google\\Chrome\\Application\\chrome.exe'],
-  ].map(([base, rel]) => (base ? join(base, rel) : '')).find((p) => p && existsSync(p))
+  // LOCALAPPDATA entra na busca porque numa máquina sem admin o Edge e o Chrome
+  // costumam estar instalados por usuário, fora de Program Files. Mesma ordem
+  // que o mqtt-panel usa nesta empresa.
+  const exe = ['PROGRAMFILES(X86)', 'PROGRAMFILES', 'LOCALAPPDATA']
+    .flatMap((v) => ['Microsoft\\Edge\\Application\\msedge.exe', 'Google\\Chrome\\Application\\chrome.exe']
+      .map((rel) => (process.env[v] ? join(process.env[v], rel) : '')))
+    .find((p) => p && existsSync(p))
 
   if (!exe) return navegadorPadrao(url) // sem Edge nem Chrome: pelo menos abre
 

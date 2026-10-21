@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fator de importação</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --card:#fff; --linha:#e3e6ea; --txt:#1c2024; --fraco:#6a737d;
+    --azul:#1f5fd0; --verde:#1f8a4c; --verde-fraco:#dff2e6; --ambar:#9a6400; --vermelho:#b42318;
+  }
+  * { box-sizing:border-box }
+  body { margin:0; font:14px/1.5 "Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--txt) }
+  .wrap { max-width:1060px; margin:0 auto; padding:20px 16px 60px }
+  h1 { font-size:20px; margin:0 0 4px }
+  .sub { color:var(--fraco); margin:0 0 20px }
+  .card { background:var(--card); border:1px solid var(--linha); border-radius:8px; padding:14px 16px; margin-bottom:14px }
+  .card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--fraco); margin:0 0 10px }
+  .cam { display:flex; align-items:center; gap:10px; padding:5px 0 }
+  .cam b { min-width:120px; color:var(--fraco); font-weight:600 }
+  .cam code { flex:1; background:var(--bg); padding:5px 8px; border-radius:5px; word-break:break-all; font-size:13px }
+  button { font:inherit; border:1px solid var(--linha); background:var(--card); border-radius:6px; padding:6px 12px; cursor:pointer }
+  button:hover:not(:disabled) { border-color:#aeb6bf }
+  button:disabled { opacity:.5; cursor:not-allowed }
+  .primario { background:var(--azul); border-color:var(--azul); color:#fff; font-weight:600; padding:9px 18px }
+  .primario:hover:not(:disabled) { background:#174aa6; border-color:#174aa6 }
+  table { width:100%; border-collapse:collapse }
+  th { text-align:left; font-size:12px; color:var(--fraco); font-weight:600; padding:0 8px 6px }
+  th.n, td.n { text-align:right }
+  td { padding:6px 8px; border-top:1px solid var(--linha) }
+  .acoes { display:flex; gap:10px; align-items:center; margin-top:4px; flex-wrap:wrap }
+  .pill { display:inline-block; padding:1px 8px; border-radius:20px; font-size:12px; font-weight:600 }
+  .pill.ok { background:var(--verde-fraco); color:var(--verde) }
+  .pill.zero { background:var(--bg); color:var(--fraco) }
+  .pill.err { background:#fdeceb; color:var(--vermelho) }
+  .erro { background:#fdeceb; border-color:#f3c7c3; color:var(--vermelho) }
+  .faixa { position:relative; height:22px; background:var(--bg); border-radius:4px; overflow:hidden }
+  .faixa .banda { position:absolute; top:0; bottom:0; background:var(--verde-fraco) }
+  .faixa .ponto { position:absolute; top:3px; width:3px; height:16px; border-radius:2px; background:var(--azul) }
+  .faixa .ponto.fora { background:var(--ambar) }
+  .legenda { display:flex; justify-content:space-between; color:var(--fraco); font-size:12px; margin-top:3px }
+  pre { background:#1c2024; color:#e6e9ec; padding:14px; border-radius:6px; overflow:auto; font-size:12.5px; max-height:380px }
+  .vazio { color:var(--fraco); padding:8px 0 }
+  label.mes { display:flex; align-items:center; gap:8px; cursor:pointer }
+  input[type=text] { font:inherit; flex:1; padding:5px 8px; border:1px solid var(--linha); border-radius:5px }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Fator de importação</h1>
+  <p class="sub">Varre as pastas de pedidos, lê as notas de débito e consolida em <code>ConsolidadoPath.xlsx</code>.</p>
+  <div id="app"><p class="vazio">Carregando…</p></div>
+</div>
+
+<script>
+const $ = (h) => { const d = document.createElement('div'); d.innerHTML = h.trim(); return d.firstChild }
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]))
+const brl = (n) => (Number(n)||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 })
+const pct = (n) => ((Number(n)||0)*100).toFixed(1).replace('.', ',') + '%'
+const api = async (rota, body) => {
+  const r = await fetch(rota, body ? { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(body) } : undefined)
+  const j = await r.json()
+  if (!r.ok) throw new Error(j.erro || r.statusText)
+  return j
+}
+
+let estado = null
+let marcados = new Set()
+let ultima = null
+
+const mesesComNovos = () => new Set(estado.meses.filter((m) => m.novos > 0).map((m) => m.mes))
+
+async function carregar() {
+  estado = await api('/api/estado')
+  marcados = mesesComNovos() // meses sem pedidos novos vêm desmarcados
+  render()
+}
+
+const novosMarcados = () => estado.meses.filter((m) => marcados.has(m.mes)).reduce((a, m) => a + m.novos, 0)
+
+function render() {
+  const app = document.getElementById('app')
+  app.innerHTML = ''
+  app.append(blocoCaminhos(), blocoMeses(), blocoAcoes())
+  if (ultima) { app.append(blocoUltima()); const f = blocoFaixa(); if (f) app.append(f) }
+  app.append(blocoHistorico())
+}
+
+function blocoCaminhos() {
+  const el = $(`<div class="card">
+    <h2>Caminhos</h2>
+    <div class="cam"><b>Pasta dos dados</b><code>${esc(estado.cfg.raiz)}</code><button data-k="raiz">Alterar</button></div>
+    <div class="cam"><b>Planilha</b><code>${esc(estado.cfg.planilha)}</code><button data-k="planilha">Alterar</button></div>
+    ${estado.erro ? `<div class="card erro" style="margin:10px 0 0">${esc(estado.erro)}</div>` : ''}
+  </div>`)
+  el.querySelectorAll('button[data-k]').forEach((b) => { b.onclick = () => trocarCaminho(b.dataset.k, b) })
+  return el
+}
+
+async function trocarCaminho(chave, botao) {
+  const linha = botao.parentElement
+  const campo = $(`<input type="text" value="${esc(estado.cfg[chave])}">`)
+  const ok = $('<button>Salvar</button>')
+  linha.querySelector('code').replaceWith(campo)
+  botao.replaceWith(ok)
+  campo.focus()
+  ok.onclick = async () => {
+    ok.disabled = true
+    try { estado = await api('/api/config', { [chave]: campo.value }); marcados = mesesComNovos(); ultima = null; render() }
+    catch (e) { alert(e.message); ok.disabled = false }
+  }
+  campo.onkeydown = (e) => { if (e.key === 'Enter') ok.click() }
+}
+
+function blocoMeses() {
+  if (!estado.meses.length) {
+    return $(`<div class="card"><h2>Meses encontrados</h2><p class="vazio">Nenhuma pasta de mês dentro de <code>${esc(estado.cfg.raiz)}</code>dados.</p></div>`)
+  }
+  const el = $(`<div class="card"><h2>Meses encontrados</h2><table>
+    <thead><tr><th>Mês</th><th class="n">Pedidos</th><th class="n">Já na planilha</th><th class="n">Novos</th></tr></thead>
+    <tbody>${estado.meses.map((m) => `<tr>
+      <td><label class="mes"><input type="checkbox" data-mes="${esc(m.mes)}" ${marcados.has(m.mes) ? 'checked' : ''}> ${esc(m.mes)}</label></td>
+      <td class="n">${m.total}</td><td class="n">${m.existentes}</td>
+      <td class="n"><span class="pill ${m.novos ? 'ok' : 'zero'}">${m.novos}</span></td></tr>`).join('')}
+    </tbody></table></div>`)
+  el.querySelectorAll('input[data-mes]').forEach((c) => {
+    c.onchange = () => {
+      if (c.checked) marcados.add(c.dataset.mes); else marcados.delete(c.dataset.mes)
+      render()
+    }
+  })
+  return el
+}
+
+function blocoAcoes() {
+  const n = novosMarcados()
+  const el = $(`<div class="card"><div class="acoes">
+    <button id="b-dry" ${marcados.size ? '' : 'disabled'}>Conferir sem gravar</button>
+    <button id="b-go" class="primario" ${n ? '' : 'disabled'}>Consolidar ${n} pedido${n === 1 ? '' : 's'}</button>
+    <span class="vazio" id="status"></span>
+  </div></div>`)
+  el.querySelector('#b-dry').onclick = () => executar({ dryRun: true })
+  el.querySelector('#b-go').onclick = () => executar({ dryRun: false })
+  return el
+}
+
+async function executar(opts) {
+  const botoes = [...document.querySelectorAll('.acoes button')]
+  botoes.forEach((b) => { b.disabled = true })
+  const st = document.getElementById('status')
+  st.textContent = opts.dryRun ? 'Conferindo…' : 'Consolidando…'
+  try {
+    ultima = await api('/api/rodar', { meses: [...marcados], ...opts })
+    estado = await api('/api/estado')
+    if (!opts.dryRun) marcados = mesesComNovos()
+    render()
+  } catch (e) {
+    st.textContent = ''
+    botoes.forEach((b) => { b.disabled = false })
+    alert('Falhou: ' + e.message)
+  }
+}
+
+function blocoUltima() {
+  const r = ultima
+  const el = $(`<div class="card">
+    <h2>Última execução — ${esc(r.quando)}${r.dryRun ? ' · conferência, nada gravado' : (r.gravado ? ' · planilha gravada' : ' · nada a gravar')}</h2>
+    <p><span class="pill ok">${r.adicionados.length} adicionados</span>
+       <span class="pill zero">${r.pulados.length} pulados</span>
+       <span class="pill ${r.erros.length ? 'err' : 'zero'}">${r.erros.length} pastas com erro</span></p>
+    ${r.erros.length ? `<table><thead><tr><th>Pasta</th><th>Motivo</th></tr></thead><tbody>${
+      r.erros.map((e) => `<tr><td><code>${esc(e.pasta)}</code></td><td>${esc(e.motivo)}</td></tr>`).join('')
+    }</tbody></table>` : ''}
+    ${['AIR','SEA'].filter((m) => r.totais[m].pedidos).map((m) => {
+      const t = r.totais[m]
+      return `<p style="margin:10px 0 0"><b>${m}</b> · ${t.pedidos} pedidos · ${t.linhas} linhas ·
+        CIF R$ ${brl(t.cif)} · custo R$ ${brl(t.total)} ·
+        fator ponderado <b>${pct(t.fatorPonderado)}</b> · logístico ${pct(t.fatorLogistico)}</p>`
+    }).join('')}
+    <div class="acoes"><button id="b-log">Abrir o registro completo</button></div>
+    <pre id="log" hidden>${esc(r.texto)}</pre>
+  </div>`)
+  el.querySelector('#b-log').onclick = (e) => {
+    const pre = el.querySelector('#log')
+    pre.hidden = !pre.hidden
+    e.target.textContent = pre.hidden ? 'Abrir o registro completo' : 'Fechar o registro'
+  }
+  return el
+}
+
+// Faixa 24%–30%: cada pedido consolidado sobre a faixa, ordenado por valor de carga.
+function blocoFaixa() {
+  const ps = [...ultima.adicionados].sort((a, b) => b.cif - a.cif)
+  if (!ps.length) return null
+  const MAX = Math.max(0.6, ...ps.map((p) => p.fator)) * 1.05
+  const x = (f) => Math.min(100, (f / MAX) * 100)
+  const min = estado.faixa.min, max = estado.faixa.max
+  return $(`<div class="card"><h2>Faixa ${min*100}%–${max*100}% — ordenado por valor de carga</h2>
+    <table><thead><tr><th>N/Ref.</th><th>Modal</th><th class="n">CIF</th><th class="n">Fator</th><th style="width:46%"></th></tr></thead>
+    <tbody>${ps.map((p) => {
+      const fora = p.fator < min || p.fator > max
+      return `<tr>
+        <td><code>${esc(p.nref)}</code></td><td>${esc(p.modal)}</td>
+        <td class="n">${brl(p.cif)}</td>
+        <td class="n" style="color:${fora ? 'var(--ambar)' : 'var(--verde)'};font-weight:600">${pct(p.fator)}</td>
+        <td><div class="faixa">
+          <div class="banda" style="left:${x(min)}%;width:${x(max)-x(min)}%"></div>
+          <div class="ponto ${fora ? 'fora' : ''}" style="left:${x(p.fator)}%"></div>
+        </div></td></tr>`
+    }).join('')}</tbody></table>
+    <div class="legenda"><span>0%</span><span>faixa esperada em verde</span><span>${pct(MAX)}</span></div>
+    <p class="vazio">Fator alto em pedido pequeno é esperado: despesa fixa por processo não acompanha o valor da carga.</p>
+  </div>`)
+}
+
+function blocoHistorico() {
+  const el = $(`<div class="card"><h2>Histórico</h2>
+    ${estado.historico.length ? `<table><thead><tr><th>Quando</th><th>Tipo</th><th class="n">Adicionados</th><th class="n">Pulados</th><th class="n">Erros</th><th></th></tr></thead>
+      <tbody>${estado.historico.map((h) => `<tr><td>${esc(h.quando)}</td><td>${h.dryRun ? 'conferência' : 'gravação'}</td>
+        <td class="n">${h.adicionados}</td><td class="n">${h.pulados}</td><td class="n">${h.erros}</td>
+        <td class="n"><button data-log="${esc(h.id)}">Ver</button></td></tr>`).join('')}</tbody></table>`
+      : '<p class="vazio">Nenhuma execução nesta sessão.</p>'}
+    <div class="acoes" style="margin-top:12px">
+      <button id="b-re" ${marcados.size ? '' : 'disabled'}>Reprocessar os meses marcados</button>
+      <span class="vazio">Apaga da planilha as linhas daqueles meses e roda de novo. Não acontece ao marcar o mês na tela principal.</span>
+    </div></div>`)
+  el.querySelectorAll('button[data-log]').forEach((b) => {
+    b.onclick = async () => {
+      const h = await api('/api/log/' + b.dataset.log)
+      ultima = { ...h.resultado, quando: h.quando, texto: h.texto }
+      render()
+    }
+  })
+  el.querySelector('#b-re').onclick = () => {
+    if (confirm(`Apagar da planilha as linhas dos meses ${[...marcados].join(', ')} e consolidar de novo?`)) {
+      executar({ dryRun: false, reprocessar: true })
+    }
+  }
+  return el
+}
+
+carregar().catch((e) => { document.getElementById('app').innerHTML = `<div class="card erro">${esc(e.message)}</div>` })
+</script>
+</body>
+</html>

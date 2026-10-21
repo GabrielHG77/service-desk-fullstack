@@ -1,5 +1,5 @@
 node_modules/
-dist/
 build/
 src/ui.gen.js
 logs/
+dist/fator-importacao-linux

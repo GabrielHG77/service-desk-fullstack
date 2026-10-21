@@ -1,5 +1,8 @@
+logs/
+config.json
 node_modules/
 build/
-src/ui.gen.js
-logs/
-dist/fator-importacao-linux
+src/
+/fator-importacao
+dist/*
+!dist/fator-importacao.exe

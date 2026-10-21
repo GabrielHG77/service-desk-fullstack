@@ -5,119 +5,134 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>MQTT Panel</title>
 <style>
-:root{--primary:#f2d740;--ink:#0c0e0f;--black:#0c0e0f;--secondary:#3dc2ff;--tertiary:#5260ff;--success:#2dd36f;--warning:#ffc409;--danger:#eb445a;--medium:#92949c;
-  --bg:#eceff2;--card:#fff;--card2:#f3f5f7;--fg:#16191c;--line:#dcdfe3;--sub:#5f666e;--shadow:0 1px 2px #0000000d,0 8px 24px #00000010}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0d0f11;--card:#16191c;--card2:#1e2226;--fg:#eceef0;--line:#2a3035;--sub:#98a0a8;--shadow:0 1px 2px #0008,0 8px 24px #0004;color-scheme:dark}}
-:root[data-theme=dark]{--bg:#0d0f11;--card:#16191c;--card2:#1e2226;--fg:#eceef0;--line:#2a3035;--sub:#98a0a8;--shadow:0 1px 2px #0008,0 8px 24px #0004;color-scheme:dark}
+:root{--primary:#f2d740;--ink:#0c0e0f;--black:#0c0e0f;--secondary:#3dc2ff;--tertiary:#5260ff;--success:#2dd36f;--warning:#ffc409;--danger:#eb445a;--medium:#92949c;   /* the colours of the buttons you make yourself */
+  --ground:#f4f5f6;--surface:#fff;--raised:#f1f3f4;--active:#e6e9ec;--border:#dde1e5;--rule:#e9ecef;--control:#c4cad1;--text:#14171a;--muted:#59616a;--on:#14171a;--stop:#c4242a;
+  --pos-bg:#dcfae5;--pos-ink:#0b4a2a;--warn-bg:#fdf0c9;--warn-ink:#6b4300;--neg-bg:#ffe5e3;--neg-ink:#8a1c1f;--neu-bg:#eceff1;--neu-ink:#3b434b;--neg:#c4242a;--neg-line:#e7a6a8;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,"Liberation Mono",monospace;--bg:var(--ground);--card:var(--surface);--card2:var(--raised);--fg:var(--text);--line:var(--border);--sub:var(--muted)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--ground:#131517;--surface:#0b0c0d;--raised:#1a1d20;--active:#23272b;--border:#272b30;--rule:#1c1f23;--control:#40464d;--text:#f2f3f4;--muted:#9ba2aa;--on:#f2d740;
+  --pos-bg:#112619;--pos-ink:#57d494;--warn-bg:#2b2412;--warn-ink:#e2b34f;--neg-bg:#2e1a1e;--neg-ink:#f2677d;--neu-bg:#1e2226;--neu-ink:#b6bdc4;--neg:#f2677d;--neg-line:#7a3a45;color-scheme:dark}}
+:root[data-theme=dark]{--ground:#131517;--surface:#0b0c0d;--raised:#1a1d20;--active:#23272b;--border:#272b30;--rule:#1c1f23;--control:#40464d;--text:#f2f3f4;--muted:#9ba2aa;--on:#f2d740;
+  --pos-bg:#112619;--pos-ink:#57d494;--warn-bg:#2b2412;--warn-ink:#e2b34f;--neg-bg:#2e1a1e;--neg-ink:#f2677d;--neu-bg:#1e2226;--neu-ink:#b6bdc4;--neg:#f2677d;--neg-line:#7a3a45;color-scheme:dark}
 *{box-sizing:border-box}[hidden]{display:none!important}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,"Segoe UI",sans-serif}
-.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;align-items:center;gap:12px;padding:10px 24px;background:var(--black);color:#fff;border-bottom:3px solid var(--primary)}
-.bar h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.02em}.sp{flex:1}
-.logo{flex:none;width:26px;height:26px;border-radius:6px;background:var(--primary);position:relative}.logo::after{content:"";position:absolute;inset:7px;border-radius:2px;background:var(--black)}
-.broker{font:12px ui-monospace,Consolas,monospace;color:#c9ced4;background:#ffffff17;border-radius:6px;padding:4px 10px}
+body{margin:0;background:var(--ground);color:var(--text);font:14px/1.45 "Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;align-items:center;gap:12px;padding:0 24px;height:52px;background:var(--black);color:#fff;border-bottom:1px solid #2a2f34}
+.bar h1{font-size:16px;margin:0;font-weight:600}.sp{flex:1}
+.logo{flex:none;width:28px;height:28px;border-radius:7px;background:var(--primary);position:relative}.logo::after{content:"";position:absolute;inset:8px;border-radius:2px;background:var(--black)}
 .ic{background:none;border:0;color:inherit;font-size:20px;cursor:pointer;padding:4px 8px}
-main{max-width:720px;margin:0 auto;padding:16px 16px 96px}main.wide{max-width:1680px;padding:20px 28px 56px}
-.btn{border:0;border-radius:8px;padding:11px 16px;font:inherit;font-weight:700;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;background:var(--primary);color:var(--ink);transition:filter .12s}
-.btn{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}.btn:hover{filter:brightness(1.07)}.btn:active{filter:brightness(.82)}.btn.gray{background:#7b8088;color:#fff}.btn.sm{padding:6px 12px;font-size:12px}.btn.lg{padding:16px 24px;font-size:17px}
-.btn.stop{background:var(--danger);color:#fff}.btn.alt{background:transparent;color:var(--fg);box-shadow:inset 0 0 0 2px var(--primary)}.btn.alt:hover{background:#f2d7401f}
-.btn.soft{background:var(--card2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}.btn.soft:hover{box-shadow:inset 0 0 0 1px var(--sub)}
-.fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;font-size:30px;padding:0;box-shadow:0 3px 8px #0006;z-index:6}
-.fld{margin:0 0 12px}.lh{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);margin-bottom:3px}
-.fld label{font-size:13px;color:var(--sub)}.fld .chk{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--fg)}.chk input{width:auto}
-input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);font:inherit;font-size:16px}
+main{max-width:720px;margin:0 auto;padding:16px 16px 96px}main.wide{max-width:1680px;padding:28px 32px 56px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 16px;border:1px solid transparent;border-radius:999px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;background:var(--primary);color:var(--ink);white-space:nowrap;transition:background-color .12s,border-color .12s,filter .12s}
+.btn{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}.btn:hover{filter:brightness(1.07)}.btn:active{filter:brightness(.88)}
+.btn.sm{height:28px;padding:0 12px;font-size:12px}.btn.lg{height:40px;padding:0 22px;font-size:14px}
+.btn.gray,.btn.alt,.btn.soft{background:transparent;color:var(--text);border-color:var(--control)}.btn.gray:hover,.btn.alt:hover,.btn.soft:hover{background:var(--raised);filter:none}
+.btn.stop{background:var(--stop);color:#fff}.btn.neg{background:transparent;color:var(--neg);border-color:var(--neg-line)}.btn.neg:hover{background:var(--neg-bg);filter:none}
+.btn.locked{opacity:.4;cursor:not-allowed;filter:none}.btn.locked:hover,.btn.locked:active{filter:none;background:transparent}.btn.locked:not(.alt):not(.soft):not(.gray):not(.neg){background:var(--primary)}
+.btn:focus-visible,.tabs button:focus-visible,.bmain:focus-visible,.st:focus-visible{outline:2px solid var(--on);outline-offset:2px}
+.fab{position:fixed;right:20px;bottom:calc(76px + env(safe-area-inset-bottom,0px));width:52px;height:52px;border-radius:50%;font-size:28px;padding:0;z-index:7}
+.fld{margin:0 0 12px}.lh{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-bottom:4px}
+.fld label{font-size:13px;color:var(--muted)}.fld .chk{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text)}.chk input{width:auto}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--control);border-radius:8px;background:var(--surface);color:var(--text);font:inherit;font-size:14px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:1px solid var(--on);outline-offset:0}
 input[type=color]{padding:2px;height:40px}
-.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}.req{color:var(--danger)}
-.q{border:0;border-radius:50%;width:18px;height:18px;font-size:11px;background:var(--primary);color:var(--black);cursor:pointer;padding:0}
-.help{color:var(--sub);display:block;margin-top:3px}.err{white-space:pre-line;color:var(--danger);margin:8px 0}
+.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}.req{color:var(--neg)}
+.q{border:0;border-radius:50%;width:18px;height:18px;font-size:11px;background:var(--raised);color:var(--text);border:1px solid var(--control);cursor:pointer;padding:0}
+.help{color:var(--muted);display:block;margin-top:3px;font-size:13px}.err{white-space:pre-line;color:var(--neg);margin:8px 0}
 .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
 .pickrow{margin:6px 0}.pickrow .help{margin:0}
-.item{border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px}
-.pick{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:8px;cursor:pointer}
+.item{border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px}
+.pick{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:8px;cursor:pointer}
 .menu{position:relative;display:inline-block}.menu summary{list-style:none;cursor:pointer;padding:2px 8px;font-size:20px}.menu summary::-webkit-details-marker{display:none}
-.pop{position:absolute;right:0;top:100%;background:var(--card);color:var(--fg);box-shadow:0 2px 12px #0006;border-radius:8px;z-index:10;min-width:160px;display:flex;flex-direction:column;border:1px solid var(--line)}
-.pop button{background:none;border:0;text-align:left;padding:10px 14px;font:inherit;color:inherit;cursor:pointer}.pop .dng{color:var(--danger)}
+.pop{position:absolute;right:0;top:100%;background:var(--surface);color:var(--text);box-shadow:0 8px 24px #0006;border-radius:8px;z-index:10;min-width:160px;display:flex;flex-direction:column;border:1px solid var(--border)}
+.pop button{background:none;border:0;text-align:left;padding:10px 14px;font:inherit;color:inherit;cursor:pointer}.pop .dng{color:var(--neg)}
 .panels{display:flex;flex-wrap:wrap;gap:8px}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;position:relative;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;position:relative;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .panel>*{max-width:100%}.panel .menu{position:absolute;top:2px;right:2px}.pname{font-weight:600;font-size:14px;margin-right:24px}
 .pb{min-width:90px}.pb[aria-pressed=true]{box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 5px var(--black)}.grp{display:flex;flex-wrap:wrap;gap:8px;width:100%}.grp .btn{flex:1 1 90px}
-.empty{text-align:center;padding:48px 0;color:var(--sub)}
-.st{border:0;border-radius:999px;padding:4px 12px;font:600 12px system-ui;cursor:pointer;color:#fff;background:var(--medium)}.st.connected{background:var(--success);color:var(--ink)}.st.connecting{background:var(--warning);color:var(--ink)}.st.error{background:var(--danger)}
-#toast{position:fixed;left:50%;bottom:calc(30px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:min(90vw,820px);background:#000e;color:#fff;padding:10px 18px;border-radius:12px;z-index:50;box-shadow:0 6px 24px #0007;border:1px solid #ffffff22}
-.shell{display:block}.side{margin-bottom:14px}.sideinfo{display:none}.content{min-width:0}
-.tabs{display:flex;border-bottom:2px solid var(--line)}
-.tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:11px 0;font:inherit;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);cursor:pointer}
-.tabs .on{color:var(--fg);border-bottom-color:var(--primary)}.ti{font-size:11px;opacity:.8}
-.box{margin-bottom:10px;align-items:stretch}.row2{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}.box .row2{margin:0}
-.pill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 11px;font-size:12px;font-weight:700;background:var(--medium);color:#fff;white-space:nowrap}.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px}
-.pill.ready{background:var(--secondary);color:var(--ink)}.pill.running{background:var(--success);color:var(--ink)}.pill.held{background:var(--warning);color:var(--ink)}.pill.online{background:var(--warning);color:var(--ink)}.pill.offline{background:var(--danger)}
+.empty{padding:16px 18px;border:1px dashed var(--control);border-radius:8px;text-align:left;color:var(--muted)}.empty p{margin:0 0 6px;color:var(--text)}.empty .btn{margin-top:6px}
+#toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:min(90vw,820px);background:#101214;color:#fff;padding:10px 18px;border-radius:8px;z-index:50;border:1px solid #ffffff38}
+/* the frame: a rail on the left (the bottom on a phone), the page to its right */
+.shell{display:block}.content{min-width:0}
+.side{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;align-items:stretch;background:var(--ground);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom,0px)}
+.brand{display:none}.tabs{display:flex;flex:1}
+.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:56px;background:none;border:0;color:var(--muted);font:inherit;font-size:11px;font-weight:600;cursor:pointer}
+.tabs button:hover{color:var(--text)}.tabs .on{color:var(--text)}.ti{display:inline-flex}.ti svg{display:block}
+.tl{position:relative;padding-bottom:3px}.tabs .on .tl::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--on)}
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px 24px;margin:0 0 20px}
+.crumb{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:0 0 8px;font-size:12px;color:var(--muted)}.crumb .mono{font-family:var(--mono);font-size:12px;color:var(--text)}
+.head .sub#logfile{max-width:min(78ch,60vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.head h1{margin:0;font-size:24px;line-height:1.2;font-weight:600;letter-spacing:-.01em}.head .sub{margin:6px 0 0;color:var(--muted);font-size:14px;max-width:70ch}
+.hact{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.hact .btn{height:36px;padding:0 18px}
+.st{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border:1px solid var(--border);border-radius:999px;background:transparent;color:var(--text);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.st::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--muted)}.st.connected::before{background:var(--pos-ink)}.st.connecting::before{background:var(--warn-ink)}.st.error::before,.st.disconnected::before{background:var(--neg)}
+.cfg{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:6px;background:none;color:var(--muted);cursor:pointer;padding:0}.cfg:hover{color:var(--text);background:var(--raised)}
+.row2{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}.box{margin-bottom:10px}.box .row2{margin:0}
+.pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:600;background:var(--neu-bg);color:var(--neu-ink);white-space:nowrap;flex:none}.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.running{background:var(--pos-bg);color:var(--pos-ink)}.pill.held,.pill.online{background:var(--warn-bg);color:var(--warn-ink)}.pill.offline{background:var(--neg-bg);color:var(--neg-ink)}
 .btns2{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.diag{display:block;white-space:pre-line;word-break:break-word;margin-top:4px}
-.logview{white-space:pre-wrap;word-break:break-all;font:11.5px/1.45 ui-monospace,Consolas,monospace;max-height:48vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}
-#logbox{width:100%;height:30vh;font-size:11px;margin-top:8px}.quick{justify-content:flex-start;margin:6px 0}#note{flex:1}
-.feed{margin-top:14px}.feed summary{cursor:pointer;color:var(--sub)}.feed pre{white-space:pre-wrap;word-break:break-all;font-size:12px;margin:8px 0}
-.sect{display:flex;align-items:center;gap:12px;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);margin:26px 0 12px}.sect::after{content:"";flex:1;height:1px;background:var(--line)}
-.toolbar{display:flex;flex-wrap:wrap;align-items:stretch;justify-content:space-between;gap:14px}
-.stats{display:flex;flex-wrap:wrap;gap:10px}.stat{display:flex;flex-direction:column;gap:2px;min-width:104px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 18px;box-shadow:var(--shadow)}
-.stat b{font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}.stat span{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--sub)}
-.stat.ok b{color:var(--success)}.stat.run b{color:var(--primary)}.stat.warn b{color:var(--warning)}
-.tact{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.tact .btn{padding:14px 22px;font-size:14px}
-.gcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
-/* the Buttons tab in two halves: MCP PLAY on the left, Motor test on the right; a button that is locked looks shut and still answers a press */
-.cols{display:grid;grid-template-columns:minmax(0,1fr);gap:28px;margin-top:22px}.pane{min-width:0}
-.phead{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;min-height:50px;padding-bottom:10px;margin-bottom:14px;border-bottom:2px solid var(--primary)}.phead .sp{flex:1}
-.ptitle{margin:0;font-size:16px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.psub{color:var(--sub);font-size:13px}
-.lockline{margin:0 0 12px;padding:9px 12px;border-radius:10px;background:var(--card2);border-left:4px solid var(--warning);font-size:13px}
-.btn.locked{opacity:.38;cursor:not-allowed;filter:none}.btn.locked:hover,.btn.locked:active{filter:none}
-.tile,.bcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow)}.tile{display:flex;flex-direction:column}.tile .trow{margin-top:auto}
-.tile.run,.bcard.run{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary),var(--shadow)}.bcard.on{border-left:4px solid var(--success)}.bcard.off{border-left:4px solid var(--danger)}
-.thead,.bhead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.tname,.bname{font-size:20px;font-weight:700;line-height:1.2}.gtile .tname{font-size:24px}
-.tcount{display:block;color:var(--sub);font-size:13px;font-weight:400}
-.tsub{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;color:var(--sub);font-size:13px;margin:4px 0 10px;min-height:22px}
-.mdots{display:flex;gap:6px;margin:0 0 12px}.md{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--card2);border:1px solid var(--line);color:var(--sub)}
-.md.run{background:var(--primary);color:var(--ink);border-color:var(--primary)}.md.bad{background:var(--danger);color:#fff;border-color:var(--danger)}
-.trow{display:grid;grid-template-columns:1fr 1fr;gap:8px}.trow .btn{padding:10px 8px;font-size:13px}
-.trow1{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.trow1 .btn{padding:14px 8px;font-size:15px}
-.topics{display:block;margin-top:10px;font:12px ui-monospace,Consolas,monospace;color:var(--sub);word-break:break-all}.warnline{display:block;margin-top:8px;color:var(--warning);font-size:13px}
-/* Status: one row per board; closed under it, its details */
-.bcards{display:flex;flex-direction:column;gap:8px}.bcard{margin:0}.brow{padding:0;overflow:hidden}
-.bmain{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:12px 16px;cursor:pointer;list-style:none}.bmain::-webkit-details-marker{display:none}.bmain:hover{background:var(--card2)}.bmain>.bwho{flex:1 1 150px;min-width:0}.bmain>.pill{flex:none}.bmain>.chips{flex:2 1 160px;margin:0}.bmain>.mcs{flex:1 1 170px}.bmain>.bev{flex:1.2 1 150px}.bmain>.bact{flex:none;margin:0;display:flex;gap:6px}
-.brow .bact .btn{padding:7px 12px;font-size:12px}.chev{color:var(--sub);font-size:14px;transition:transform .15s;justify-self:end}details[open]>.bmain .chev{transform:rotate(90deg)}
-.bwho{display:flex;flex-direction:column;gap:1px}.bwho .bip{font:600 13px ui-monospace,Consolas,monospace;margin:0;color:var(--sub)}
-.mcs{display:flex;flex-wrap:wrap;gap:6px}.mc{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:2px 9px 2px 2px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;background:var(--card2);border:1px solid var(--line);color:var(--sub)}
-.mc i{font-style:normal;width:22px;height:22px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;background:var(--card);color:var(--fg);border:1px solid var(--line)}
-.mc.run{border-color:var(--primary);color:var(--fg)}.mc.run i{background:var(--primary);color:var(--ink);border-color:var(--primary)}.mc.bad{border-color:var(--danger);color:var(--danger)}.mc.bad i{background:var(--danger);color:#fff;border-color:var(--danger)}
-.bev{font-size:13px;color:var(--sub);word-break:break-word}.bev.bad{color:var(--danger);font-weight:600}
-.bthead{display:none}.bdet{padding:8px 16px 14px;border-top:1px solid var(--line);background:var(--card2)}.brow .bwarn{padding:0 16px 10px;margin:0}.brow .evt{margin:0}.brow .evt>summary{color:var(--fg);font-size:inherit}
-.dh{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);margin:10px 0 4px}.brow .mrows{margin:8px 0 4px}
-.bsub{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:4px 0 8px;color:var(--sub);font-size:13px}.bip{color:var(--fg);font-weight:600;font-size:16px;margin-right:4px}
-.tag{background:var(--card2);border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:12px;color:var(--fg)}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.chip{border-radius:999px;padding:3px 11px;font-size:12px;font-weight:600;background:var(--card2);color:var(--fg);border:1px solid var(--line)}
-.chip.good{background:var(--success);color:var(--ink);border-color:transparent}.chip.bad{background:var(--danger);color:#fff;border-color:transparent}.chip.live{background:var(--primary);color:var(--ink);border-color:transparent}.chip.warn{background:var(--warning);color:var(--ink);border-color:transparent}
-.mrows{margin:8px 0 4px}.mrow{display:grid;grid-template-columns:22px 1fr auto auto;gap:3px 10px;align-items:center;padding:7px 0 5px;border-top:1px solid var(--line);font-size:14px}
-.mn{font-weight:700}.mt{color:var(--sub)}.mst{font-size:12px;font-weight:600;padding:1px 8px;border-radius:10px;background:var(--success);color:var(--ink)}.mst.bad{background:var(--danger);color:#fff}
-.msp{font-size:13px;font-variant-numeric:tabular-nums}.sbar{grid-column:1/-1;height:5px;border-radius:3px;background:var(--line);overflow:hidden}.sbar i{display:block;height:100%;background:var(--primary)}
-.evt{margin:6px 0 2px}.evt summary{cursor:pointer;color:var(--sub);font-size:13px}.bact{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}.bact .btn{padding:9px 20px;font-size:13px}
-/* Log: actions on top, the log as wide as the window, lines coloured by what they are */
-.logbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0 10px}#logfile{margin:0;max-width:min(52ch,40vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.logbar .btn{padding:9px 16px;font-size:13px}.logbar .sp{flex:1}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}.seg .btn{border-radius:0;padding:9px 16px}.seg .btn.gray{background:var(--card);color:var(--sub)}
-.lognote{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 10px}.lognote #note{flex:1 1 280px;min-width:0;padding:9px 12px;font-size:14px}.lognote .btn{padding:8px 14px;font-size:12px}
-.logview{font-size:12px}.ll{display:inline}.ll.w{color:var(--warning)}.ll.e{color:var(--danger);font-weight:600}.lt{color:var(--sub)}.lg{font-weight:700}
-.g-ui{color:#59b4ff}.g-board{color:#3ddc84}.g-app{color:#c58bff}.g-sys{color:#ffa94d}.g-note{color:var(--primary)}.g-mqtt,.g-relay{color:var(--sub)}
+.feed{margin-top:16px}.feed summary{cursor:pointer;color:var(--muted);font-size:13px}.feed pre{white-space:pre-wrap;word-break:break-all;font-family:var(--mono);font-size:13px;margin:8px 0}
+.sect{display:flex;align-items:center;gap:12px;font-size:13px;font-weight:600;color:var(--muted);margin:24px 0 12px}.sect::after{content:"";flex:1;height:1px;background:var(--border)}
+/* Buttons: the numbers in one divided strip, then two halves */
+.kpis{display:flex;border:1px solid var(--border);border-radius:6px;background:var(--surface);margin:0 0 28px}
+.kpi{flex:1 1 0;min-width:0;padding:12px 18px}.kpi+.kpi{border-left:1px solid var(--border)}.kpi.lead{flex:1.5 1 0}
+.kpi span{display:block;font-size:12px;color:var(--muted)}.kpi b{display:block;font-size:20px;font-weight:500;line-height:1.35}.kpi.lead b{font-size:32px;line-height:1.1;font-weight:500}.kpi b small{font-size:14px;font-weight:400;color:var(--muted)}
+.kpi.ok b{color:var(--pos-ink)}.kpi.run b{color:var(--on)}.kpi.warn b{color:var(--warn-ink)}
+.cols{display:grid;grid-template-columns:minmax(0,1fr);gap:32px}.pane{min-width:0}
+.phead{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;min-height:34px;margin:0 0 14px}.phead .sp{flex:1}
+.ptitle{margin:0;font-size:16px;font-weight:600}.psub{color:var(--muted);font-size:13px}
+.recent{margin-top:22px}.rl{display:grid;grid-template-columns:96px 1fr;gap:10px;padding:8px 0;border-top:1px solid var(--rule);font-size:13px}.rt{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.lockline{margin:0 0 12px;padding:9px 12px;border-radius:6px;background:var(--warn-bg);color:var(--warn-ink);font-size:13px}
+.gcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.tile.gtile{display:flex;flex-direction:column;align-items:stretch;gap:12px;min-height:0;padding:16px 18px;background:var(--surface);border:1px solid var(--border);border-radius:6px}.tile.gtile:hover{background:var(--surface)}
+.thead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.tname{font-size:15px;font-weight:600;line-height:1.3}.gtile .tname{font-size:18px}
+.tcount{display:block;color:var(--muted);font-size:12px;font-weight:400}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0}.chip{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;font-size:12px;font-weight:500;background:var(--raised);color:var(--text);border:1px solid var(--border);white-space:nowrap;flex:none}
+.chip.good{background:var(--pos-bg);color:var(--pos-ink);border-color:transparent}.chip.warn{background:var(--warn-bg);color:var(--warn-ink);border-color:transparent}.chip.bad{background:var(--neg-bg);color:var(--neg-ink);border-color:transparent}.chip.live{background:transparent;color:var(--on);border-color:var(--on)}
+.trow1{display:flex;gap:8px}.trow1 .btn{flex:1}
+.topics{display:block;font-family:var(--mono);font-size:12px;color:var(--muted);word-break:break-all}.warnline{display:block;color:var(--warn-ink);font-size:13px}
+.tiles{display:flex;flex-direction:column}
+.trh,.tile{display:grid;grid-template-columns:minmax(54px,.7fr) minmax(96px,1.1fr) 92px minmax(112px,1.4fr) 150px;align-items:center;gap:0 12px}
+.trh{padding:0 12px 8px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border)}
+.tile{position:relative;min-height:46px;padding:6px 12px;border-bottom:1px solid var(--rule)}.tile:hover{background:var(--raised)}
+.tile.run::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:2px;background:var(--on)}
+.tip{font-family:var(--mono);font-size:13px;color:var(--muted)}.tmo{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;min-width:0}
+.mdots{display:flex;gap:4px;margin:0}.md{width:22px;height:22px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;background:var(--raised);border:1px solid var(--border);color:var(--muted)}
+.md.run{background:var(--primary);color:var(--ink);border-color:var(--primary)}.md.bad{background:var(--neg);color:var(--surface);border-color:var(--neg)}
+.trow{display:flex;gap:6px}.trow .btn{height:28px;padding:0 12px;font-size:13px}
+/* Status: one row per board; opened, its details */
+.bcards{display:flex;flex-direction:column;border-top:1px solid var(--border)}.bcard{position:relative;margin:0;padding:0;background:none;border:0;border-bottom:1px solid var(--rule);border-radius:0}
+.bcard.off::before,.bcard.run::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;background:var(--neg)}.bcard.run::before{background:var(--on)}
+.bmain{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;min-height:52px;padding:8px 12px;cursor:pointer;list-style:none}.bmain::-webkit-details-marker{display:none}.bmain:hover{background:var(--raised)}.bmain>.bwho{flex:1 1 150px;min-width:0}.bmain>.pill{flex:none}.bmain>.chips{flex:2 1 160px}.bmain>.mcs{flex:1 1 170px}.bmain>.bev{flex:1.2 1 150px}.bmain>.bact{flex:none;margin:0;display:flex;gap:6px}
+.bact .btn{height:28px;padding:0 12px;font-size:13px}.chev{color:var(--muted);font-size:12px;transition:transform .15s;justify-self:end}details[open]>.bmain .chev{transform:rotate(90deg)}
+.bwho{display:flex;flex-direction:column;gap:1px}.bwho .bip{font-family:var(--mono);font-size:13px;margin:0;color:var(--muted)}.bname{font-size:15px;font-weight:600}
+.mcs{display:flex;flex-wrap:wrap;gap:6px}.mc{display:inline-flex;align-items:center;gap:6px;border-radius:6px;padding:2px 8px 2px 2px;font-size:13px;font-weight:600;background:var(--raised);border:1px solid var(--border);color:var(--muted)}
+.mc i{font-style:normal;width:20px;height:20px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.mc.run{border-color:var(--on);color:var(--text)}.mc.run i{background:var(--primary);color:var(--ink);border-color:var(--primary)}.mc.bad{border-color:var(--neg);color:var(--neg)}.mc.bad i{background:var(--neg);color:var(--surface);border-color:var(--neg)}
+.bev{font-size:13px;color:var(--muted);word-break:break-word}.bev.bad{color:var(--neg);font-weight:600}
+.bthead{display:none;padding:0 12px 8px;font-size:12px;color:var(--muted)}.bdet{padding:10px 14px 16px;border-top:1px solid var(--rule);background:var(--surface)}.bcard .bwarn{padding:0 14px 10px;margin:0}.bcard .evt{margin:0}.bcard .evt>summary{color:var(--text);font-size:inherit}
+.dh{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:12px 0 4px}.bcard .mrows{margin:8px 0 4px}
+.tag{background:var(--raised);border:1px solid var(--border);border-radius:6px;padding:1px 7px;font-size:12px;color:var(--text)}
+.mrows{margin:8px 0 4px}.mrow{display:grid;grid-template-columns:22px 1fr auto auto;gap:3px 10px;align-items:center;padding:7px 0 5px;border-top:1px solid var(--rule);font-size:13px}
+.mn{font-weight:600}.mt{color:var(--muted)}.mst{font-size:12px;font-weight:600;padding:1px 8px;border-radius:10px;background:var(--pos-bg);color:var(--pos-ink)}.mst.bad{background:var(--neg-bg);color:var(--neg-ink)}
+.msp{font-size:13px}.sbar{grid-column:1/-1;height:4px;border-radius:2px;background:var(--rule);overflow:hidden}.sbar i{display:block;height:100%;background:var(--on)}
+.evt{margin:6px 0 2px}.evt summary{cursor:pointer;color:var(--muted);font-size:13px}
+/* Log: the actions on top, tabs of one line, the log as wide as the window */
+.logtabs{display:flex;align-items:center;gap:20px;border-bottom:1px solid var(--border);margin:0 0 14px}
+.logtabs .btn{height:36px;padding:0;border:0;border-radius:0;background:none;color:var(--text);font-size:13px;position:relative}.logtabs .btn.gray{color:var(--muted)}.logtabs .btn:hover{filter:none;color:var(--text)}
+.logtabs .btn:not(.gray)::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--on)}
+.lognote{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px}.lognote #note{flex:1 1 280px;min-width:0;height:34px;padding:0 14px;border-radius:999px;font-size:13px}.lognote .btn{height:28px;padding:0 12px;font-size:12px}
+.logview{white-space:pre-wrap;word-break:break-all;font-family:var(--mono);font-size:13px;line-height:1.5;max-height:48vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin:0}
+.ll{display:inline}.ll.w{color:var(--warn-ink)}.ll.e{color:var(--neg);font-weight:600}.lt{color:var(--muted)}.lg{font-weight:700}.g-ui,.g-note{color:var(--on)}.g-board{color:var(--text)}.g-app,.g-sys,.g-mqtt,.g-relay{color:var(--muted)}
+#logbox{width:100%;height:30vh;font-size:11px;margin-top:8px}
 @media (min-width:760px){
-  .shell{display:grid;grid-template-columns:200px minmax(0,1fr);gap:28px;align-items:start}
-  .side{position:sticky;top:88px;margin:0;display:flex;flex-direction:column;gap:20px}
-  .tabs{flex-direction:column;border:0;gap:4px}
-  .tabs button{flex:none;justify-content:flex-start;padding:12px 14px;border:0;border-radius:10px;margin:0;font-size:14px}
-  .tabs button:hover{background:var(--card2)}.tabs .on{background:var(--card);box-shadow:inset 3px 0 0 var(--primary),var(--shadow)}
-  .sideinfo{display:block;padding:0 4px}.sideinfo .sect{margin:0 0 6px}.sideinfo .sect::after{display:none}.sideinfo b{font:600 13px ui-monospace,Consolas,monospace;word-break:break-all}
+  .shell{padding-left:76px}
+  .side{top:0;right:auto;width:76px;flex-direction:column;align-items:center;border-top:0;border-right:1px solid var(--border);padding:14px 0}
+  .brand{display:flex;margin:0 0 20px;padding:0;background:none;border:0;cursor:pointer}.tabs{flex:none;flex-direction:column;gap:6px;width:100%}.tabs button{flex:none;width:100%}
+  .fab{bottom:24px}#toast{bottom:28px}
+  .logview{max-height:none;height:calc(100vh - 330px);min-height:320px}
 }
-@media (min-width:1000px){.cols{grid-template-columns:minmax(330px,5fr) minmax(0,7fr);gap:0}.cols>.pane:first-child{padding-right:26px}.cols>.pane+.pane{padding-left:26px;border-left:1px solid var(--line)}}
-@media (min-width:1200px){
-  .bmain,.bthead{display:grid;grid-template-columns:minmax(140px,1.1fr) 92px minmax(140px,1.4fr) minmax(170px,1.6fr) minmax(140px,1.4fr) 150px 22px;gap:0 14px;align-items:center}
-  .bthead{padding:0 16px 2px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--sub)}
-}
-@media (min-width:760px){.logview{max-height:none;height:calc(100vh - 300px);min-height:340px;margin:0}}
-@media (max-width:759px){.bar{padding:10px 14px}.broker{display:none}.stat{min-width:0;flex:1 1 40%}.tact{width:100%}.tact .btn{flex:1}.gcards{grid-template-columns:1fr}.bcards{grid-template-columns:1fr}}
+@media (min-width:1000px){.cols{grid-template-columns:minmax(330px,5fr) minmax(0,7fr);gap:0}.cols>.pane:first-child{padding-right:28px}.cols>.pane+.pane{padding-left:28px;border-left:1px solid var(--border)}}
+@media (min-width:1200px){.bmain,.bthead{display:grid;grid-template-columns:minmax(120px,1fr) 96px minmax(110px,1fr) minmax(262px,2fr) minmax(120px,1.1fr) 150px 22px;gap:0 14px;align-items:center}}
+@media (max-width:759px){main.wide{padding:20px 16px 88px}.broker{display:none}.kpis{flex-wrap:wrap}.kpi{flex:1 1 40%}.kpi+.kpi{border-left:0}.kpi:nth-child(even){border-left:1px solid var(--border)}.kpi:nth-child(n+3){border-top:1px solid var(--border)}.kpi.lead{flex:1 1 40%}.hact{width:100%}.hact .btn{flex:1}.gcards{grid-template-columns:1fr}
+  .trh{display:none}.tile{grid-template-columns:1fr auto;grid-template-areas:"n s" "i a" "m m";gap:4px 10px;padding:10px 12px}.tile .tname{grid-area:n}.tile .tip{grid-area:i}.tile .pill{grid-area:s;justify-self:end}.tile .tmo{grid-area:m}.tile .trow{grid-area:a;justify-self:end}}
 </style>
 </head>
 <body>
@@ -132,7 +147,8 @@ const h=(tag,attrs,...kids)=>{const e=document.createElement(tag);
   for(const c of kids.flat())if(c!=null&&c!==false)e.append(c.nodeType?c:String(c));return e};
 const uid=()=>Math.random().toString(36).slice(2,10);
 const rid=()=>Array.from(crypto.getRandomValues(new Uint8Array(10)),b=>'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[b%62]).join('');
-let tt;const toast=m=>{log('ui.toast',{text:m});const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,Math.max(2500,m.length*70))};
+let tt;const TL=[];   // what the app said lately: a message goes away in seconds, the list under the groups keeps it
+const toast=m=>{log('ui.toast',{text:m});TL.unshift({at:Date.now(),m});TL.length=Math.min(TL.length,8);drawRecent();const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,Math.max(2500,m.length*70))};
 const COL={primary:'#f2d740',secondary:'#3dc2ff',tertiary:'#5260ff',success:'#2dd36f',warning:'#ffc409',danger:'#eb445a',medium:'#92949c'};
 const COLS=Object.keys(COL).map(k=>[k,k[0].toUpperCase()+k.slice(1)]);
 const fill=c=>{const k=COL[c]?c:'primary';return `background:${COL[k]};color:${k==='primary'||k==='warning'?'#0c0e0f':'#fff'}`};   // white text is unreadable on the two yellows
@@ -550,11 +566,28 @@ function card(p,i,vis){
       {label:'Delete',danger:1,fn:()=>{if(confirm(`Delete "${p.name}"?`)){log('ui.panel',{action:'delete',name:p.name,id:p.id});db.panels=db.panels.filter(x=>x!==p);db.panels.forEach(g=>{if(g.members)g.members=g.members.filter(id=>id!==p.id)});save();render()}}}]),
     p.hideName?null:h('div',{class:'pname'},p.name),PT[p.type].body(p))}
 const add=()=>go({n:'pick'});
-const tabs=cur=>h('aside',{class:'side'},h('nav',{class:'tabs'},[['home','Buttons','▶'],['status','Status','◉'],['logs','Log','☰']].map(([n,l,i])=>
-  h('button',{type:'button',class:n===cur?'on':'','aria-current':n===cur?'page':null,onclick:()=>{if(n!==cur){route={n};render()}}},h('span',{class:'ti','aria-hidden':'true'},i),l))),h('div',{id:'sideinfo',class:'sideinfo'}));
-const shell=(cur,...kids)=>h('main',{class:'wide'},h('div',{class:'shell'},tabs(cur),h('div',{class:'content'},kids)));   // a column of tabs on the left and the page on the right; on a narrow window the tabs go on top
-function drawSide(){const e=$('#sideinfo');if(!e||!db.conn)return;
-  e.replaceChildren(h('div',{class:'sect'},'Broker'),h('b',{},`${db.conn.host}:${db.conn.port}`),h('small',{class:'help'},sys.clients?`${sys.clients} clients${sys.version?' · '+sys.version.replace('mosquitto version ','mosquitto '):''}`:status==='connected'?'':'not connected'))}
+const ICONS={home:'<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  status:'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  logs:'<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+  conn:'<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'};
+const ic=(n,sz=18)=>{const e=h('span',{class:'ti','aria-hidden':'true'});e.innerHTML=`<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ICONS[n]}</svg>`;return e};   // one set of outline icons, one stroke
+const goto=n=>{if(route.n!==n){route={n};render()}};
+// the frame: a rail with the mark of the product and the three screens (the bottom of the window on a phone), and the page to its right. A selected screen has a line under its name
+const tabs=cur=>h('aside',{class:'side'},
+  h('button',{type:'button',class:'brand','aria-label':'MQTT Panel: Buttons',title:'MQTT Panel',onclick:()=>goto('home')},h('span',{class:'logo','aria-hidden':'true'})),
+  h('nav',{class:'tabs','aria-label':'Screens'},[['home','Buttons'],['status','Status'],['logs','Log']].map(([n,l])=>
+    h('button',{type:'button',class:n===cur?'on':'','aria-current':n===cur?'page':null,title:l,onclick:()=>goto(n)},ic(n),h('span',{class:'tl'},l)))));
+const shell=(cur,...kids)=>h('main',{class:'wide'},h('div',{class:'shell'},tabs(cur),h('div',{class:'content'},kids)));
+const brokerInfo=()=>sys.clients?`${sys.clients} clients${sys.version?' · '+sys.version.replace('mosquitto version ','mosquitto '):''}`:status==='connected'?'The broker has not said how many clients are connected':'';
+// the title of a screen: the product and the broker it is scoped to (with the connection, one click to switch it off or on), the name of the screen, one line about what the data says, and the actions
+const head=(title,sub,...acts)=>h('div',{class:'head'},
+  h('div',{},
+    h('div',{class:'crumb'},h('span',{},'MQTT Panel'),db.conn?h('span',{class:'mono'},`${db.conn.host}:${db.conn.port}`):null,
+      db.conn?h('button',{id:'st',type:'button',class:'st '+status,onclick:chipClick},status):null,db.conn?h('span',{id:'sideinfo'},brokerInfo()):null,
+      db.conn?h('button',{type:'button',class:'cfg',title:'Connection','aria-label':'Connection',onclick:()=>go({n:'conn'})},ic('conn',16)):null),
+    h('h1',{},title),sub==null?null:sub.nodeType?sub:h('p',{class:'sub'},sub)),
+  h('div',{class:'hact'},acts));
+function drawSide(){const e=$('#sideinfo');if(e)e.textContent=brokerInfo()}
 function ask(){   // the manual: an empty message on <name>/status/get (18.6.7) makes a board repeat its state, no answer within 2 s means it is probably offline; on <name>/network/ip/get (18.6.4) it answers its IP on <name>/network/ip. Never <name>/network/ip/set: that changes the IP
   if(!client?.connected)return toast('Not connected');
   const t=Date.now();log('ui.refresh',{boards:[...boards.keys()].join(',')||null});boards.forEach(b=>{b.asked=t;pub(b.id+'/status/get','',{},'refresh');pub(b.id+'/network/ip/get','',{},'refresh')});
@@ -635,7 +668,7 @@ async function drawLog(){
   const box=$('#logview');if(!box||drawingLog)return;drawingLog=true;
   try{const lines=(await mergedTail(600)).filter(l=>logAll||isKey(l)).slice(-250),atEnd=box.scrollHeight-box.scrollTop-box.clientHeight<40;
     box.replaceChildren(...(lines.length?lines.flatMap(l=>[lineEl(l),'\n']):['(nothing yet)']));if(atEnd)box.scrollTop=box.scrollHeight;
-    $('#logfile').textContent=INFO?.logPath?`Written to ${INFO.logPath}`:'Only in this page (no Windows program behind it)';
+    const lf=$('#logfile');lf.textContent=INFO?.logPath?`Written to ${INFO.logPath}`:'Only in this page (no Windows program behind it)';lf.title=lf.textContent;
     $('#lk').classList.toggle('gray',logAll);$('#la').classList.toggle('gray',!logAll)}finally{drawingLog=false}}
 setInterval(()=>{if(route.n==='logs')drawLog()},2000);
 function clearHeld(){   // deleting a kept message means publishing an empty one, and the broker also hands that to every board listening: for start, restart, teachin an empty message IS the command, so only for boards that are not connected
@@ -668,7 +701,7 @@ function bcard(b,open,on=groupsOn()){
           bad?chip('event handler: '+e.state,'bad'):null),
         h('div',{class:'mcs'},mcs),
         h('div',{class:'bev'+(bad?' bad':'')},e?(e['active event']&&e['active event']!=='none'?e['active event']:'no active event'):''),
-        h('div',{class:'bact'},h('button',{class:'btn'+(gn?' locked':''),...lk(gn&&`${gn} is running: stop the group first`),onclick:()=>motorTest(b,true)},'▶ Spin'),h('button',{class:'btn gray',onclick:()=>motorTest(b,false)},'■ Stop')),
+        h('div',{class:'bact'},h('button',{class:'btn alt'+(gn?' locked':''),...lk(gn&&`${gn} is running: stop the group first`),onclick:()=>motorTest(b,true)},'▶ Spin'),h('button',{class:'btn alt',onclick:()=>motorTest(b,false)},'■ Stop')),
         h('span',{class:'chev','aria-hidden':'true'},'▸')),
       h('div',{class:'bdet'},
         h('div',{class:'chips'},
@@ -683,15 +716,14 @@ function bcard(b,open,on=groupsOn()){
 const drawn={home:'',status:''};   // what each tab shows now: it is rebuilt only when it would look different, so a button is not swapped under a finger by every message of a board
 function draw(){
   const body=$('#stbody');if(!body||!db.conn)return;
-  const all=[...boards.values()].sort(byId),list=all.filter(b=>b.live),stored=all.filter(b=>!b.live),gon=groupsOn(),open=new Set([...body.querySelectorAll('details.evt[open]')].map(d=>d.dataset.id));
+  const all=[...boards.values()].sort(byId),list=all.filter(b=>b.live),stored=all.filter(b=>!b.live),gon=groupsOn(),open=new Set([...body.querySelectorAll('details.evt[open]')].map(d=>d.dataset.id)),
+    silent=list.filter(b=>b.asked&&Date.now()-b.asked>2500&&(b.heard||0)<b.asked).map(b=>b.id),
+    fine=!list.length?'No board has answered yet.':`${nBoards(list.length)} answered${silent.length?`. ${silent.join(', ')} ${silent.length>1?'have':'has'} not answered since Refresh`:''}.`;
   const nodes=[
-    h('section',{class:'panel box'},h('div',{class:'row2'},h('b',{},`${db.conn.host}:${db.conn.port}`),h('span',{class:'st '+status},status)),
-      h('small',{class:'help'},sys.clients?`${sys.clients} clients connected to the broker${sys.version?' · '+sys.version:''}`:'The broker has not said how many clients are connected')),
+    head('Status',fine,h('button',{class:'btn',onclick:ask},'Refresh'),h('button',{class:'btn gray',onclick:diagnose},'Diagnose'),h('button',{class:'btn gray',onclick:copyReport},'Copy report')),
     status!=='connected'&&h('div',{class:'err'},'Not connected.'+(all.length?' Showing the last data received.':'')),
     denied.length&&h('div',{class:'err'},'The broker does not let this app listen to: '+denied.join(', ')),
     held.size&&h('div',{class:'err'},h('b',{},'The broker keeps these commands and hands them to a board every time it connects: '),[...held].map(([t,m])=>`${t} ← ${m}`).join(' · '),' ',h('button',{class:'btn sm',onclick:clearHeld},'Clear them')),
-    h('div',{class:'row2'},h('b',{},`Devices (${list.length})`),
-      h('div',{class:'btns2'},h('button',{class:'btn sm',onclick:ask},'Refresh'),h('button',{class:'btn sm',onclick:diagnose},'Diagnose'),h('button',{class:'btn sm gray',onclick:copyReport},'Copy report'))),
     ...(list.length?[h('div',{class:'bthead'},['Board','State','Mode','Motors','Last event','',''].map(x=>h('span',{},x))),h('div',{class:'bcards'},list.map(b=>bcard(b,open,gon)))]:[h('div',{class:'empty'},h('p',{},'No board has answered yet'),h('small',{class:'help'},'A board is listed here only after it publishes on <name>/status or answers Refresh. If nothing shows up, no board is talking to this broker, or this app is not allowed to listen.'))])
   ].filter(Boolean);
   const html=nodes.map(n=>n.outerHTML).join('');if(html!==drawn.status){drawn.status=html;body.replaceChildren(...nodes)}
@@ -699,27 +731,26 @@ function draw(){
   $('#storedlist').textContent=stored.map(b=>[b.id,b.ip||'IP unknown',b.state&&'last state: '+b.state].filter(Boolean).join(' · ')).join('\n');
   $('#feed').textContent=feedText()}
 // the Buttons tab: the numbers of the boards, a Spin and a Stop for every board that answered (normal speed, forward) and for all of them, and the flow groups with their Start and Stop. Nothing to create
-const stat=(n,label,cls)=>h('div',{class:'stat'+(cls?' '+cls:'')},h('b',{},n),h('span',{},label));
+const kpi=(label,val,o={})=>h('div',{class:'kpi'+(o.cls?' '+o.cls:'')},h('span',{},label),h('b',{},val,o.of!=null?h('small',{},` / ${o.of}`):null));
 const mdots=b=>{const mo=b.motors,ty=mo?.config?.type;if(!ty||ty.every(t=>!t||t==='disabled'))return null;   // one square per motor in use: red when it reports a fault, yellow while it turns
   return h('div',{class:'mdots'},ty.map((t,i)=>{if(!t||t==='disabled')return null;const st=mo.info?.status?.[i],sp=Math.abs(+mo.speedrel?.[i]||0);
     return h('span',{class:'md'+(st&&st!=='ok'&&st!=='n/c'?' bad':turning(b)&&sp>=1?' run':''),title:`motor ${i+1}: ${t}, ${st??'?'}, speed ${sp}%`},i+1)}))};
 const lk=why=>why?{'aria-disabled':'true',title:why}:{};   // a locked button looks shut and still answers a press, with the reason
-const tile=(b,gn)=>h('section',{class:'tile'+(turning(b)?' run':'')},
-  h('div',{class:'thead'},h('b',{class:'tname'},b.id),h('span',{class:'pill '+sCls(b)},sTxt(b))),
-  h('div',{class:'tsub'},h('span',{},b.ip||'IP unknown'),turning(b)?h('span',{class:'chip live'},'turning'):null,b.manualmode==='true'?h('span',{class:'chip warn'},'manual mode'):null),
-  mdots(b),
-  h('div',{class:'trow'},h('button',{class:'btn alt'+(gn?' locked':''),...lk(gn&&`${gn} is running: stop the group first`),onclick:()=>tileAct(b,true)},'▶ Spin'),h('button',{class:'btn soft',onclick:()=>tileAct(b,false)},'■ Stop')));
+const tile=(b,gn)=>h('section',{class:'tile'+(turning(b)?' run':'')},   // a row of the Motor test table: board, IP, state, motors, Spin and Stop
+  h('b',{class:'tname'},b.id),h('span',{class:'tip'},b.ip||'IP unknown'),h('span',{class:'pill '+sCls(b)},sTxt(b)),
+  h('div',{class:'tmo'},mdots(b),turning(b)?h('span',{class:'chip live'},'turning'):null,b.manualmode==='true'&&!isHeld(b)&&!turning(b)?h('span',{class:'chip warn'},'manual mode'):null),
+  h('div',{class:'trow'},h('button',{class:'btn alt'+(gn?' locked':''),...lk(gn&&`${gn} is running: stop the group first`),onclick:()=>tileAct(b,true)},'▶ Spin'),h('button',{class:'btn alt',onclick:()=>tileAct(b,false)},'■ Stop')));
 function tileAct(b,on){log('ui.press',{name:b.id,mode:'board',action:on?'spin':'stop',connected:!!client?.connected});spin(b.id,on,'all','button '+b.id)}
 const gtile=g=>{const n=g.live.length,run=g.live.filter(logicOn).length,hd=g.live.filter(isHeld).length,man=g.live.filter(b=>b.manualmode==='true').map(b=>b.id),t=GT.get(gkey(g))??'group'+g.id,
     hand=g.live.filter(byHand).map(b=>b.id).sort((x,y)=>x.localeCompare(y,undefined,{numeric:true})),why=hand.length&&`${hand.join(', ')} ${hand.length>1?'are':'is'} turning by hand: stop ${hand.length>1?'them':'it'} first`;
   return h('section',{class:'tile gtile'},
     h('div',{class:'thead'},h('div',{},h('b',{class:'tname'},g.name),h('small',{class:'tcount'},nBoards(n))),h('span',{class:'pill '+(run===n?'running':run||hd?'online':'')},`${run} of ${n} running`+(hd?` · ${hd} held`:''))),
-    h('div',{class:'chips'},[...g.live].sort(byId).map(b=>{const nm=ownName(b,g),odd=nm!==g.name;return h('span',{class:'chip'+(b.state==='running'?logicOn(b)?' good':' warn':''),title:odd?`this board calls its group ${nm}`:null},b.id+(odd?` (${nm})`:''))})),
-    h('div',{class:'trow1'},h('button',{class:'btn'+(why?' locked':''),title:'The start command to the whole group: its boards run their own logic (MCP PLAY)',...lk(why),onclick:()=>startGroup(g)},'▶ Start'),
-      h('button',{class:'btn stop',title:'Stops the rollers of the group at once (speed 0 in manual mode) and sends the stop command',onclick:()=>stopGroup(g)},'■ Stop')),
+    h('div',{class:'chips'},[...g.live].sort(byId).map(b=>{const nm=ownName(b,g),odd=nm!==g.name;return h('span',{class:'chip'+(b.state==='running'?logicOn(b)?' good':' warn':''),title:odd?`this board calls its group ${nm}`:null},b.id+(odd?` (${nm})`:''))})),   // the line of boards of the group, each tinted by what it says
+    h('div',{class:'trow1'},h('button',{class:'btn alt'+(why?' locked':''),title:'The start command to the whole group: its boards run their own logic (MCP PLAY)',...lk(why),onclick:()=>startGroup(g)},'▶ Start'),
+      h('button',{class:'btn neg',title:'Stops the rollers of the group at once (speed 0 in manual mode) and sends the stop command',onclick:()=>stopGroup(g)},'■ Stop')),
     man.length?h('small',{class:'warnline',title:man.join(', ')},`Manual mode on in ${man.length} of ${n} boards: Start gives them back to their logic.`):null,
     h('small',{class:'topics'},`${t}/command/start · ${t}/command/stop`))};
-// the Buttons tab in two halves: MCP PLAY on the left (the flow groups: the boards run their own logic) and Motor test on the right (the rollers turned by hand, board by board). On top the numbers, and Start all and Stop all
+// the Buttons tab in two halves: MCP PLAY on the left (the flow groups: the boards run their own logic) and Motor test on the right (the rollers turned by hand, board by board). On top the title, what the boards say in one line, Start all and Stop all, and the numbers
 function drawHome(){
   const box=$('#boardbtns');if(!box||!db.conn)return;
   const live=[...boards.values()].filter(b=>b.live),list=live.filter(b=>b.motors?.config?.type).sort(byId),G=flowGroups(),on=groupsOn(),
@@ -727,33 +758,35 @@ function drawHome(){
     hand=[...new Set(G.flatMap(g=>g.live).filter(byHand).map(b=>b.id))].sort((x,y)=>x.localeCompare(y,undefined,{numeric:true})),   // rollers turned by hand in a flow group: the groups are not started meanwhile
     shut=[...new Set(list.map(b=>runningGroup(b,on)).filter(Boolean))],   // the flow groups that are on and keep their boards from being turned by hand
     allWhy=hand.length&&`${hand.join(', ')} ${hand.length>1?'are':'is'} turning by hand: stop ${hand.length>1?'them':'it'} first`,
-    allShut=list.length>0&&list.every(b=>runningGroup(b,on));   // no board can be turned by hand
+    allShut=list.length>0&&list.every(b=>runningGroup(b,on)),   // no board can be turned by hand
+    fine=!live.length?'No board has answered yet.':hand.length?`${hand.join(', ')} ${hand.length>1?'are':'is'} turning by hand. Stop ${hand.length>1?'them':'it'} before starting a group.`
+      :`${run} of ${live.length} boards run their own logic${hd?`, ${hd} held in manual mode`:''}${turn?`, ${turn} turning`:''}.`;
   const nodes=[
-    h('div',{class:'toolbar'},
-      h('div',{class:'stats'},stat(live.length,'Boards'),stat(run,'Running',run?'ok':''),stat(turn,'Turning',turn?'run':''),stat(hd,'Held',hd?'warn':'')),
-      h('div',{class:'tact'},h('button',{class:'btn'+(allWhy?' locked':''),title:'The start command to every flow group: their boards run their own logic (MCP PLAY)',...lk(allWhy),onclick:()=>startAll()},'▶ Start all'),
-        h('button',{class:'btn stop',title:'Stops every board (speed 0 in manual mode) and sends the stop command to every flow group',onclick:()=>stopAll()},'■ Stop all'))),
+    head('Buttons',fine,h('button',{class:'btn'+(allWhy?' locked':''),title:'The start command to every flow group: their boards run their own logic (MCP PLAY)',...lk(allWhy),onclick:()=>startAll()},'▶ Start all'),
+      h('button',{class:'btn stop',title:'Stops every board (speed 0 in manual mode) and sends the stop command to every flow group',onclick:()=>stopAll()},'■ Stop all')),
+    h('div',{class:'kpis'},kpi('Running',run,{cls:'lead'+(run?' ok':''),of:live.length}),kpi('Turning',turn,{cls:turn?'run':''}),kpi('Held',hd,{cls:hd?'warn':''})),
     h('div',{class:'cols'},
       h('section',{class:'pane'},
         h('div',{class:'phead'},h('h2',{class:'ptitle'},'MCP PLAY'),h('span',{class:'psub'},`Flow groups (${G.length}): the boards run their own logic`)),
-        hand.length?h('div',{class:'lockline'},`${hand.join(', ')} ${hand.length>1?'are':'is'} turning by hand: stop ${hand.length>1?'them':'it'} before starting a group.`):null,
-        G.length?h('div',{class:'gcards'},G.map(gtile)):h('small',{class:'help'},'No flow group yet: every board says its groups on <board>/group.'),
-        G.length?h('small',{class:'help'},'Start gives the start command to the whole group: its boards run their own logic (MCP PLAY). Stop holds the rollers at speed 0 and sends the stop command.'):null),
+        G.length?h('div',{class:'gcards'},G.map(gtile)):h('div',{class:'empty'},h('p',{},'No flow group yet'),h('small',{class:'help'},'Every board says its groups on <board>/group.')),
+        G.length?h('small',{class:'help'},'Start gives the start command to the whole group: its boards run their own logic (MCP PLAY). Stop holds the rollers at speed 0 and sends the stop command.'):null,
+        h('div',{class:'recent',id:'recent',hidden:true})),
       h('section',{class:'pane'},
         h('div',{class:'phead'},h('h2',{class:'ptitle'},'Motor test'),h('span',{class:'psub'},`Boards (${list.length}): the rollers by hand`),h('span',{class:'sp'}),
           h('button',{class:'btn alt sm'+(allShut?' locked':''),title:allShut?'Every board is in a flow group that is on: stop it first':'Turns the rollers of every board at normal speed, by hand (manual mode)',...(allShut?{'aria-disabled':'true'}:{}),onclick:()=>spinAll()},'▶ Spin all rollers')),
         shut.length?h('div',{class:'lockline'},`${shut.join(', ')} ${shut.length>1?'are':'is'} running: its boards cannot be turned by hand. Stop ${shut.length>1?'them':'it'} first.`):null,
-        list.length?h('div',{class:'tiles'},list.map(b=>tile(b,runningGroup(b,on)))):h('div',{class:'empty'},h('p',{},status==='connected'?'Waiting for the boards…':'Not connected'),h('small',{class:'help'},'Every board that answers gets its own Spin and Stop here. If none shows up, press Refresh in the Status tab.')),
+        list.length?h('div',{class:'tiles'},h('div',{class:'trh'},['Board','IP','State','Motors',''].map(x=>h('span',{},x))),list.map(b=>tile(b,runningGroup(b,on)))):h('div',{class:'empty'},h('p',{},status==='connected'?'Waiting for the boards…':'Not connected'),h('small',{class:'help'},'Every board that answers gets its own Spin and Stop here. If none shows up, press Refresh in the Status tab.')),
         list.length?h('small',{class:'help'},'Spin and Stop turn the rollers by hand. A board whose logic is running stays in manual mode after its Stop, so the logic cannot move it again; Start gives it back.'):null))].filter(Boolean);
-  const html=nodes.map(n=>n.outerHTML).join('');if(html!==drawn.home){drawn.home=html;box.replaceChildren(...nodes)}}
+  const html=nodes.map(n=>n.outerHTML).join('');if(html!==drawn.home){drawn.home=html;box.replaceChildren(...nodes)}
+  drawRecent()}
+function drawRecent(){const e=$('#recent');if(!e)return;   // the messages of the app, kept for a while: filled on its own, so the buttons are not rebuilt when a message comes
+  e.hidden=!TL.length;e.replaceChildren(h('span',{class:'dh'},'Last messages'),...TL.slice(0,6).map(x=>h('div',{class:'rl'},h('span',{class:'rt'},clock(x.at)),h('span',{},x.m))))}
 const chipClick=()=>{const dis=client&&status==='connected';log('ui.chip',{status,action:dis?'disconnect':'connect'});if(dis){off=true;hangup()}else connect()};   // while it is trying again a click tries again, it does not switch it off
-const dashBar=()=>{const chip=db.conn&&h('button',{id:'st',class:'st '+status,onclick:chipClick},status);
-  return bar('MQTT Panel',{back:false,right:[db.conn&&h('span',{class:'broker'},`${db.conn.host}:${db.conn.port}`),chip,menu([{label:'Connection',fn:()=>go({n:'conn'})}])]})};
 const views={
 home(){
   if(db.conn&&!client&&!off)connect();
-  return h('div',{},dashBar(),
-    shell('home',!db.conn?h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn',onclick:()=>go({n:'conn'})},'Setup a connection'))
+  return h('div',{},
+    shell('home',!db.conn?h('div',{},head('Buttons',null),h('div',{class:'empty'},h('p',{},'Connect to your MQTT broker first'),h('button',{class:'btn',onclick:()=>go({n:'conn'})},'Setup a connection')))
       :h('div',{},h('div',{id:'boardbtns'}),
         db.panels.length?h('div',{class:'sect'},'My buttons'):null,
         db.panels.length?h('div',{class:'panels'},visible().map((p,i,vis)=>card(p,i,vis)))
@@ -761,19 +794,16 @@ home(){
       db.conn&&db.panels.length?h('button',{class:'btn fab','aria-label':'Add',onclick:add},'+'):null))},
 status(){
   if(db.conn&&!client&&!off)connect();
-  return h('div',{},dashBar(),
-    shell('status',h('div',{id:'stbody'}),
+  return h('div',{},
+    shell('status',db.conn?null:head('Status','Connect to your MQTT broker first.'),h('div',{id:'stbody'}),
       h('details',{class:'feed',id:'stored',hidden:true},h('summary',{id:'storedsum'}),h('pre',{id:'storedlist'})),
       h('details',{class:'feed'},h('summary',{},'Messages received'),h('pre',{id:'feed'}))))},
 logs(){
   if(db.conn&&!client&&!off)connect();
-  return h('div',{},dashBar(),
+  return h('div',{},
     shell('logs',
-      h('small',{class:'help'},'Everything the app and the program do is written down here, in order, so Claude can read what happened. Add a note whenever you see something with your own eyes: it is stamped with the time.'),
-      h('div',{class:'logbar'},
-        h('div',{class:'seg'},h('button',{id:'lk',class:'btn',onclick:()=>{logAll=false;drawLog()}},'Key events'),h('button',{id:'la',class:'btn gray',onclick:()=>{logAll=true;drawLog()}},'Everything')),
-        h('small',{class:'help',id:'logfile'}),h('span',{class:'sp'}),
-        h('button',{class:'btn',onclick:copyExport},'Copy for Claude'),h('button',{class:'btn gray',onclick:downloadExport},'Download')),
+      head('Log',h('p',{class:'sub',id:'logfile'}),h('button',{class:'btn',onclick:copyExport},'Copy for Claude'),h('button',{class:'btn gray',onclick:downloadExport},'Download')),
+      h('div',{class:'logtabs'},h('button',{id:'lk',class:'btn',onclick:()=>{logAll=false;drawLog()}},'Key events'),h('button',{id:'la',class:'btn gray',onclick:()=>{logAll=true;drawLog()}},'Everything')),
       h('div',{class:'lognote'},h('input',{id:'note',placeholder:'What did you see? e.g. roller stopped',onkeydown:e=>{if(e.key==='Enter')addNote()}}),h('button',{class:'btn sm',onclick:addNote},'Add note'),
         QUICK.map(q=>h('button',{class:'btn sm gray',onclick:()=>addNote(q)},q))),
       h('pre',{id:'logview',class:'logview'}),

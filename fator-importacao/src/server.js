@@ -1,5 +1,6 @@
 import { createServer } from 'node:http'
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { join, dirname, basename, isAbsolute } from 'node:path'
 import { spawn } from 'node:child_process'
 import { consolidar, varrer, FAIXA } from './consolidar.js'
@@ -152,16 +153,50 @@ const server = createServer(async (req, res) => {
   }
 })
 
-const PORTA = Number(process.env.PORT) || 7317
-server.listen(PORTA, '127.0.0.1', () => {
-  const url = `http://127.0.0.1:${PORTA}/`
-  console.log(`Fator de importação rodando em ${url}`)
-  console.log(`Configuração: ${CONFIG}`)
-  if (!process.argv.includes('--no-open')) {
-    const cmd = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
-      : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]]
+const navegadorPadrao = (url) => spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref()
+
+// Janela própria: sem barra de endereço, sem abas, ícone próprio na barra de
+// tarefas. Tem que parecer aplicativo, não site aberto no navegador.
+function abrirApp(url) {
+  if (process.argv.includes('--no-open')) return
+  if (process.platform !== 'win32') {
+    const cmd = process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]]
     try { spawn(cmd[0], cmd[1], { detached: true, stdio: 'ignore' }).unref() } catch { /* abre na mão */ }
+    return
   }
+  const exe = [
+    [process.env['PROGRAMFILES(X86)'], 'Microsoft\\Edge\\Application\\msedge.exe'],
+    [process.env.PROGRAMFILES, 'Microsoft\\Edge\\Application\\msedge.exe'],
+    [process.env.PROGRAMFILES, 'Google\\Chrome\\Application\\chrome.exe'],
+    [process.env['PROGRAMFILES(X86)'], 'Google\\Chrome\\Application\\chrome.exe'],
+  ].map(([base, rel]) => (base ? join(base, rel) : '')).find((p) => p && existsSync(p))
+
+  if (!exe) return navegadorPadrao(url) // sem Edge nem Chrome: pelo menos abre
+
+  // Perfil só do app, fora do OneDrive: não mistura com a sessão do usuário e
+  // garante uma janela de verdade em vez de uma aba na janela já aberta.
+  const perfil = join(process.env.LOCALAPPDATA || APP_DIR, 'FatorImportacao', 'janela')
+  const janela = spawn(exe, [`--app=${url}`, '--window-size=1180,920',
+    `--user-data-dir=${perfil}`, '--no-first-run', '--no-default-browser-check'], { stdio: 'ignore' })
+  janela.on('error', () => navegadorPadrao(url))
+  // Fechou a janela, fechou o app: nada de processo órfão segurando a planilha.
+  janela.on('exit', () => process.exit(0))
+}
+
+const PORTA = Number(process.env.PORT) || 7317
+const URL_APP = `http://127.0.0.1:${PORTA}/`
+
+// Segunda execução não sobe outro servidor: traz a janela da que já está aberta.
+server.on('error', (e) => {
+  if (e.code !== 'EADDRINUSE') throw e
+  console.log('O app já está aberto; abrindo a janela da instância existente.')
+  abrirApp(URL_APP)
+})
+
+server.listen(PORTA, '127.0.0.1', () => {
+  console.log(`Fator de importação em ${URL_APP}`)
+  console.log(`Configuração: ${CONFIG}`)
+  abrirApp(URL_APP)
 })
 
 export { server }

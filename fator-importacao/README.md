@@ -17,10 +17,13 @@ npm start                  # precisa de Node 22+
 dist\fator-importacao.exe  # executável único, pasta portátil, sem instalação
 ```
 
-Abre o navegador em `http://127.0.0.1:7317`. Uma tela só: caminhos no topo,
-meses encontrados com quantos pedidos são novos, e dois botões —
-**Conferir sem gravar** (roda tudo e mostra o resultado sem tocar na planilha)
-e **Consolidar N pedidos** (grava).
+Abre em **janela própria**: sem barra de endereço, sem abas, ícone próprio na
+barra de tarefas, e fechar a janela encerra o app. Rodar o `.exe` de novo com o
+app já aberto só traz a janela existente para a frente, não sobe um segundo.
+
+Uma tela só: caminhos no topo, meses encontrados com quantos pedidos são novos,
+e dois botões — **Conferir sem gravar** (roda tudo e mostra o resultado sem
+tocar na planilha) e **Consolidar N pedidos** (grava).
 
 Antes de gravar, a planilha é copiada para `ConsolidadoPath.bak.xlsx`.
 
@@ -56,6 +59,26 @@ npm run build    # bun build --compile --target=bun-windows-x64 -> dist\fator-im
 Precisa do [Bun](https://bun.sh) na máquina de build, não na de uso. O `.exe` é
 autocontido: não precisa de Node, de instalação nem de privilégio de administrador.
 A tela é embutida no binário por `scripts/ui.mjs`.
+
+Compilando **no próprio Windows** dá para acrescentar
+`--windows-icon=<arquivo>.ico`, que põe o ícone no arquivo `.exe` em si. Esse
+parâmetro não funciona em compilação cruzada a partir do Linux, então no binário
+publicado aqui o ícone aparece só na janela do app (vem do favicon da tela), não
+no arquivo.
+
+## A casca é web, a janela não é um navegador
+
+A tela é HTML servido por um servidor HTTP que só escuta em `127.0.0.1` — nada
+sai da máquina. O app abre essa tela em modo aplicativo (`--app`) no Edge ou no
+Chrome que já existem no Windows corporativo, com um perfil separado em
+`%LOCALAPPDATA%\FatorImportacao\janela`. O resultado é uma janela comum, sem
+barra de endereço e sem abas, que não se mistura com a sessão de navegação do
+usuário.
+
+Foi essa a escolha em vez de Electron ou Tauri: ambos triplicariam o tamanho do
+binário e, no caso do Tauri, dependeriam do WebView2 instalado. Se nem Edge nem
+Chrome forem encontrados, o app cai para o navegador padrão e aí sim aparece
+como uma aba comum.
 
 ## Decisões que não são óbvias
 

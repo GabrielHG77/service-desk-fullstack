@@ -479,6 +479,10 @@ async function executar(opts) {
   }
 }
 
+// Sinal de vida: fechar a janela encerra o app do outro lado.
+setInterval(() => { fetch('/api/vivo').catch(() => {}) }, 20000)
+fetch('/api/vivo').catch(() => {})
+
 carregar(false).catch((e) => {
   document.getElementById('canvas').innerHTML = `<div class="card erro">${esc(e.message)}</div>`
 })

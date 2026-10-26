@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -37,6 +38,8 @@ var (
 	appDir     string
 	configPath string
 	raizFlag   string
+
+	ultimoPing atomic.Int64
 
 	mu        sync.Mutex // uma consolidação por vez: duas em paralelo corromperiam a planilha
 	historico []*Execucao
@@ -311,6 +314,12 @@ func handler() http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(html)
 	})
+	// Sinal de vida da janela, e marca que quem atende nesta porta somos nós.
+	mux.HandleFunc("GET /api/vivo", func(w http.ResponseWriter, r *http.Request) {
+		ultimoPing.Store(time.Now().Unix())
+		w.Header().Set("X-Fator-Importacao", "1")
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("GET /api/estado", func(w http.ResponseWriter, r *http.Request) {
 		escreverJSON(w, http.StatusOK, estado())
 	})
@@ -396,13 +405,67 @@ func open(url string) {
 			cmd := exec.Command(p, "--app="+url, "--window-size=1180,920",
 				"--user-data-dir="+perfil, "--no-first-run", "--no-default-browser-check")
 			if cmd.Start() == nil {
-				// Fechou a janela, fechou o app: nada de processo órfão.
-				go func() { _ = cmd.Wait(); os.Exit(0) }()
+				// Sem cmd.Wait() aqui: o Edge costuma repassar a janela para um
+				// processo já existente e sair em seguida, e encerrar o app nessa
+				// hora deixava a janela aberta contra um servidor morto.
 				return
 			}
 		}
 	}
 	_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+}
+
+// nossaInstancia diz se quem está na porta é outra cópia deste app, e não um
+// programa qualquer que pegou a porta antes.
+func nossaInstancia(porta int) bool {
+	c := http.Client{Timeout: 700 * time.Millisecond}
+	r, err := c.Get(fmt.Sprintf("http://127.0.0.1:%d/api/vivo", porta))
+	if err != nil {
+		return false
+	}
+	defer r.Body.Close()
+	return r.Header.Get("X-Fator-Importacao") == "1"
+}
+
+// escutar tenta a porta pedida e anda para a seguinte quando ela está ocupada
+// por outro programa. Abrir a janela numa porta que ninguém serve era o que
+// produzia a tela de "não foi possível acessar esta página".
+func escutar(base int) (ln net.Listener, porta int, jaAberto bool) {
+	for p := base; p < base+12; p++ {
+		if l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p)); err == nil {
+			return l, p, false
+		}
+		if nossaInstancia(p) {
+			return nil, p, true
+		}
+	}
+	return nil, 0, false
+}
+
+// vigiarJanela encerra o app quando a janela some. A página dá sinal de vida a
+// cada 20s; o Chrome afrouxa o timer de janela em segundo plano para um por
+// minuto, daí a folga de 90s.
+func vigiarJanela() {
+	ultimoPing.Store(time.Now().Unix())
+	for range time.Tick(15 * time.Second) {
+		if time.Since(time.Unix(ultimoPing.Load(), 0)) > 90*time.Second {
+			log.Printf("janela fechada, encerrando")
+			os.Exit(0)
+		}
+	}
+}
+
+// Compilado com -H=windowsgui não existe console: sem arquivo de log, uma falha
+// na subida não deixa rastro nenhum para o usuário.
+func logParaArquivo() {
+	if os.MkdirAll(filepath.Join(appDir, "logs"), 0o755) != nil {
+		return
+	}
+	f, err := os.OpenFile(filepath.Join(appDir, "logs", "app.log"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err == nil {
+		log.SetOutput(f)
+	}
 }
 
 func main() {
@@ -423,25 +486,28 @@ func main() {
 		configPath = filepath.Join(appDir, "config.json")
 	}
 
+	logParaArquivo()
 	carregarHistorico()
 
-	addr := fmt.Sprintf("127.0.0.1:%d", *porta)
-	url := "http://" + addr + "/"
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
+	ln, p, jaAberto := escutar(*porta)
+	url := fmt.Sprintf("http://127.0.0.1:%d/", p)
+	if jaAberto {
 		// Segunda execução não sobe outro servidor: traz a janela da que já está aberta.
-		log.Printf("o app já está aberto; abrindo a janela da instância existente")
+		log.Printf("o app já está aberto em %s; trazendo a janela", url)
 		if !*semJanela {
 			open(url)
-			select {} // o app encerra quando a janela fechar
 		}
 		return
 	}
+	if ln == nil {
+		log.Printf("nenhuma porta livre entre %d e %d", *porta, *porta+11)
+		return
+	}
 
-	log.Printf("Fator de importação em %s", url)
-	log.Printf("Configuração: %s", configPath)
+	log.Printf("Fator de importação em %s (configuração: %s)", url, configPath)
 	if !*semJanela {
 		open(url)
+		go vigiarJanela()
 	}
 	log.Fatal(http.Serve(ln, handler()))
 }

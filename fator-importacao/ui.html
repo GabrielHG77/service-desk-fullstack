@@ -5,109 +5,128 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fator de importação</title>
 <!-- A janela em modo app herda daqui o ícone da barra de tarefas. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Crect width='256' height='256' rx='48' fill='%231d5fbf'/%3E%3Cpath d='M128 48 L128 150 M86 110 L128 152 L170 110' fill='none' stroke='%23fff' stroke-width='22' stroke-linecap='round' stroke-linejoin='round'/%3E%3Crect x='52' y='184' width='152' height='26' rx='13' fill='%239fc0f0'/%3E%3Crect x='52' y='184' width='46' height='26' rx='13' fill='%234ade80'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Crect width='256' height='256' rx='48' fill='%23f2d740'/%3E%3Cpath d='M128 48 L128 150 M86 110 L128 152 L170 110' fill='none' stroke='%230c0e0f' stroke-width='22' stroke-linecap='round' stroke-linejoin='round'/%3E%3Crect x='52' y='184' width='152' height='26' rx='13' fill='%230c0e0f33'/%3E%3Crect x='52' y='184' width='46' height='26' rx='13' fill='%230c0e0f'/%3E%3C/svg%3E">
 <style>
 :root{
-  --ground:#f2f4f7; --surface:#fff; --raised:#eef0f3; --border:#e6e6e6; --rule:#f0f0f0; --control:#d4d4d4;
-  --text:#0a0a0a; --muted:#5f6368; --primary:#141414; --hue:#1d5fbf;
-  --negative:#c4242a; --pill-neg-bg:#ffedea; --pill-neg-ink:#831c1e;
+  /* Mesma paleta do mqtt-panel (index.html da raiz): dourado da marca, e os
+     três do semáforo já definidos lá. Claro e escuro acompanham o Windows. */
+  --primary:#f2d740; --ink:#0c0e0f; --secondary:#3dc2ff;
+  --ok:#2dd36f; --atencao:#ffc409; --ruim:#eb445a; --medium:#92949c;
+  --bg:#eceff2; --card:#fff; --card2:#f3f5f7; --fg:#16191c; --line:#dcdfe3; --sub:#5f666e;
+  --shadow:0 1px 2px #0000000d,0 8px 24px #00000010;
+  /* Fundo fraco de cada cor, para faixa e etiquetas. */
+  --ok-fraca:#2dd36f1f; --atencao-fraca:#ffc4091f; --ruim-fraca:#eb445a1f; --primary-fraca:#f2d7402e;
   --radius-card:8px; --radius-control:6px; --gap:12px;
   --fs-title:24px; --fs-body:14px; --fs-small:12px;
   --font:system-ui,-apple-system,"Segoe UI",sans-serif;
 }
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --bg:#0d0f11; --card:#16191c; --card2:#1e2226; --fg:#eceef0; --line:#2a3035; --sub:#98a0a8;
+  --shadow:0 1px 2px #0008,0 8px 24px #0004; color-scheme:dark}}
+:root[data-theme=dark]{
+  --bg:#0d0f11; --card:#16191c; --card2:#1e2226; --fg:#eceef0; --line:#2a3035; --sub:#98a0a8;
+  --shadow:0 1px 2px #0008,0 8px 24px #0004; color-scheme:dark}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--font);background:var(--ground);color:var(--text);font-size:var(--fs-body);line-height:20px;-webkit-font-smoothing:antialiased}
+body{font-family:var(--font);background:var(--bg);color:var(--fg);font-size:var(--fs-body);line-height:20px;-webkit-font-smoothing:antialiased}
 .num{font-variant-numeric:tabular-nums}
 .app{display:grid;grid-template-columns:256px minmax(0,1fr);min-height:100vh}
 .side{padding:20px 12px;display:flex;flex-direction:column;gap:4px;min-width:0}
-.brand{display:flex;gap:10px;align-items:center;padding:6px 12px 2px}
+.brand{display:flex;gap:10px;align-items:center;padding:6px 12px 2px;color:var(--fg)}
 .brand b{font-size:15px;font-weight:600;letter-spacing:-.01em}
-.scope{margin:10px 12px 22px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-control);min-width:0}
+.scope{margin:10px 12px 22px;padding:8px 10px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-control);min-width:0}
 .scope .s1{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.scope .s2{font-size:var(--fs-small);color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.navlbl{font-size:13px;color:var(--muted);padding:0 12px;margin:0 0 8px}
-.nav button{display:flex;align-items:center;gap:10px;width:100%;height:32px;padding:0 12px;border:0;border-radius:var(--radius-control);background:none;color:var(--text);font:var(--fs-body)/20px var(--font);text-align:left;cursor:pointer}
-.nav button:hover{background:#e9ecf1}
-.nav button[aria-current]{background:#e4e7ec;font-weight:500}
-.nav button .c{margin-left:auto;font-size:var(--fs-small);color:var(--muted)}
-.nav button .c.alert{background:var(--pill-neg-bg);color:var(--pill-neg-ink);border-radius:10px;padding:1px 7px}
-.side .foot{margin-top:auto;padding:10px 12px 0;border-top:1px solid var(--border)}
+.scope .s2{font-size:var(--fs-small);color:var(--sub);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.navlbl{font-size:13px;color:var(--sub);padding:0 12px;margin:0 0 8px}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;height:32px;padding:0 12px;border:0;border-radius:var(--radius-control);background:none;color:var(--fg);font:var(--fs-body)/20px var(--font);text-align:left;cursor:pointer}
+.nav button:hover{background:var(--card2)}
+.nav button[aria-current]{background:var(--primary-fraca);font-weight:600}
+.nav button .c{margin-left:auto;font-size:var(--fs-small);color:var(--sub)}
+.nav button .c.alert{background:var(--ruim-fraca);color:var(--ruim);border-radius:10px;padding:1px 7px}
+.side .foot{margin-top:auto;padding:10px 12px 0;border-top:1px solid var(--line)}
 .side .foot .u1{font-size:13px;font-weight:500}
-.side .foot .u2{font-size:var(--fs-small);color:var(--muted)}
+.side .foot .u2{font-size:var(--fs-small);color:var(--sub)}
 .canvas{padding:32px;max-width:1184px;min-width:0}
 .titlerow{display:flex;align-items:flex-start;gap:24px;margin-bottom:28px}
 h1{font-size:var(--fs-title);font-weight:700;letter-spacing:-.02em;line-height:30px}
-.finding{font-size:15px;line-height:22px;color:var(--muted);margin-top:6px;max-width:620px}
-.btn{height:36px;padding:0 16px;border:0;border-radius:var(--radius-control);background:var(--primary);color:#fff;font:500 var(--fs-body)/36px var(--font);cursor:pointer;white-space:nowrap}
-.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--control)}
+.finding{font-size:15px;line-height:22px;color:var(--sub);margin-top:6px;max-width:620px}
+.btn{height:36px;padding:0 16px;border:0;border-radius:var(--radius-control);background:var(--primary);color:var(--ink);font:600 var(--fs-body)/36px var(--font);cursor:pointer;white-space:nowrap}
+.btn:hover:not(:disabled){filter:brightness(1.07)}
+.btn:active:not(:disabled){filter:brightness(.82)}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.btn.ghost:hover:not(:disabled){background:var(--card2);filter:none}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .ml{margin-left:auto;display:flex;gap:8px;align-items:center}
 section{margin-bottom:40px}
 .sechead{display:flex;align-items:baseline;gap:12px;margin-bottom:10px;flex-wrap:wrap}
 h2{font-size:18px;font-weight:500}
-.sechead .meta{font-size:var(--fs-body);color:var(--muted)}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card)}
+.sechead .meta{font-size:var(--fs-body);color:var(--sub)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-card)}
 .paths{display:flex;align-items:center;gap:10px;padding:0 16px;height:44px;margin-bottom:32px;font-size:13px;min-width:0;overflow:hidden}
-.paths .pk{color:var(--muted);font-size:var(--fs-small);flex:none}
+.paths .pk{color:var(--sub);font-size:var(--fs-small);flex:none}
 .paths .pv{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.paths .sep{width:1px;height:18px;background:var(--border);flex:none;margin:0 6px}
+.paths .sep{width:1px;height:18px;background:var(--line);flex:none;margin:0 6px}
 .paths .pa{margin-left:auto;flex:none}
-.lnk{background:none;border:0;border-bottom:1px solid var(--control);padding:0;font:13px/18px var(--font);color:var(--text);cursor:pointer}
-.lnk:hover{border-bottom-color:var(--text)}
+.lnk{background:none;border:0;border-bottom:1px solid var(--line);padding:0;font:13px/18px var(--font);color:var(--fg);cursor:pointer}
+.lnk:hover{border-bottom-color:var(--fg)}
 .cols{display:grid;grid-template-columns:minmax(0,740px) 368px;gap:var(--gap);align-items:stretch}
 .cols>div{min-width:0}
 table{width:100%;border-collapse:collapse}
-th{font-size:var(--fs-small);font-weight:400;color:var(--muted);text-align:left;padding:0 0 8px}
+th{font-size:var(--fs-small);font-weight:400;color:var(--sub);text-align:left;padding:0 0 8px}
 th.r,td.r{text-align:right}
-td{padding:0;height:44px;border-top:1px solid var(--rule);font-size:var(--fs-body)}
-tbody tr:first-child td{border-top:1px solid var(--border)}
-tr.sel td{background:#f5f8fc;font-weight:500}
+td{padding:0;height:44px;border-top:1px solid var(--line);font-size:var(--fs-body)}
+tbody tr:first-child td{border-top:1px solid var(--line)}
+tr.sel td{background:var(--card2);font-weight:500}
 tr.sel td.dim{font-weight:400}
 .tw{padding:20px 20px 4px}
 label.mes{display:flex;align-items:center;gap:10px;cursor:pointer}
-.dim{color:var(--muted)}
-.neg{color:var(--negative)}
+.dim{color:var(--sub)}
+.neg{color:var(--ruim)}
 .runcard{display:flex;flex-direction:column}
-.runrow{display:flex;align-items:baseline;justify-content:space-between;padding:12px 20px;border-top:1px solid var(--rule)}
+.runrow{display:flex;align-items:baseline;justify-content:space-between;padding:12px 20px;border-top:1px solid var(--line)}
 .runrow:first-of-type{border-top:0}
-.runrow .k{font-size:var(--fs-body);color:var(--muted)}
+.runrow .k{font-size:var(--fs-body);color:var(--sub)}
 .runrow .v{font-size:22px;font-weight:500}
-.errbox{margin:12px 20px 0;padding:12px;background:var(--raised);border-radius:var(--radius-control)}
+.errbox{margin:12px 20px 0;padding:12px;background:var(--card2);border-radius:var(--radius-control)}
 .errbox .e1{font-size:13px;font-weight:500;word-break:break-all}
-.errbox .e2{font-size:var(--fs-small);color:var(--muted);margin-top:3px;word-break:break-all}
-.runfoot{margin-top:auto;padding:14px 20px;border-top:1px solid var(--rule)}
+.errbox .e2{font-size:var(--fs-small);color:var(--sub);margin-top:3px;word-break:break-all}
+.runfoot{margin-top:auto;padding:14px 20px;border-top:1px solid var(--line)}
 .band .row{display:grid;grid-template-columns:200px minmax(0,1fr) 88px;gap:12px;align-items:center;height:36px}
 .band .lbl{font-size:var(--fs-body);display:flex;gap:8px;align-items:baseline;min-width:0}
-.band .lbl .m{font-size:var(--fs-small);color:var(--muted)}
+.band .lbl .m{font-size:var(--fs-small);color:var(--sub)}
 .track{position:relative;height:16px;overflow:hidden}
-.track .zone{position:absolute;top:0;bottom:0;background:#dfe6f2;border-left:1px solid #a9bbd6;border-right:1px solid #a9bbd6}
-.track .bar{position:absolute;top:4px;height:10px;background:var(--hue);border-radius:2px}
-.track .bar.out{background:#9fb6d8}
+.track .zone{position:absolute;top:0;bottom:0;background:var(--ok-fraca);border-left:1px solid var(--ok);border-right:1px solid var(--ok)}
+.track .bar{position:absolute;top:4px;height:10px;border-radius:2px;background:var(--ok)}
+.track .bar.atencao{background:var(--atencao)}
+.track .bar.ruim{background:var(--ruim)}
+.val.ok{color:var(--ok)} .val.atencao{color:var(--atencao)} .val.ruim{color:var(--ruim)}
 .band .val{text-align:right;font-size:var(--fs-body);font-weight:500}
 .axis{display:grid;grid-template-columns:200px minmax(0,1fr) 88px;gap:12px;margin-top:8px}
-.axis .t{position:relative;height:16px;font-size:var(--fs-small);color:var(--muted)}
+.axis .t{position:relative;height:16px;font-size:var(--fs-small);color:var(--sub)}
 .axis .t span{position:absolute;transform:translateX(-50%)}
 .axis .t span:last-child{transform:translateX(-100%)}
-.legend{display:flex;gap:18px;align-items:center;font-size:var(--fs-small);color:var(--muted);flex-wrap:wrap}
+.legend{display:flex;gap:18px;align-items:center;font-size:var(--fs-small);color:var(--sub);flex-wrap:wrap}
 .legend i{display:inline-block;width:10px;height:8px;border-radius:2px;margin-right:6px}
-.vazio{color:var(--muted);padding:20px}
-.erro{background:var(--pill-neg-bg);border-color:#f3c7c3;color:var(--pill-neg-ink);padding:12px 16px;margin-bottom:24px}
-pre{background:#141414;color:#e6e9ec;padding:16px;border-radius:var(--radius-card);overflow:auto;font-size:12.5px;max-height:420px;white-space:pre-wrap;word-break:break-word;margin:16px 0}
-input[type=text]{font:var(--fs-body)/20px var(--font);flex:1;min-width:0;padding:6px 8px;border:1px solid var(--control);border-radius:var(--radius-control)}
+.vazio{color:var(--sub);padding:20px}
+.erro{background:var(--ruim-fraca);border-color:var(--ruim);color:var(--ruim);padding:12px 16px;margin-bottom:24px}
+pre{background:var(--ink);color:#eceef0;padding:16px;border-radius:var(--radius-card);overflow:auto;font-size:12.5px;max-height:420px;white-space:pre-wrap;word-break:break-word;margin:16px 0}
+input[type=text]{font:var(--fs-body)/20px var(--font);flex:1;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius-control)}
 .regras dl{padding:4px 20px 20px}
 .regras dt{font-weight:500;margin-top:14px}
-.regras dd{color:var(--muted);margin-top:2px}
+.regras dd{color:var(--sub);margin-top:2px}
 @media print{
   @page{size:A4 portrait;margin:14mm}
-  body{background:#fff}
+  /* No tema escuro o papel sairia com texto claro sobre branco. */
+  :root{--bg:#fff;--card:#fff;--card2:#f3f5f7;--fg:#16191c;--line:#dcdfe3;--sub:#5f666e}
+  body{background:#fff;color:#16191c}
   .side,.titlerow .ml,.paths .pa,.lnk,.btn{display:none!important}
   .app{display:block}
   .canvas{padding:0;max-width:none}
-  .card{break-inside:avoid;border-color:#ccc}
+  .card{break-inside:avoid;border-color:#ccc;background:#fff}
+  .nav button[aria-current]{background:none}
   section,.sechead{break-inside:avoid}
   .band .row{height:30px}
-  .track .zone{background:#e8eef7!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .track .bar,.legend i,[style*="background:#1d5fbf"],[style*="background:#9fb6d8"],[style*="background:#8aa0bd"]{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .track .zone{background:#e8f9ef!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .track .bar,.track .zone,.legend i,.barra-mes,.barra-comp{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .cabecalho-impressao{display:block!important;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid #ccc}
   pre{display:none}
 }
@@ -119,7 +138,7 @@ input[type=text]{font:var(--fs-body)/20px var(--font);flex:1;min-width:0;padding
 }
 @media (max-width:900px){
   .app{grid-template-columns:1fr}
-  .side{flex-direction:row;align-items:center;gap:12px;height:48px;padding:0 16px;border-bottom:1px solid var(--border);overflow-x:auto}
+  .side{flex-direction:row;align-items:center;gap:12px;height:48px;padding:0 16px;border-bottom:1px solid var(--line);overflow-x:auto}
   .scope,.navlbl,.side .foot{display:none}
   .nav{display:flex;gap:4px}.nav button{width:auto;white-space:nowrap}
   .canvas{padding:16px;max-width:none}
@@ -133,7 +152,7 @@ input[type=text]{font:var(--fs-body)/20px var(--font);flex:1;min-width:0;padding
 <div class="app">
   <nav class="side">
     <div class="brand">
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="3" width="16" height="3" rx="1" fill="#0a0a0a"/><rect x="1" y="8" width="10" height="3" rx="1" fill="#0a0a0a"/><rect x="1" y="13" width="6" height="3" rx="1" fill="#1d5fbf"/></svg>
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="3" width="16" height="3" rx="1" fill="currentColor"/><rect x="1" y="8" width="10" height="3" rx="1" fill="currentColor"/><rect x="1" y="13" width="6" height="3" rx="1" fill="currentColor" style="color:var(--primary)"/></svg>
       <b>Consolidador</b>
     </div>
     <div class="scope"><div class="s1" id="sc1">—</div><div class="s2" id="sc2"></div></div>
@@ -207,7 +226,7 @@ function cabecalhoImpressao() {
   const agora = new Date().toLocaleString('pt-BR')
   return $(`<div class="cabecalho-impressao">
     <div style="font-size:16px;font-weight:600">Fator de importação — ${esc(TITULOS[aba])}</div>
-    <div style="font-size:12px;color:var(--muted);margin-top:4px">
+    <div style="font-size:12px;color:var(--sub);margin-top:4px">
       ${esc(estado.cfg.planilha)}<br>
       Faixa ${pct(estado.faixa.min)} a ${pct(estado.faixa.max)} · gerado em ${esc(agora)}</div></div>`)
 }
@@ -221,6 +240,24 @@ function menu(id, itens) {
     b.onclick = () => { aba = chave; render() }
     el.append(b)
   }
+}
+
+// Semáforo: verde dentro da faixa, âmbar até uma largura de faixa além dela,
+// vermelho a partir daí. A tolerância acompanha a faixa em vez de ser fixa.
+function nivel(fator) {
+  const min = estado.faixa.min, max = estado.faixa.max
+  if (fator >= min && fator <= max) return 'ok'
+  const folga = Math.max(0.05, max - min)
+  return fator <= max + folga && fator >= min - folga ? 'atencao' : 'ruim'
+}
+
+const LEGENDA_SEMAFORO = () => {
+  const min = estado.faixa.min, max = estado.faixa.max
+  const folga = Math.max(0.05, max - min)
+  return `<span class="legend">
+    <span><i style="background:var(--ok)"></i>dentro de ${pct(min)}–${pct(max)}</span>
+    <span><i style="background:var(--atencao)"></i>até ${pct(max + folga)}</span>
+    <span><i style="background:var(--ruim)"></i>acima disso</span></span>`
 }
 
 // A frase do topo diz o que a analista procuraria batendo o olho na planilha.
@@ -318,7 +355,7 @@ function cardMeses() {
       <td class="r num dim">${m.existentes}</td>
       <td class="r num ${m.novos ? '' : 'dim'}">${m.novos}</td></tr>`).join('')}
     </tbody></table>
-    <p style="font-size:12px;color:var(--muted);padding:12px 0 16px">Pedidos já na planilha são reconhecidos pela N/Ref. e nunca são gravados de novo.</p></div>`)
+    <p style="font-size:12px;color:var(--sub);padding:12px 0 16px">Pedidos já na planilha são reconhecidos pela N/Ref. e nunca são gravados de novo.</p></div>`)
   card.querySelectorAll('input[data-mes]').forEach((c) => {
     c.onchange = () => {
       if (c.checked) marcados.add(c.dataset.mes); else marcados.delete(c.dataset.mes)
@@ -373,24 +410,22 @@ function banda(ps, titulo) {
 
   const box = $('<div></div>')
   box.append($(`<div class="sechead"><h2>${esc(titulo)}</h2>
-    <span class="legend">
-      <span><i style="background:#dfe6f2"></i>faixa ${pct(min)} a ${pct(max)}</span>
-      <span><i style="background:#1d5fbf"></i>dentro</span>
-      <span><i style="background:#9fb6d8"></i>fora</span></span></div>`))
+    
+      ${LEGENDA_SEMAFORO()}</div>`))
   box.append($(`<div class="card" style="padding:20px"><div class="band">
     <div class="row" style="height:auto;margin-bottom:6px">
-      <span style="font-size:12px;color:var(--muted)">Pedido, por valor de carga</span><span></span>
-      <span style="font-size:12px;color:var(--muted);text-align:right">Fator</span></div>
+      <span style="font-size:12px;color:var(--sub)">Pedido, por valor de carga</span><span></span>
+      <span style="font-size:12px;color:var(--sub);text-align:right">Fator</span></div>
     ${ps.map((p) => {
-      const fora = p.fator < min || p.fator > max
+      const n = nivel(p.fator)
       return `<div class="row">
         <span class="lbl">${esc(p.nref)} <span class="m">R$ ${brl0(p.cif)}</span></span>
-        <span class="track"><i class="zone" style="${zona}"></i><i class="bar ${fora ? 'out' : ''}" style="width:${x(p.fator)}%"></i></span>
-        <span class="val num ${fora ? 'neg' : ''}">${pct(p.fator)}</span></div>`
+        <span class="track"><i class="zone" style="${zona}"></i><i class="bar ${n}" style="width:${x(p.fator)}%"></i></span>
+        <span class="val num ${n}">${pct(p.fator)}</span></div>`
     }).join('')}
     <div class="axis"><span></span><span class="t">${ticks.map((v) => `<span style="left:${x(v)}%">${Math.round(v * 100)}%</span>`).join('')}</span><span></span></div>
     </div>
-    <p style="font-size:13px;color:var(--muted);margin-top:14px">Somados, os ${ps.length} pedidos dão fator de ${pct(ponderado)} sobre R$ ${brl0(cif)} de carga — ${ponderado >= min && ponderado <= max ? 'dentro da faixa' : 'fora da faixa'}. Fator alto em pedido pequeno é esperado: as despesas fixas por processo não acompanham o valor da carga.</p>
+    <p style="font-size:13px;color:var(--sub);margin-top:14px">Somados, os ${ps.length} pedidos dão fator de ${pct(ponderado)} sobre R$ ${brl0(cif)} de carga — ${ponderado >= min && ponderado <= max ? 'dentro da faixa' : 'fora da faixa'}. Fator alto em pedido pequeno é esperado: as despesas fixas por processo não acompanham o valor da carga.</p>
   </div>`))
   return box
 }
@@ -447,7 +482,7 @@ function viewErros() {
       <div class="e1">${esc(e.mes)} / ${esc(e.modal)} / ${esc(e.nref)}</div>
       <div class="e2">${esc(e.motivo)}</div>
       <div class="e2" style="margin-top:6px"><code>${esc(e.pasta)}</code></div></div>`).join('')}
-    <p style="font-size:13px;color:var(--muted);padding:16px 20px 0">O pedido inteiro foi pulado. Corrija a pasta e rode de novo — nada do que já está na planilha é reescrito.</p></div>`))
+    <p style="font-size:13px;color:var(--sub);padding:16px 20px 0">O pedido inteiro foi pulado. Corrija a pasta e rode de novo — nada do que já está na planilha é reescrito.</p></div>`))
   return sec
 }
 
@@ -455,13 +490,13 @@ function viewCaminhos() {
   const sec = $('<section></section>')
   const card = $(`<div class="card" style="padding:4px 20px 20px">
     <div style="padding:16px 0">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Pasta dos dados</div>
+      <div style="font-size:12px;color:var(--sub);margin-bottom:6px">Pasta dos dados</div>
       <div style="display:flex;gap:10px"><input type="text" id="f-raiz" value="${esc(estado.cfg.raiz)}"></div>
-      <div style="font-size:12px;color:var(--muted);margin-top:6px">Tem que conter a subpasta <code>dados</code>, com <code>dados\\&lt;mês&gt;\\&lt;modal&gt;\\&lt;pedido&gt;</code>.</div></div>
-    <div style="padding:16px 0;border-top:1px solid var(--rule)">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Planilha de destino</div>
+      <div style="font-size:12px;color:var(--sub);margin-top:6px">Tem que conter a subpasta <code>dados</code>, com <code>dados\\&lt;mês&gt;\\&lt;modal&gt;\\&lt;pedido&gt;</code>.</div></div>
+    <div style="padding:16px 0;border-top:1px solid var(--line)">
+      <div style="font-size:12px;color:var(--sub);margin-bottom:6px">Planilha de destino</div>
       <div style="display:flex;gap:10px"><input type="text" id="f-pl" value="${esc(estado.cfg.planilha)}"></div>
-      <div style="font-size:12px;color:var(--muted);margin-top:6px">Apague o conteúdo para voltar a <code>&lt;raiz&gt;\\ConsolidadoPath.xlsx</code>. Antes de gravar, é copiada para <code>ConsolidadoPath.bak.xlsx</code>.</div></div>
+      <div style="font-size:12px;color:var(--sub);margin-top:6px">Apague o conteúdo para voltar a <code>&lt;raiz&gt;\\ConsolidadoPath.xlsx</code>. Antes de gravar, é copiada para <code>ConsolidadoPath.bak.xlsx</code>.</div></div>
     <div style="display:flex;gap:10px;padding-top:4px">
       <button class="btn" id="b-salvar">Salvar</button>
       <button class="btn ghost" id="b-cancelar">Cancelar</button></div></div>`)
@@ -489,24 +524,24 @@ function viewRegras() {
   const card = $(`<div class="card" style="padding:4px 20px 20px">
     <div style="padding:16px 0">
       <div style="font-weight:500;margin-bottom:4px">Faixa esperada</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Fora dela o pedido entra na lista de avisos e aparece destacado no gráfico. Não impede a gravação.</div>
+      <div style="font-size:12px;color:var(--sub);margin-bottom:10px">Fora dela o pedido entra na lista de avisos e aparece destacado no gráfico. Não impede a gravação.</div>
       <div style="display:flex;gap:10px;align-items:center">
         <input type="number" id="f-min" step="0.5" min="0" max="999" value="${(r.faixa.min * 100).toFixed(1)}" style="width:90px">
         <span class="dim">% até</span>
         <input type="number" id="f-max" step="0.5" min="0" max="999" value="${(r.faixa.max * 100).toFixed(1)}" style="width:90px">
         <span class="dim">%</span></div></div>
 
-    <div style="padding:16px 0;border-top:1px solid var(--rule)">
+    <div style="padding:16px 0;border-top:1px solid var(--line)">
       <div style="font-weight:500;margin-bottom:4px">O que entra no custo</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Muda o Total, o Percentual e a fórmula gravada na planilha. Vale para as próximas consolidações; o que já está gravado só muda ao reprocessar o mês.</div>
+      <div style="font-size:12px;color:var(--sub);margin-bottom:10px">Muda o Total, o Percentual e a fórmula gravada na planilha. Vale para as próximas consolidações; o que já está gravado só muda ao reprocessar o mês.</div>
       ${comps.map((c) => `<label class="mes" style="padding:5px 0">
         <input type="checkbox" data-comp="${esc(c.chave)}" ${r.custo.includes(c.chave) ? 'checked' : ''}>
         ${esc(c.rotulo)}${c.imposto ? ' <span class="dim" style="font-size:12px">· imposto</span>' : ''}</label>`).join('')}
-      <div style="font-size:12px;color:var(--muted);margin-top:10px">A coluna <code>Outros</code> entra sempre: é o campo que você preenche à mão na planilha.</div></div>
+      <div style="font-size:12px;color:var(--sub);margin-top:10px">A coluna <code>Outros</code> entra sempre: é o campo que você preenche à mão na planilha.</div></div>
 
-    <div style="padding:16px 0;border-top:1px solid var(--rule)">
+    <div style="padding:16px 0;border-top:1px solid var(--line)">
       <div style="font-weight:500;margin-bottom:4px">Fora da conta, de propósito</div>
-      <div style="font-size:12px;color:var(--muted)">PIS, COFINS e ICMS não aparecem acima porque são recuperáveis — a empresa credita depois, então não são despesa de importação. O app nem chega a ler essas colunas. Incluí-los já fez o fator aparecer entre 69% e 200%, o que parecia bug e era a conta errada.</div></div>
+      <div style="font-size:12px;color:var(--sub)">PIS, COFINS e ICMS não aparecem acima porque são recuperáveis — a empresa credita depois, então não são despesa de importação. O app nem chega a ler essas colunas. Incluí-los já fez o fator aparecer entre 69% e 200%, o que parecia bug e era a conta errada.</div></div>
 
     <div style="display:flex;gap:10px;padding-top:4px;align-items:center">
       <button class="btn" id="b-salvar">Salvar regras</button>
@@ -605,18 +640,18 @@ function graficoMeses(ps) {
   const alt = (f) => Math.max(1, (f / MAX) * 150)
 
   box.append($(`<div class="sechead"><h2>Fator ponderado por mês</h2>
-    <span class="legend"><span><i style="background:#1d5fbf"></i>marítimo</span><span><i style="background:#9fb6d8"></i>aéreo</span>
-    <span><i style="background:#dfe6f2"></i>faixa ${pct(min)} a ${pct(max)}</span></span></div>`))
+    ${LEGENDA_SEMAFORO()}</div>`))
   box.append($(`<div class="card" style="padding:20px">
-    <div style="position:relative;height:170px;display:flex;align-items:flex-end;gap:18px;border-bottom:1px solid var(--border);padding:0 4px">
-      <div style="position:absolute;left:0;right:0;bottom:${(min / MAX) * 150}px;height:${((max - min) / MAX) * 150}px;background:#dfe6f2"></div>
+    <div style="position:relative;height:170px;display:flex;align-items:flex-end;gap:18px;border-bottom:1px solid var(--line);padding:0 4px">
+      <div class="barra-mes" style="position:absolute;left:0;right:0;bottom:${(min / MAX) * 150}px;height:${((max - min) / MAX) * 150}px;background:var(--ok-fraca)"></div>
       ${dados.map((d) => `<div style="flex:1;display:flex;gap:4px;align-items:flex-end;justify-content:center;position:relative;z-index:1">
-        ${['SEA', 'AIR'].map((m) => d[m].cif ? `<div title="${m} ${pct(d[m].fator)}" style="width:22px;height:${alt(d[m].fator)}px;background:${m === 'SEA' ? '#1d5fbf' : '#9fb6d8'};border-radius:2px 2px 0 0"></div>` : '').join('')}
+        ${['SEA', 'AIR'].map((m) => d[m].cif ? `<div class="barra-mes" title="${m === 'SEA' ? 'marítimo' : 'aéreo'} ${pct(d[m].fator)}" style="width:22px;height:${alt(d[m].fator)}px;background:var(--${nivel(d[m].fator)}-barra);border-radius:2px 2px 0 0;position:relative">
+          <span style="position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:10px;color:var(--sub)">${m === 'SEA' ? 'M' : 'A'}</span></div>` : '').join('')}
       </div>`).join('')}
     </div>
-    <div style="display:flex;gap:18px;padding:6px 4px 0">
-      ${dados.map((d) => `<div style="flex:1;text-align:center;font-size:12px;color:var(--muted)">${esc(d.mes)}<br>
-        <span style="color:var(--text)">${d.SEA.cif ? pct(d.SEA.fator) : ''}${d.SEA.cif && d.AIR.cif ? ' · ' : ''}${d.AIR.cif ? pct(d.AIR.fator) : ''}</span></div>`).join('')}
+    <div style="display:flex;gap:18px;padding:22px 4px 0">
+      ${dados.map((d) => `<div style="flex:1;text-align:center;font-size:12px;color:var(--sub)">${esc(d.mes)}<br>
+        <span style="color:var(--fg)">${d.SEA.cif ? pct(d.SEA.fator) : ''}${d.SEA.cif && d.AIR.cif ? ' · ' : ''}${d.AIR.cif ? pct(d.AIR.fator) : ''}</span></div>`).join('')}
     </div></div>`))
   return box
 }
@@ -626,22 +661,22 @@ function graficoMeses(ps) {
 function graficoComposicao(ps) {
   const box = $('<div style="margin-top:40px"></div>')
   box.append($(`<div class="sechead"><h2>De onde vem o custo</h2>
-    <span class="legend"><span><i style="background:#8aa0bd"></i>imposto</span><span><i style="background:#1d5fbf"></i>logística</span></span></div>`))
+    <span class="legend"><span><i style="background:var(--medium)"></i>imposto</span><span><i style="background:var(--primary)"></i>logística</span></span></div>`))
   const barra = (rot, lista) => {
     if (!lista.length) return ''
     const t = ponderado(lista)
     if (!t.total) return ''
     const fImp = (t.imposto / t.total) * 100
-    return `<div style="padding:14px 20px;border-top:1px solid var(--rule)">
+    return `<div style="padding:14px 20px;border-top:1px solid var(--line)">
       <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
         <span>${rot}</span><span class="dim num">imposto ${pct(t.imposto / t.cif)} · logística ${pct(t.logistico)}</span></div>
       <div style="display:flex;height:18px;border-radius:3px;overflow:hidden">
-        <div style="width:${fImp}%;background:#8aa0bd"></div><div style="flex:1;background:#1d5fbf"></div></div></div>`
+        <div class="barra-comp" style="width:${fImp}%;background:var(--medium)"></div><div class="barra-comp" style="flex:1;background:var(--primary)"></div></div></div>`
   }
   box.append($(`<div class="card" style="padding-top:2px">
     ${barra('Marítimo', ps.filter((p) => p.modal === 'SEA'))}
     ${barra('Aéreo', ps.filter((p) => p.modal === 'AIR'))}
-    <p style="font-size:13px;color:var(--muted);padding:14px 20px 18px;border-top:1px solid var(--rule)">
+    <p style="font-size:13px;color:var(--sub);padding:14px 20px 18px;border-top:1px solid var(--line)">
       A alíquota de imposto é parecida nos dois modais, então o fator cheio esconde a diferença entre eles. A parte logística é a que responde a decisão de compra.</p></div>`))
   return box
 }

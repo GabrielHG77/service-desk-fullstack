@@ -115,6 +115,26 @@ PDF". O CSS de impressão esconde a barra lateral e os botões, força retrato e
 evita cortar card ao meio; o cabeçalho da folha diz qual planilha, qual faixa e
 quando foi gerado.
 
+## Cores
+
+A paleta é a mesma do `mqtt-panel` (`index.html` da raiz do repositório), tirada
+de lá em vez de inventada: dourado `#f2d740` da marca, e os três do semáforo que
+já existiam ali — `#2dd36f`, `#ffc409`, `#eb445a`. Claro e escuro acompanham a
+configuração do Windows, pelo mesmo `prefers-color-scheme` que o mqtt-panel usa.
+
+O semáforo vale para o fator de cada pedido:
+
+| Cor | Quando |
+| --- | --- |
+| Verde | dentro da faixa configurada |
+| Amarelo | fora dela, até uma largura de faixa além (com 24%–30%, até 36%) |
+| Vermelho | a partir daí |
+
+A tolerância acompanha a faixa: mudando para 20%–35%, o amarelo passa a ir até 50%.
+
+O gráfico de composição (imposto × logística) fica em tons neutros de propósito:
+ali não há bom nem ruim, é só de onde vem o custo.
+
 ## Decisões que não são óbvias
 
 **Excel nunca é aberto.** `.xlsx`, `.csv` e `.pdf` são lidos por biblioteca

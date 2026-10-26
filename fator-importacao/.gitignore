@@ -1,8 +1,9 @@
 logs/
 config.json
-node_modules/
 build/
+node_modules/
 src/
 /fator-importacao
+icone-*.png
 dist/*
-!dist/fator-importacao.exe
+!dist/FatorImportacao.exe

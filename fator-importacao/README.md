@@ -13,7 +13,7 @@ sem instalação e sem privilégio de administrador.
 
 ## Como rodar
 
-Baixe `dist/fator-importacao.exe`, ponha numa pasta qualquer e dê dois cliques.
+Baixe `dist/FatorImportacao.exe`, ponha numa pasta qualquer e dê dois cliques.
 
 Abre em **janela própria**: sem barra de endereço, sem abas, ícone próprio na
 barra de tarefas, e fechar a janela encerra o app. Abrir o executável de novo
@@ -59,15 +59,34 @@ O nome do arquivo de materiais sem a extensão é a **N/Ref.**, a chave do pedid
 
 ```
 go test ./...
-GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -H=windowsgui" -o dist/fator-importacao.exe .
+GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -H=windowsgui" -o dist/FatorImportacao.exe .
 ```
 
 `-H=windowsgui` é o que tira a janela preta de terminal. A tela é embutida no
 binário por `go:embed`, então o `.exe` é autocontido.
 
-Para pôr um ícone no arquivo `.exe` (e não só na janela) é preciso compilar no
-próprio Windows, com um `.syso` de recursos. Hoje o ícone vem do favicon
-embutido em `ui.html`, que é o que aparece na barra de tarefas.
+### O ícone
+
+`rsrc_windows_amd64.syso` carrega o ícone do arquivo `.exe` — o que aparece no
+Explorer, no menu Iniciar e ao fixar na barra de tarefas. O sufixo no nome é o
+que faz o linker do Go usá-lo só em `windows/amd64`, e ele é versionado para
+quem compilar não precisar de Python nem de ferramenta extra.
+
+Para mudar o desenho, edite o comando abaixo, rode os dois passos e recompile:
+
+```
+convert -size 256x256 xc:none \
+  -fill '#f2d740' -draw 'roundrectangle 0,0 255,255 56,56' \
+  -stroke '#0c0e0f' -strokewidth 24 -fill none \
+  -draw 'stroke-linecap round stroke-linejoin round path "M 128,46 L 128,150 M 84,108 L 128,152 L 172,108"' \
+  -stroke none -fill '#0c0e0f' -draw 'roundrectangle 52,186 204,212 13,13' \
+  -define icon:auto-resize=256,128,64,48,32,16 icone.ico
+python3 scripts/syso.py
+```
+
+`scripts/syso.py` escreve o objeto COFF à mão, sem depender de `go-winres` nem
+de `rsrc`. O ícone da **janela** é outro: vem do favicon embutido em `ui.html`,
+e os dois usam o mesmo desenho.
 
 ## Regras de cálculo editáveis
 

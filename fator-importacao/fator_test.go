@@ -475,3 +475,39 @@ func TestPastaSemMateriaisNaoDerruba(t *testing.T) {
 		t.Errorf("erros = %+v", r.Erros)
 	}
 }
+
+// A pasta chama-se "pedido-sea" e o arquivo "B26TESTE01.CSV": a chave é a do
+// arquivo. Com a da pasta, o painel de meses contava pedido já consolidado como
+// novo e a pré-checagem de duplicata nunca disparava.
+func TestNRefVemDoArquivoNaoDaPasta(t *testing.T) {
+	raiz, planilha := arvore(t)
+
+	for _, a := range Varrer(raiz) {
+		if filepath.Base(a.Dir) == a.NRef {
+			t.Errorf("Varrer devolveu o nome da pasta como N/Ref.: %q", a.NRef)
+		}
+	}
+	nrefs := map[string]bool{}
+	for _, a := range Varrer(raiz) {
+		nrefs[a.NRef] = true
+	}
+	if !nrefs["B26TESTE01"] || !nrefs["B26TESTE02"] {
+		t.Fatalf("N/Ref. esperadas não apareceram: %v", nrefs)
+	}
+
+	if _, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}}); err != nil {
+		t.Fatal(err)
+	}
+	// Agora a varredura tem que reconhecer os dois como já gravados.
+	pl, err := AbrirPlanilha(planilha)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pl.Close()
+	existentes := map[string]map[string]bool{"AIR": pl.NRefsExistentes("AIR"), "SEA": pl.NRefsExistentes("SEA")}
+	for _, a := range Varrer(raiz) {
+		if !existentes[a.Modal][a.NRef] {
+			t.Errorf("%s/%s ficaria contado como novo depois de consolidado", a.Modal, a.NRef)
+		}
+	}
+}

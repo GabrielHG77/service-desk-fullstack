@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -39,7 +40,52 @@ var (
 
 	mu        sync.Mutex // uma consolidação por vez: duas em paralelo corromperiam a planilha
 	historico []*Execucao
+	proximoID = 1
 )
+
+// O histórico fica em disco para sobreviver a fechar e reabrir o app. Guarda as
+// últimas execuções inteiras; as linhas de material não entram (Pedido.Itens é
+// `json:"-"`), então o arquivo fica pequeno.
+const maxHistorico = 20
+
+func caminhoHistorico() string { return filepath.Join(appDir, "historico.json") }
+
+func carregarHistorico() {
+	b, err := os.ReadFile(caminhoHistorico())
+	if err != nil {
+		return // primeira execução: começa vazio
+	}
+	var lido []*Execucao
+	if err := json.Unmarshal(b, &lido); err != nil {
+		log.Printf("histórico ilegível, começando vazio: %v", err)
+		return
+	}
+	historico = lido
+	for _, h := range historico {
+		if n, err := strconv.Atoi(h.ID); err == nil && n >= proximoID {
+			proximoID = n + 1
+		}
+	}
+}
+
+func salvarHistorico() {
+	if len(historico) > maxHistorico {
+		historico = historico[len(historico)-maxHistorico:]
+	}
+	b, err := json.MarshalIndent(historico, "", " ")
+	if err != nil {
+		return
+	}
+	// Grava em .tmp e renomeia: desligar no meio não deixa o arquivo pela metade.
+	tmp := caminhoHistorico() + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+		log.Printf("não deu para gravar o histórico: %v", err)
+		return
+	}
+	if err := os.Rename(tmp, caminhoHistorico()); err != nil {
+		log.Printf("não deu para gravar o histórico: %v", err)
+	}
+}
 
 type Execucao struct {
 	ID        string     `json:"id"`
@@ -155,8 +201,14 @@ func estado() map[string]any {
 	if len(problemas) > 0 {
 		erro = strings.Join(problemas, " · ")
 	}
+	// `ultima` deixa a tela voltar preenchida depois de fechar e reabrir o app.
+	var ultima *Execucao
+	if len(historico) > 0 {
+		ultima = historico[len(historico)-1]
+	}
 	return map[string]any{
-		"cfg": c, "erro": erro, "faixa": Faixa, "meses": meses, "historico": hist,
+		"cfg": c, "erro": erro, "faixa": Faixa, "meses": meses,
+		"historico": hist, "ultima": ultima,
 	}
 }
 
@@ -225,10 +277,12 @@ func rodar(req pedidoRodar) (*Execucao, error) {
 		return nil, err
 	}
 	e := &Execucao{
-		ID: fmt.Sprint(len(historico) + 1), Quando: quando,
+		ID: strconv.Itoa(proximoID), Quando: quando,
 		DryRun: r.DryRun, Resultado: r, Texto: relatorio(r, c, quando),
 	}
+	proximoID++
 	historico = append(historico, e)
+	salvarHistorico()
 
 	// Log em arquivo é um extra: não pode derrubar a execução.
 	dir := filepath.Join(appDir, "logs")
@@ -368,6 +422,8 @@ func main() {
 	if configPath == "" {
 		configPath = filepath.Join(appDir, "config.json")
 	}
+
+	carregarHistorico()
 
 	addr := fmt.Sprintf("127.0.0.1:%d", *porta)
 	url := "http://" + addr + "/"

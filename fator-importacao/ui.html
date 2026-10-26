@@ -1,64 +1,141 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fator de importação</title>
 <!-- A janela em modo app herda daqui o ícone da barra de tarefas. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Crect width='256' height='256' rx='48' fill='%231f5fd0'/%3E%3Cpath d='M128 48 L128 150 M86 110 L128 152 L170 110' fill='none' stroke='%23fff' stroke-width='22' stroke-linecap='round' stroke-linejoin='round'/%3E%3Crect x='52' y='184' width='152' height='26' rx='13' fill='%239fc0f0'/%3E%3Crect x='52' y='184' width='46' height='26' rx='13' fill='%234ade80'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Crect width='256' height='256' rx='48' fill='%231d5fbf'/%3E%3Cpath d='M128 48 L128 150 M86 110 L128 152 L170 110' fill='none' stroke='%23fff' stroke-width='22' stroke-linecap='round' stroke-linejoin='round'/%3E%3Crect x='52' y='184' width='152' height='26' rx='13' fill='%239fc0f0'/%3E%3Crect x='52' y='184' width='46' height='26' rx='13' fill='%234ade80'/%3E%3C/svg%3E">
 <style>
-  :root {
-    --bg:#f6f7f9; --card:#fff; --linha:#e3e6ea; --txt:#1c2024; --fraco:#6a737d;
-    --azul:#1f5fd0; --verde:#1f8a4c; --verde-fraco:#dff2e6; --ambar:#9a6400; --vermelho:#b42318;
-  }
-  * { box-sizing:border-box }
-  body { margin:0; font:14px/1.5 "Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--txt) }
-  .wrap { max-width:1060px; margin:0 auto; padding:20px 16px 60px }
-  h1 { font-size:20px; margin:0 0 4px }
-  .sub { color:var(--fraco); margin:0 0 20px }
-  .card { background:var(--card); border:1px solid var(--linha); border-radius:8px; padding:14px 16px; margin-bottom:14px }
-  .card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--fraco); margin:0 0 10px }
-  .cam { display:flex; align-items:center; gap:10px; padding:5px 0 }
-  .cam b { min-width:120px; color:var(--fraco); font-weight:600 }
-  .cam code { flex:1; background:var(--bg); padding:5px 8px; border-radius:5px; word-break:break-all; font-size:13px }
-  button { font:inherit; border:1px solid var(--linha); background:var(--card); border-radius:6px; padding:6px 12px; cursor:pointer }
-  button:hover:not(:disabled) { border-color:#aeb6bf }
-  button:disabled { opacity:.5; cursor:not-allowed }
-  .primario { background:var(--azul); border-color:var(--azul); color:#fff; font-weight:600; padding:9px 18px }
-  .primario:hover:not(:disabled) { background:#174aa6; border-color:#174aa6 }
-  table { width:100%; border-collapse:collapse }
-  th { text-align:left; font-size:12px; color:var(--fraco); font-weight:600; padding:0 8px 6px }
-  th.n, td.n { text-align:right }
-  td { padding:6px 8px; border-top:1px solid var(--linha) }
-  .acoes { display:flex; gap:10px; align-items:center; margin-top:4px; flex-wrap:wrap }
-  .pill { display:inline-block; padding:1px 8px; border-radius:20px; font-size:12px; font-weight:600 }
-  .pill.ok { background:var(--verde-fraco); color:var(--verde) }
-  .pill.zero { background:var(--bg); color:var(--fraco) }
-  .pill.err { background:#fdeceb; color:var(--vermelho) }
-  .erro { background:#fdeceb; border-color:#f3c7c3; color:var(--vermelho) }
-  .faixa { position:relative; height:22px; background:var(--bg); border-radius:4px; overflow:hidden }
-  .faixa .banda { position:absolute; top:0; bottom:0; background:var(--verde-fraco) }
-  .faixa .ponto { position:absolute; top:3px; width:3px; height:16px; border-radius:2px; background:var(--azul) }
-  .faixa .ponto.fora { background:var(--ambar) }
-  .legenda { display:flex; justify-content:space-between; color:var(--fraco); font-size:12px; margin-top:3px }
-  pre { background:#1c2024; color:#e6e9ec; padding:14px; border-radius:6px; overflow:auto; font-size:12.5px; max-height:380px }
-  .vazio { color:var(--fraco); padding:8px 0 }
-  label.mes { display:flex; align-items:center; gap:8px; cursor:pointer }
-  input[type=text] { font:inherit; flex:1; padding:5px 8px; border:1px solid var(--linha); border-radius:5px }
+:root{
+  --ground:#f2f4f7; --surface:#fff; --raised:#eef0f3; --border:#e6e6e6; --rule:#f0f0f0; --control:#d4d4d4;
+  --text:#0a0a0a; --muted:#5f6368; --primary:#141414; --hue:#1d5fbf;
+  --negative:#c4242a; --pill-neg-bg:#ffedea; --pill-neg-ink:#831c1e;
+  --radius-card:8px; --radius-control:6px; --gap:12px;
+  --fs-title:24px; --fs-body:14px; --fs-small:12px;
+  --font:system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--ground);color:var(--text);font-size:var(--fs-body);line-height:20px;-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}
+.app{display:grid;grid-template-columns:256px minmax(0,1fr);min-height:100vh}
+.side{padding:20px 12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.brand{display:flex;gap:10px;align-items:center;padding:6px 12px 2px}
+.brand b{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.scope{margin:10px 12px 22px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-control);min-width:0}
+.scope .s1{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scope .s2{font-size:var(--fs-small);color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.navlbl{font-size:13px;color:var(--muted);padding:0 12px;margin:0 0 8px}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;height:32px;padding:0 12px;border:0;border-radius:var(--radius-control);background:none;color:var(--text);font:var(--fs-body)/20px var(--font);text-align:left;cursor:pointer}
+.nav button:hover{background:#e9ecf1}
+.nav button[aria-current]{background:#e4e7ec;font-weight:500}
+.nav button .c{margin-left:auto;font-size:var(--fs-small);color:var(--muted)}
+.nav button .c.alert{background:var(--pill-neg-bg);color:var(--pill-neg-ink);border-radius:10px;padding:1px 7px}
+.side .foot{margin-top:auto;padding:10px 12px 0;border-top:1px solid var(--border)}
+.side .foot .u1{font-size:13px;font-weight:500}
+.side .foot .u2{font-size:var(--fs-small);color:var(--muted)}
+.canvas{padding:32px;max-width:1184px;min-width:0}
+.titlerow{display:flex;align-items:flex-start;gap:24px;margin-bottom:28px}
+h1{font-size:var(--fs-title);font-weight:700;letter-spacing:-.02em;line-height:30px}
+.finding{font-size:15px;line-height:22px;color:var(--muted);margin-top:6px;max-width:620px}
+.btn{height:36px;padding:0 16px;border:0;border-radius:var(--radius-control);background:var(--primary);color:#fff;font:500 var(--fs-body)/36px var(--font);cursor:pointer;white-space:nowrap}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--control)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.ml{margin-left:auto;display:flex;gap:8px;align-items:center}
+section{margin-bottom:40px}
+.sechead{display:flex;align-items:baseline;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+h2{font-size:18px;font-weight:500}
+.sechead .meta{font-size:var(--fs-body);color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card)}
+.paths{display:flex;align-items:center;gap:10px;padding:0 16px;height:44px;margin-bottom:32px;font-size:13px;min-width:0;overflow:hidden}
+.paths .pk{color:var(--muted);font-size:var(--fs-small);flex:none}
+.paths .pv{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.paths .sep{width:1px;height:18px;background:var(--border);flex:none;margin:0 6px}
+.paths .pa{margin-left:auto;flex:none}
+.lnk{background:none;border:0;border-bottom:1px solid var(--control);padding:0;font:13px/18px var(--font);color:var(--text);cursor:pointer}
+.lnk:hover{border-bottom-color:var(--text)}
+.cols{display:grid;grid-template-columns:minmax(0,740px) 368px;gap:var(--gap);align-items:stretch}
+.cols>div{min-width:0}
+table{width:100%;border-collapse:collapse}
+th{font-size:var(--fs-small);font-weight:400;color:var(--muted);text-align:left;padding:0 0 8px}
+th.r,td.r{text-align:right}
+td{padding:0;height:44px;border-top:1px solid var(--rule);font-size:var(--fs-body)}
+tbody tr:first-child td{border-top:1px solid var(--border)}
+tr.sel td{background:#f5f8fc;font-weight:500}
+tr.sel td.dim{font-weight:400}
+.tw{padding:20px 20px 4px}
+label.mes{display:flex;align-items:center;gap:10px;cursor:pointer}
+.dim{color:var(--muted)}
+.neg{color:var(--negative)}
+.runcard{display:flex;flex-direction:column}
+.runrow{display:flex;align-items:baseline;justify-content:space-between;padding:12px 20px;border-top:1px solid var(--rule)}
+.runrow:first-of-type{border-top:0}
+.runrow .k{font-size:var(--fs-body);color:var(--muted)}
+.runrow .v{font-size:22px;font-weight:500}
+.errbox{margin:12px 20px 0;padding:12px;background:var(--raised);border-radius:var(--radius-control)}
+.errbox .e1{font-size:13px;font-weight:500;word-break:break-all}
+.errbox .e2{font-size:var(--fs-small);color:var(--muted);margin-top:3px;word-break:break-all}
+.runfoot{margin-top:auto;padding:14px 20px;border-top:1px solid var(--rule)}
+.band .row{display:grid;grid-template-columns:200px minmax(0,1fr) 88px;gap:12px;align-items:center;height:36px}
+.band .lbl{font-size:var(--fs-body);display:flex;gap:8px;align-items:baseline;min-width:0}
+.band .lbl .m{font-size:var(--fs-small);color:var(--muted)}
+.track{position:relative;height:16px;overflow:hidden}
+.track .zone{position:absolute;top:0;bottom:0;background:#dfe6f2;border-left:1px solid #a9bbd6;border-right:1px solid #a9bbd6}
+.track .bar{position:absolute;top:4px;height:10px;background:var(--hue);border-radius:2px}
+.track .bar.out{background:#9fb6d8}
+.band .val{text-align:right;font-size:var(--fs-body);font-weight:500}
+.axis{display:grid;grid-template-columns:200px minmax(0,1fr) 88px;gap:12px;margin-top:8px}
+.axis .t{position:relative;height:16px;font-size:var(--fs-small);color:var(--muted)}
+.axis .t span{position:absolute;transform:translateX(-50%)}
+.axis .t span:last-child{transform:translateX(-100%)}
+.legend{display:flex;gap:18px;align-items:center;font-size:var(--fs-small);color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:8px;border-radius:2px;margin-right:6px}
+.vazio{color:var(--muted);padding:20px}
+.erro{background:var(--pill-neg-bg);border-color:#f3c7c3;color:var(--pill-neg-ink);padding:12px 16px;margin-bottom:24px}
+pre{background:#141414;color:#e6e9ec;padding:16px;border-radius:var(--radius-card);overflow:auto;font-size:12.5px;max-height:420px;white-space:pre-wrap;word-break:break-word;margin:16px 0}
+input[type=text]{font:var(--fs-body)/20px var(--font);flex:1;min-width:0;padding:6px 8px;border:1px solid var(--control);border-radius:var(--radius-control)}
+.regras dl{padding:4px 20px 20px}
+.regras dt{font-weight:500;margin-top:14px}
+.regras dd{color:var(--muted);margin-top:2px}
+@media (max-width:1100px){
+  .titlerow{flex-wrap:wrap}.finding{max-width:100%}.ml{margin-left:0;width:100%}
+  .cols{grid-template-columns:1fr}
+  .band .row,.axis{grid-template-columns:160px minmax(0,1fr) 72px}
+}
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  .side{flex-direction:row;align-items:center;gap:12px;height:48px;padding:0 16px;border-bottom:1px solid var(--border);overflow-x:auto}
+  .scope,.navlbl,.side .foot{display:none}
+  .nav{display:flex;gap:4px}.nav button{width:auto;white-space:nowrap}
+  .canvas{padding:16px;max-width:none}
+  .paths{flex-wrap:wrap;height:auto;padding:12px 16px;row-gap:4px}.paths .sep{display:none}.paths .pa{margin-left:0}
+  .band .row,.axis{grid-template-columns:104px minmax(0,1fr) 60px;gap:8px}
+  .band .lbl .m{display:none}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Fator de importação</h1>
-  <p class="sub">Varre as pastas de pedidos, lê as notas de débito e consolida em <code>ConsolidadoPath.xlsx</code>.</p>
-  <div id="app"><p class="vazio">Carregando…</p></div>
+<div class="app">
+  <nav class="side">
+    <div class="brand">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="3" width="16" height="3" rx="1" fill="#0a0a0a"/><rect x="1" y="8" width="10" height="3" rx="1" fill="#0a0a0a"/><rect x="1" y="13" width="6" height="3" rx="1" fill="#1d5fbf"/></svg>
+      <b>Consolidador</b>
+    </div>
+    <div class="scope"><div class="s1" id="sc1">—</div><div class="s2" id="sc2"></div></div>
+    <p class="navlbl">Trabalho</p>
+    <div class="nav" id="nav1"></div>
+    <p class="navlbl" style="margin-top:28px">Ajustes</p>
+    <div class="nav" id="nav2"></div>
+    <div class="foot"><div class="u1">Fator de importação</div><div class="u2">Procurement · BR10</div></div>
+  </nav>
+  <main class="canvas" id="canvas"><p class="vazio">Carregando…</p></main>
 </div>
 
 <script>
-const $ = (h) => { const d = document.createElement('div'); d.innerHTML = h.trim(); return d.firstChild }
+const $ = (h) => { const d = document.createElement('div'); d.innerHTML = h.trim(); return d.firstElementChild }
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]))
-const brl = (n) => (Number(n)||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 })
-const pct = (n) => ((Number(n)||0)*100).toFixed(1).replace('.', ',') + '%'
+const brl0 = (n) => Math.round(Number(n) || 0).toLocaleString('pt-BR')
+const pct = (n) => ((Number(n) || 0) * 100).toFixed(1).replace('.', ',') + '%'
 const api = async (rota, body) => {
   const r = await fetch(rota, body ? { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(body) } : undefined)
   const j = await r.json()
@@ -66,182 +143,345 @@ const api = async (rota, body) => {
   return j
 }
 
-let estado = null
-let marcados = new Set()
-let ultima = null
+let estado = null, marcados = new Set(), ultima = null, aba = 'consolidar', ocupado = false
 
-const mesesComNovos = () => new Set(estado.meses.filter((m) => m.novos > 0).map((m) => m.mes))
+const mesesComNovos = () => new Set((estado.meses || []).filter((m) => m.novos > 0).map((m) => m.mes))
+const novosMarcados = () => (estado.meses || []).filter((m) => marcados.has(m.mes)).reduce((a, m) => a + m.novos, 0)
+const totalPedidos = () => (estado.meses || []).reduce((a, m) => a + m.total, 0)
+const errosDaUltima = () => (ultima && ultima.erros) || []
 
-async function carregar() {
+async function carregar(preservarMarcados) {
+  const antes = new Set(marcados)
   estado = await api('/api/estado')
-  marcados = mesesComNovos() // meses sem pedidos novos vêm desmarcados
+  // A última execução volta do disco: fechar e reabrir não perde o histórico.
+  if (estado.ultima) {
+    ultima = { ...estado.ultima.resultado, quando: estado.ultima.quando, texto: estado.ultima.texto, id: estado.ultima.id }
+  }
+  marcados = preservarMarcados
+    ? new Set([...antes].filter((m) => estado.meses.some((x) => x.mes === m)))
+    : mesesComNovos()
   render()
 }
 
-const novosMarcados = () => estado.meses.filter((m) => marcados.has(m.mes)).reduce((a, m) => a + m.novos, 0)
+const VIEWS = { consolidar: viewConsolidar, historico: viewHistorico, erros: viewErros, caminhos: viewCaminhos, regras: viewRegras }
 
 function render() {
-  const app = document.getElementById('app')
-  app.innerHTML = ''
-  app.append(blocoCaminhos(), blocoMeses(), blocoAcoes())
-  if (ultima) { app.append(blocoUltima()); const f = blocoFaixa(); if (f) app.append(f) }
-  app.append(blocoHistorico())
+  const raiz = estado.cfg.raiz || ''
+  document.getElementById('sc1').textContent = raiz.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '—'
+  document.getElementById('sc2').textContent = raiz
+  const nErros = errosDaUltima().length
+  menu('nav1', [
+    ['consolidar', 'Consolidar', null],
+    ['historico', 'Histórico', (estado.historico || []).length || null],
+    ['erros', 'Pastas com erro', nErros ? { alerta: nErros } : null],
+  ])
+  menu('nav2', [['caminhos', 'Pastas e planilha', null], ['regras', 'Regras de cálculo', null]])
+
+  const c = document.getElementById('canvas')
+  c.innerHTML = ''
+  c.append(tituloEAcoes())
+  if (estado.erro) c.append($(`<div class="card erro">${esc(estado.erro)}</div>`))
+  c.append(barraCaminhos())
+  c.append(VIEWS[aba]())
 }
 
-function blocoCaminhos() {
-  const el = $(`<div class="card">
-    <h2>Caminhos</h2>
-    <div class="cam"><b>Pasta dos dados</b><code>${esc(estado.cfg.raiz)}</code><button data-k="raiz">Alterar</button></div>
-    <div class="cam"><b>Planilha</b><code>${esc(estado.cfg.planilha)}</code><button data-k="planilha">Alterar</button></div>
-    ${estado.erro ? `<div class="card erro" style="margin:10px 0 0">${esc(estado.erro)}</div>` : ''}
-  </div>`)
-  el.querySelectorAll('button[data-k]').forEach((b) => { b.onclick = () => trocarCaminho(b.dataset.k, b) })
-  return el
-}
-
-async function trocarCaminho(chave, botao) {
-  const linha = botao.parentElement
-  const campo = $(`<input type="text" value="${esc(estado.cfg[chave])}">`)
-  const ok = $('<button>Salvar</button>')
-  linha.querySelector('code').replaceWith(campo)
-  botao.replaceWith(ok)
-  campo.focus()
-  ok.onclick = async () => {
-    ok.disabled = true
-    try { estado = await api('/api/config', { [chave]: campo.value }); marcados = mesesComNovos(); ultima = null; render() }
-    catch (e) { alert(e.message); ok.disabled = false }
+function menu(id, itens) {
+  const el = document.getElementById(id)
+  el.innerHTML = ''
+  for (const [chave, rotulo, extra] of itens) {
+    const c = extra && extra.alerta ? `<span class="c alert">${extra.alerta}</span>` : extra ? `<span class="c">${extra}</span>` : ''
+    const b = $(`<button ${aba === chave ? 'aria-current="page"' : ''}>${rotulo}${c}</button>`)
+    b.onclick = () => { aba = chave; render() }
+    el.append(b)
   }
-  campo.onkeydown = (e) => { if (e.key === 'Enter') ok.click() }
 }
 
-function blocoMeses() {
-  if (!estado.meses.length) {
-    return $(`<div class="card"><h2>Meses encontrados</h2><p class="vazio">Nenhuma pasta de mês dentro de <code>${esc(estado.cfg.raiz)}</code>dados.</p></div>`)
+// A frase do topo diz o que a analista procuraria batendo o olho na planilha.
+function frase() {
+  const partes = []
+  const novos = novosMarcados()
+  if (novos) {
+    const ms = (estado.meses || []).filter((m) => marcados.has(m.mes) && m.novos > 0).map((m) => m.mes)
+    partes.push(`${novos} pedido${novos === 1 ? '' : 's'} novo${novos === 1 ? '' : 's'} em ${ms.join(', ')}.`)
+  } else if (totalPedidos()) {
+    partes.push('Nenhum pedido novo para consolidar.')
   }
-  const el = $(`<div class="card"><h2>Meses encontrados</h2><table>
-    <thead><tr><th>Mês</th><th class="n">Pedidos</th><th class="n">Já na planilha</th><th class="n">Novos</th></tr></thead>
-    <tbody>${estado.meses.map((m) => `<tr>
-      <td><label class="mes"><input type="checkbox" data-mes="${esc(m.mes)}" ${marcados.has(m.mes) ? 'checked' : ''}> ${esc(m.mes)}</label></td>
-      <td class="n">${m.total}</td><td class="n">${m.existentes}</td>
-      <td class="n"><span class="pill ${m.novos ? 'ok' : 'zero'}">${m.novos}</span></td></tr>`).join('')}
-    </tbody></table></div>`)
-  el.querySelectorAll('input[data-mes]').forEach((c) => {
-    c.onchange = () => {
-      if (c.checked) marcados.add(c.dataset.mes); else marcados.delete(c.dataset.mes)
-      render()
+  const ad = (ultima && ultima.adicionados) || []
+  if (ad.length) {
+    const fora = ad.filter((p) => p.fator > estado.faixa.max)
+    if (fora.length) {
+      const maiorCif = Math.max(...fora.map((p) => p.cif))
+      partes.push(`Na última execução, ${fora.length} dos ${ad.length} consolidados ficaram acima de ${pct(estado.faixa.max)} — todos com carga de até R$ ${brl0(maiorCif)}.`)
+    } else {
+      partes.push(`Os ${ad.length} consolidados na última execução ficaram dentro da faixa.`)
     }
-  })
-  return el
+  }
+  return partes.join(' ')
 }
 
-function blocoAcoes() {
+const TITULOS = { consolidar:'Consolidar', historico:'Histórico', erros:'Pastas com erro', caminhos:'Pastas e planilha', regras:'Regras de cálculo' }
+
+function tituloEAcoes() {
   const n = novosMarcados()
-  const el = $(`<div class="card"><div class="acoes">
-    <button id="b-dry" ${marcados.size ? '' : 'disabled'}>Conferir sem gravar</button>
-    <button id="b-go" class="primario" ${n ? '' : 'disabled'}>Consolidar ${n} pedido${n === 1 ? '' : 's'}</button>
-    <span class="vazio" id="status"></span>
-  </div></div>`)
+  const el = $(`<div class="titlerow">
+    <div><h1>${TITULOS[aba]}</h1>${aba === 'consolidar' ? `<p class="finding">${esc(frase())}</p>` : ''}</div>
+    <div class="ml">
+      <button class="btn ghost" id="b-atualizar" title="Reler as pastas e a planilha">${ocupado ? 'Trabalhando…' : 'Atualizar'}</button>
+      <button class="btn ghost" id="b-dry" ${marcados.size && !ocupado ? '' : 'disabled'}>Conferir sem gravar</button>
+      <button class="btn" id="b-go" ${n && !ocupado ? '' : 'disabled'}>Consolidar ${n} pedido${n === 1 ? '' : 's'}</button>
+    </div></div>`)
+  el.querySelector('#b-atualizar').onclick = atualizar
   el.querySelector('#b-dry').onclick = () => executar({ dryRun: true })
   el.querySelector('#b-go').onclick = () => executar({ dryRun: false })
   return el
 }
 
-async function executar(opts) {
-  const botoes = [...document.querySelectorAll('.acoes button')]
-  botoes.forEach((b) => { b.disabled = true })
-  const st = document.getElementById('status')
-  st.textContent = opts.dryRun ? 'Conferindo…' : 'Consolidando…'
+async function atualizar(ev) {
+  const b = ev.target
+  b.disabled = true
+  b.textContent = 'Atualizando…'
   try {
-    ultima = await api('/api/rodar', { meses: [...marcados], ...opts })
-    estado = await api('/api/estado')
-    if (!opts.dryRun) marcados = mesesComNovos()
+    await carregar(true)
+  } catch (e) {
+    b.disabled = false
+    b.textContent = 'Atualizar'
+    alert(e.message)
+  }
+}
+
+function barraCaminhos() {
+  const el = $(`<div class="paths card">
+    <span class="pk">Dados</span><span class="pv">${esc(estado.cfg.raiz)}dados</span>
+    <span class="sep"></span>
+    <span class="pk">Planilha</span><span class="pv">${esc(estado.cfg.planilha)}</span>
+    <span class="pa"><button class="lnk">Alterar</button></span></div>`)
+  el.querySelector('button').onclick = () => { aba = 'caminhos'; render() }
+  return el
+}
+
+function viewConsolidar() {
+  const sec = $('<section></section>')
+  const cols = $('<div class="cols"></div>')
+  cols.append(cardMeses(), cardUltima())
+  sec.append(cols)
+  const faixa = cardFaixa()
+  if (faixa) {
+    const s2 = $('<div style="margin-top:40px"></div>')
+    s2.append(faixa)
+    sec.append(s2)
+  }
+  return sec
+}
+
+function cardMeses() {
+  const box = $('<div></div>')
+  box.append($(`<div class="sechead"><h2>Meses encontrados</h2><span class="meta">${totalPedidos()} pedidos no total</span></div>`))
+  if (!(estado.meses || []).length) {
+    box.append($(`<div class="card"><p class="vazio">Nenhuma pasta de mês em <code>${esc(estado.cfg.raiz)}dados</code>.</p></div>`))
+    return box
+  }
+  const card = $(`<div class="card tw"><table>
+    <thead><tr><th>Mês</th><th class="r">Pedidos</th><th class="r">Já na planilha</th><th class="r">Novos</th></tr></thead>
+    <tbody>${estado.meses.map((m) => `<tr class="${marcados.has(m.mes) ? 'sel' : ''}">
+      <td><label class="mes"><input type="checkbox" data-mes="${esc(m.mes)}" ${marcados.has(m.mes) ? 'checked' : ''}> ${esc(m.mes)}</label></td>
+      <td class="r num">${m.total}</td>
+      <td class="r num dim">${m.existentes}</td>
+      <td class="r num ${m.novos ? '' : 'dim'}">${m.novos}</td></tr>`).join('')}
+    </tbody></table>
+    <p style="font-size:12px;color:var(--muted);padding:12px 0 16px">Pedidos já na planilha são reconhecidos pela N/Ref. e nunca são gravados de novo.</p></div>`)
+  card.querySelectorAll('input[data-mes]').forEach((c) => {
+    c.onchange = () => {
+      if (c.checked) marcados.add(c.dataset.mes); else marcados.delete(c.dataset.mes)
+      render()
+    }
+  })
+  box.append(card)
+  return box
+}
+
+function cardUltima() {
+  const box = $('<div></div>')
+  box.append($('<div class="sechead"><h2>Última execução</h2></div>'))
+  if (!ultima) {
+    box.append($('<div class="card"><p class="vazio">Nenhuma execução ainda.</p></div>'))
+    return box
+  }
+  const erros = ultima.erros || []
+  const card = $(`<div class="card runcard" style="height:calc(100% - 38px)">
+    <div class="runrow"><span class="k">Adicionados</span><span class="v num">${(ultima.adicionados || []).length}</span></div>
+    <div class="runrow"><span class="k">Pulados, já existiam</span><span class="v num dim">${(ultima.pulados || []).length}</span></div>
+    <div class="runrow"><span class="k">Pastas com erro</span><span class="v num ${erros.length ? 'neg' : 'dim'}">${erros.length}</span></div>
+    ${erros.slice(0, 3).map((e) => `<div class="errbox">
+      <div class="e1">${esc(e.mes)} / ${esc(e.modal)} / ${esc(e.nref)}</div>
+      <div class="e2">${esc(e.motivo)}</div></div>`).join('')}
+    ${erros.length > 3 ? `<div class="errbox"><div class="e2">e mais ${erros.length - 3}…</div></div>` : ''}
+    <div class="runfoot"><button class="lnk">Ver execução de ${esc(ultima.quando)}${ultima.dryRun ? ' (conferência)' : ''}</button></div></div>`)
+  card.querySelector('.runfoot button').onclick = () => { aba = 'historico'; render() }
+  box.append(card)
+  return box
+}
+
+// Faixa 24%–30%: cada pedido consolidado sobre a faixa, ordenado por valor de carga.
+function cardFaixa() {
+  const ps = [...((ultima && ultima.adicionados) || [])].sort((a, b) => a.cif - b.cif)
+  if (!ps.length) return null
+  const min = estado.faixa.min, max = estado.faixa.max
+  const MAX = Math.max(0.7, ...ps.map((p) => p.fator)) * 1.06
+  const x = (f) => Math.min(100, (f / MAX) * 100)
+  const zona = `left:${x(min)}%;width:${x(max) - x(min)}%`
+  const ticks = []
+  for (let v = 0; v <= MAX; v += 0.3) ticks.push(v)
+
+  const cif = ps.reduce((a, p) => a + p.cif, 0)
+  const total = ps.reduce((a, p) => a + p.total, 0)
+  const ponderado = cif ? total / cif : 0
+
+  const box = $('<div></div>')
+  box.append($(`<div class="sechead"><h2>Fator dos ${ps.length} pedido${ps.length === 1 ? '' : 's'} consolidado${ps.length === 1 ? '' : 's'}</h2>
+    <span class="legend">
+      <span><i style="background:#dfe6f2"></i>faixa ${pct(min)} a ${pct(max)}</span>
+      <span><i style="background:#1d5fbf"></i>dentro</span>
+      <span><i style="background:#9fb6d8"></i>fora</span></span></div>`))
+  box.append($(`<div class="card" style="padding:20px"><div class="band">
+    <div class="row" style="height:auto;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Pedido, por valor de carga</span><span></span>
+      <span style="font-size:12px;color:var(--muted);text-align:right">Fator</span></div>
+    ${ps.map((p) => {
+      const fora = p.fator < min || p.fator > max
+      return `<div class="row">
+        <span class="lbl">${esc(p.nref)} <span class="m">R$ ${brl0(p.cif)}</span></span>
+        <span class="track"><i class="zone" style="${zona}"></i><i class="bar ${fora ? 'out' : ''}" style="width:${x(p.fator)}%"></i></span>
+        <span class="val num ${fora ? 'neg' : ''}">${pct(p.fator)}</span></div>`
+    }).join('')}
+    <div class="axis"><span></span><span class="t">${ticks.map((v) => `<span style="left:${x(v)}%">${Math.round(v * 100)}%</span>`).join('')}</span><span></span></div>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:14px">Somados, os ${ps.length} pedidos dão fator de ${pct(ponderado)} sobre R$ ${brl0(cif)} de carga — ${ponderado >= min && ponderado <= max ? 'dentro da faixa' : 'fora da faixa'}. Fator alto em pedido pequeno é esperado: as despesas fixas por processo não acompanham o valor da carga.</p>
+  </div>`))
+  return box
+}
+
+function viewHistorico() {
+  const sec = $('<section></section>')
+  const h = estado.historico || []
+  if (!h.length) {
+    sec.append($('<div class="card"><p class="vazio">Nenhuma execução registrada.</p></div>'))
+    return sec
+  }
+  sec.append($(`<div class="sechead"><h2>Execuções</h2><span class="meta">as ${h.length} mais recentes, guardadas em historico.json</span></div>`))
+  const card = $(`<div class="card tw"><table>
+    <thead><tr><th>Quando</th><th>Tipo</th><th class="r">Adicionados</th><th class="r">Pulados</th><th class="r">Erros</th><th></th></tr></thead>
+    <tbody>${h.map((x) => `<tr><td>${esc(x.quando)}</td><td class="dim">${x.dryRun ? 'conferência' : 'gravação'}</td>
+      <td class="r num">${x.adicionados}</td><td class="r num dim">${x.pulados}</td>
+      <td class="r num ${x.erros ? 'neg' : 'dim'}">${x.erros}</td>
+      <td class="r"><button class="lnk" data-log="${esc(x.id)}">Ver registro</button></td></tr>`).join('')}
+    </tbody></table><div id="log-alvo"></div></div>`)
+  card.querySelectorAll('button[data-log]').forEach((b) => {
+    b.onclick = async () => {
+      try {
+        const e = await api('/api/log/' + b.dataset.log)
+        const alvo = card.querySelector('#log-alvo')
+        alvo.innerHTML = ''
+        alvo.append($(`<pre>${esc(e.texto)}</pre>`))
+      } catch (err) { alert(err.message) }
+    }
+  })
+  sec.append(card)
+  const acao = $(`<div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <button class="btn ghost" id="b-re" ${marcados.size && !ocupado ? '' : 'disabled'}>Reprocessar os meses marcados</button>
+    <span class="dim" style="font-size:13px">Apaga da planilha as linhas daqueles meses e consolida de novo. Nunca acontece só por marcar o mês.</span></div>`)
+  acao.querySelector('#b-re').onclick = () => {
+    if (confirm(`Apagar da planilha as linhas de ${[...marcados].join(', ')} e consolidar de novo?`)) {
+      executar({ dryRun: false, reprocessar: true })
+    }
+  }
+  sec.append(acao)
+  return sec
+}
+
+function viewErros() {
+  const sec = $('<section></section>')
+  const erros = errosDaUltima()
+  if (!erros.length) {
+    sec.append($('<div class="card"><p class="vazio">Nenhuma pasta falhou na última execução.</p></div>'))
+    return sec
+  }
+  sec.append($(`<div class="sechead"><h2>${erros.length} pasta${erros.length === 1 ? '' : 's'} pulada${erros.length === 1 ? '' : 's'}</h2>
+    <span class="meta">na execução de ${esc(ultima.quando)}</span></div>`))
+  sec.append($(`<div class="card" style="padding:8px 0 20px">
+    ${erros.map((e) => `<div class="errbox">
+      <div class="e1">${esc(e.mes)} / ${esc(e.modal)} / ${esc(e.nref)}</div>
+      <div class="e2">${esc(e.motivo)}</div>
+      <div class="e2" style="margin-top:6px"><code>${esc(e.pasta)}</code></div></div>`).join('')}
+    <p style="font-size:13px;color:var(--muted);padding:16px 20px 0">O pedido inteiro foi pulado. Corrija a pasta e rode de novo — nada do que já está na planilha é reescrito.</p></div>`))
+  return sec
+}
+
+function viewCaminhos() {
+  const sec = $('<section></section>')
+  const card = $(`<div class="card" style="padding:4px 20px 20px">
+    <div style="padding:16px 0">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Pasta dos dados</div>
+      <div style="display:flex;gap:10px"><input type="text" id="f-raiz" value="${esc(estado.cfg.raiz)}"></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">Tem que conter a subpasta <code>dados</code>, com <code>dados\\&lt;mês&gt;\\&lt;modal&gt;\\&lt;pedido&gt;</code>.</div></div>
+    <div style="padding:16px 0;border-top:1px solid var(--rule)">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Planilha de destino</div>
+      <div style="display:flex;gap:10px"><input type="text" id="f-pl" value="${esc(estado.cfg.planilha)}"></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">Apague o conteúdo para voltar a <code>&lt;raiz&gt;\\ConsolidadoPath.xlsx</code>. Antes de gravar, é copiada para <code>ConsolidadoPath.bak.xlsx</code>.</div></div>
+    <div style="display:flex;gap:10px;padding-top:4px">
+      <button class="btn" id="b-salvar">Salvar</button>
+      <button class="btn ghost" id="b-cancelar">Cancelar</button></div></div>`)
+  card.querySelector('#b-cancelar').onclick = () => { aba = 'consolidar'; render() }
+  card.querySelector('#b-salvar').onclick = async (ev) => {
+    ev.target.disabled = true
+    try {
+      estado = await api('/api/config', { raiz: card.querySelector('#f-raiz').value, planilha: card.querySelector('#f-pl').value })
+      marcados = mesesComNovos()
+      aba = 'consolidar'
+      render()
+    } catch (err) {
+      ev.target.disabled = false
+      alert(err.message)
+    }
+  }
+  sec.append(card)
+  return sec
+}
+
+function viewRegras() {
+  const min = estado.faixa.min, max = estado.faixa.max
+  const sec = $('<section></section>')
+  sec.append($(`<div class="card regras"><dl>
+    <dt>Fator de importação</dt><dd>Custo total ÷ soma do CIF Total. A faixa esperada é ${pct(min)} a ${pct(max)}.</dd>
+    <dt>O que entra no custo</dt><dd>II Recolhido + Tx. Siscomex + frete rodoviário + marinha mercante (zero no aéreo) + despesas na origem + armazenagem + honorários + frete internacional.</dd>
+    <dt>O que fica de fora</dt><dd>PIS, COFINS e ICMS. São recuperáveis — a empresa credita depois, então não são despesa de importação.</dd>
+    <dt>Armazenagem</dt><dd>Uma nota traz uma cobrança por período de permanência. Todas são somadas, não só a primeira.</dd>
+    <dt>PDFs descartados</dt><dd>Arquivo com <code>Extrato</code> no nome, e nota que contenha <code>DESPACHANTES ADUANEIROS</code>: esses valores já entram por outra via.</dd>
+    <dt>Coluna Outros</dt><dd>Fica sempre vazia, para você digitar à mão. O Total é fórmula do Excel e inclui essa coluna, então acompanha o que for digitado.</dd>
+    <dt>Fator logístico</dt><dd>O custo sem II e sem Tx. Siscomex, dividido pelo CIF. É a parcela sobre a qual uma decisão de compra ou de despachante muda alguma coisa.</dd>
+    <dt>Pedido já gravado</dt><dd>A N/Ref. na coluna A é a chave. Se já aparece na aba, o pedido é pulado inteiro.</dd>
+  </dl></div>`))
+  return sec
+}
+
+async function executar(opts) {
+  ocupado = true
+  render()
+  try {
+    await api('/api/rodar', { meses: [...marcados], ...opts })
+    ocupado = false
+    await carregar(opts.dryRun) // relê tudo, inclusive o histórico já gravado
+    aba = 'consolidar'
     render()
   } catch (e) {
-    st.textContent = ''
-    botoes.forEach((b) => { b.disabled = false })
+    ocupado = false
+    render()
     alert('Falhou: ' + e.message)
   }
 }
 
-function blocoUltima() {
-  const r = ultima
-  const el = $(`<div class="card">
-    <h2>Última execução — ${esc(r.quando)}${r.dryRun ? ' · conferência, nada gravado' : (r.gravado ? ' · planilha gravada' : ' · nada a gravar')}</h2>
-    <p><span class="pill ok">${r.adicionados.length} adicionados</span>
-       <span class="pill zero">${r.pulados.length} pulados</span>
-       <span class="pill ${r.erros.length ? 'err' : 'zero'}">${r.erros.length} pastas com erro</span></p>
-    ${r.erros.length ? `<table><thead><tr><th>Pasta</th><th>Motivo</th></tr></thead><tbody>${
-      r.erros.map((e) => `<tr><td><code>${esc(e.pasta)}</code></td><td>${esc(e.motivo)}</td></tr>`).join('')
-    }</tbody></table>` : ''}
-    ${['AIR','SEA'].filter((m) => r.totais[m].pedidos).map((m) => {
-      const t = r.totais[m]
-      return `<p style="margin:10px 0 0"><b>${m}</b> · ${t.pedidos} pedidos · ${t.linhas} linhas ·
-        CIF R$ ${brl(t.cif)} · custo R$ ${brl(t.total)} ·
-        fator ponderado <b>${pct(t.fatorPonderado)}</b> · logístico ${pct(t.fatorLogistico)}</p>`
-    }).join('')}
-    <div class="acoes"><button id="b-log">Abrir o registro completo</button></div>
-    <pre id="log" hidden>${esc(r.texto)}</pre>
-  </div>`)
-  el.querySelector('#b-log').onclick = (e) => {
-    const pre = el.querySelector('#log')
-    pre.hidden = !pre.hidden
-    e.target.textContent = pre.hidden ? 'Abrir o registro completo' : 'Fechar o registro'
-  }
-  return el
-}
-
-// Faixa 24%–30%: cada pedido consolidado sobre a faixa, ordenado por valor de carga.
-function blocoFaixa() {
-  const ps = [...ultima.adicionados].sort((a, b) => b.cif - a.cif)
-  if (!ps.length) return null
-  const MAX = Math.max(0.6, ...ps.map((p) => p.fator)) * 1.05
-  const x = (f) => Math.min(100, (f / MAX) * 100)
-  const min = estado.faixa.min, max = estado.faixa.max
-  return $(`<div class="card"><h2>Faixa ${min*100}%–${max*100}% — ordenado por valor de carga</h2>
-    <table><thead><tr><th>N/Ref.</th><th>Modal</th><th class="n">CIF</th><th class="n">Fator</th><th style="width:46%"></th></tr></thead>
-    <tbody>${ps.map((p) => {
-      const fora = p.fator < min || p.fator > max
-      return `<tr>
-        <td><code>${esc(p.nref)}</code></td><td>${esc(p.modal)}</td>
-        <td class="n">${brl(p.cif)}</td>
-        <td class="n" style="color:${fora ? 'var(--ambar)' : 'var(--verde)'};font-weight:600">${pct(p.fator)}</td>
-        <td><div class="faixa">
-          <div class="banda" style="left:${x(min)}%;width:${x(max)-x(min)}%"></div>
-          <div class="ponto ${fora ? 'fora' : ''}" style="left:${x(p.fator)}%"></div>
-        </div></td></tr>`
-    }).join('')}</tbody></table>
-    <div class="legenda"><span>0%</span><span>faixa esperada em verde</span><span>${pct(MAX)}</span></div>
-    <p class="vazio">Fator alto em pedido pequeno é esperado: despesa fixa por processo não acompanha o valor da carga.</p>
-  </div>`)
-}
-
-function blocoHistorico() {
-  const el = $(`<div class="card"><h2>Histórico</h2>
-    ${estado.historico.length ? `<table><thead><tr><th>Quando</th><th>Tipo</th><th class="n">Adicionados</th><th class="n">Pulados</th><th class="n">Erros</th><th></th></tr></thead>
-      <tbody>${estado.historico.map((h) => `<tr><td>${esc(h.quando)}</td><td>${h.dryRun ? 'conferência' : 'gravação'}</td>
-        <td class="n">${h.adicionados}</td><td class="n">${h.pulados}</td><td class="n">${h.erros}</td>
-        <td class="n"><button data-log="${esc(h.id)}">Ver</button></td></tr>`).join('')}</tbody></table>`
-      : '<p class="vazio">Nenhuma execução nesta sessão.</p>'}
-    <div class="acoes" style="margin-top:12px">
-      <button id="b-re" ${marcados.size ? '' : 'disabled'}>Reprocessar os meses marcados</button>
-      <span class="vazio">Apaga da planilha as linhas daqueles meses e roda de novo. Não acontece ao marcar o mês na tela principal.</span>
-    </div></div>`)
-  el.querySelectorAll('button[data-log]').forEach((b) => {
-    b.onclick = async () => {
-      const h = await api('/api/log/' + b.dataset.log)
-      ultima = { ...h.resultado, quando: h.quando, texto: h.texto }
-      render()
-    }
-  })
-  el.querySelector('#b-re').onclick = () => {
-    if (confirm(`Apagar da planilha as linhas dos meses ${[...marcados].join(', ')} e consolidar de novo?`)) {
-      executar({ dryRun: false, reprocessar: true })
-    }
-  }
-  return el
-}
-
-carregar().catch((e) => { document.getElementById('app').innerHTML = `<div class="card erro">${esc(e.message)}</div>` })
+carregar(false).catch((e) => {
+  document.getElementById('canvas').innerHTML = `<div class="card erro">${esc(e.message)}</div>`
+})
 </script>
 </body>
 </html>

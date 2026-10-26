@@ -97,11 +97,23 @@ func Varrer(raiz string) []Alvo {
 				continue
 			}
 			for _, nome := range subpastas(filepath.Join(base, mes, dirModal)) {
-				alvos = append(alvos, Alvo{mes, modal, nome, filepath.Join(base, mes, dirModal, nome)})
+				dir := filepath.Join(base, mes, dirModal, nome)
+				alvos = append(alvos, Alvo{mes, modal, nrefDaPasta(dir, nome), dir})
 			}
 		}
 	}
 	return alvos
+}
+
+// A N/Ref. é o nome do arquivo de materiais, não o da pasta. Sem resolver isso
+// aqui, a contagem de "já na planilha" compara a chave errada e todo pedido já
+// consolidado volta a aparecer como novo.
+func nrefDaPasta(dir, nomeDaPasta string) string {
+	arq, err := arquivoDeMateriais(dir)
+	if err != nil {
+		return nomeDaPasta // pasta sem materiais: o erro aparece ao processar
+	}
+	return NRefDe(arq)
 }
 
 func arquivoDeMateriais(dir string) (string, error) {

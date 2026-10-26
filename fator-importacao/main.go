@@ -30,8 +30,23 @@ var assets embed.FS
 const raizPadrao = `Y:\BR10\Procurement\Public\Teste fator importação\`
 
 type Config struct {
-	Raiz     string `json:"raiz"`
-	Planilha string `json:"planilha,omitempty"`
+	Raiz     string   `json:"raiz"`
+	Planilha string   `json:"planilha,omitempty"`
+	Faixa    *Faixa   `json:"faixa,omitempty"`
+	Custo    []string `json:"custo,omitempty"`
+}
+
+// Regras devolve a faixa e os componentes escolhidos, caindo no padrão do
+// levantamento quando a configuração não diz nada.
+func (c Config) Regras() Regras {
+	r := RegrasPadrao()
+	if c.Faixa != nil {
+		r.Faixa = *c.Faixa
+	}
+	if len(c.Custo) > 0 {
+		r.Custo = c.Custo
+	}
+	return r.Normalizar()
 }
 
 var (
@@ -210,8 +225,9 @@ func estado() map[string]any {
 		ultima = historico[len(historico)-1]
 	}
 	return map[string]any{
-		"cfg": c, "erro": erro, "faixa": Faixa, "meses": meses,
+		"cfg": c, "erro": erro, "faixa": c.Regras().Faixa, "meses": meses,
 		"historico": hist, "ultima": ultima,
+		"regras": c.Regras(), "componentes": Componentes,
 	}
 }
 
@@ -251,8 +267,9 @@ func relatorio(r *Resultado, c Config, quando string) string {
 		L = append(L, falhasPdf...)
 	}
 	if len(r.Avisos) > 0 {
+		f := c.Regras().Faixa
 		L = append(L, "", fmt.Sprintf("Fora da faixa %s–%s (fator alto em pedido pequeno é esperado):",
-			FmtPct(Faixa.Min), FmtPct(Faixa.Max)))
+			FmtPct(f.Min), FmtPct(f.Max)))
 		for _, a := range r.Avisos {
 			L = append(L, fmt.Sprintf("  %s [%s] CIF R$ %s -> %s", a.NRef, a.Modal, FmtBRL(a.CIF), FmtPct(a.Fator)))
 		}
@@ -275,6 +292,7 @@ func rodar(req pedidoRodar) (*Execucao, error) {
 	r, err := Consolidar(OpcoesConsolidar{
 		Raiz: c.Raiz, Planilha: c.Planilha,
 		Meses: req.Meses, DryRun: req.DryRun, Reprocessar: req.Reprocessar,
+		Regras: c.Regras(),
 	})
 	if err != nil {
 		return nil, err
@@ -344,6 +362,31 @@ func handler() http.Handler {
 			return
 		}
 		escreverJSON(w, http.StatusOK, estado())
+	})
+	mux.HandleFunc("POST /api/regras", func(w http.ResponseWriter, r *http.Request) {
+		var body Regras
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			erroJSON(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		n := body.Normalizar()
+		c := lerConfigBruta()
+		c.Faixa, c.Custo = &n.Faixa, n.Custo
+		if err := gravarConfig(c); err != nil {
+			erroJSON(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		escreverJSON(w, http.StatusOK, estado())
+	})
+	// Tudo que já está na planilha, para os gráficos — não só a última execução.
+	mux.HandleFunc("GET /api/planilha", func(w http.ResponseWriter, r *http.Request) {
+		c := lerConfig()
+		res, err := LerConsolidado(c.Planilha, c.Regras())
+		if err != nil {
+			erroJSON(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		escreverJSON(w, http.StatusOK, res)
 	})
 	mux.HandleFunc("POST /api/rodar", func(w http.ResponseWriter, r *http.Request) {
 		var body pedidoRodar

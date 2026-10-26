@@ -299,7 +299,7 @@ func TestPontaAPonta(t *testing.T) {
 		t.Errorf("modal em minúscula também tem que contar: %v", modais)
 	}
 
-	dry, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}, DryRun: true})
+	dry, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}, DryRun: true, Regras: RegrasPadrao()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,7 +341,7 @@ func TestPontaAPonta(t *testing.T) {
 		t.Errorf("fator logístico tem que excluir II e Siscomex: %v", sea.FatorLogistico*sea.CIF)
 	}
 
-	r1, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}})
+	r1, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}, Regras: RegrasPadrao()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +350,7 @@ func TestPontaAPonta(t *testing.T) {
 	}
 
 	// Reexecução: a N/Ref. bloqueia regravação.
-	r2, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}})
+	r2, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}, Regras: RegrasPadrao()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestPontaAPonta(t *testing.T) {
 	conferirPlanilha(t, planilha)
 
 	// Backup antes de gravar por cima; reprocessar não duplica.
-	if _, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}, Reprocessar: true}); err != nil {
+	if _, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}, Reprocessar: true, Regras: RegrasPadrao()}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(strings.TrimSuffix(planilha, ".xlsx") + ".bak.xlsx"); err != nil {
@@ -464,7 +464,7 @@ func TestPastaSemMateriaisNaoDerruba(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(raiz, "dados", "2026-08", "SEA", "pedido-vazio"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	r, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}, DryRun: true})
+	r, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}, DryRun: true, Regras: RegrasPadrao()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,7 +495,7 @@ func TestNRefVemDoArquivoNaoDaPasta(t *testing.T) {
 		t.Fatalf("N/Ref. esperadas não apareceram: %v", nrefs)
 	}
 
-	if _, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}}); err != nil {
+	if _, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}, Regras: RegrasPadrao()}); err != nil {
 		t.Fatal(err)
 	}
 	// Agora a varredura tem que reconhecer os dois como já gravados.
@@ -509,5 +509,136 @@ func TestNRefVemDoArquivoNaoDaPasta(t *testing.T) {
 		if !existentes[a.Modal][a.NRef] {
 			t.Errorf("%s/%s ficaria contado como novo depois de consolidado", a.Modal, a.NRef)
 		}
+	}
+}
+
+func TestRegrasNormalizar(t *testing.T) {
+	p := RegrasPadrao()
+	if len(p.Custo) != len(Componentes) || p.Faixa != (Faixa{0.24, 0.30}) {
+		t.Fatalf("padrão errado: %+v", p)
+	}
+	// Chave desconhecida some; faixa invertida volta ao padrão; repetida não duplica.
+	n := Regras{Faixa: Faixa{0.9, 0.1}, Custo: []string{"ii", "icms", "ii", "armazenagem"}}.Normalizar()
+	if n.Faixa != p.Faixa {
+		t.Errorf("faixa invertida devia voltar ao padrão, veio %+v", n.Faixa)
+	}
+	if len(n.Custo) != 2 || !n.Usa("ii") || !n.Usa("armazenagem") || n.Usa("icms") {
+		t.Errorf("custo normalizado errado: %v", n.Custo)
+	}
+	// Lista vazia cai no padrão em vez de zerar o fator de todo mundo.
+	if v := (Regras{Faixa: p.Faixa}).Normalizar(); len(v.Custo) != len(p.Custo) {
+		t.Errorf("custo vazio devia cair no padrão, veio %v", v.Custo)
+	}
+}
+
+func TestRegrasTotalEFormula(t *testing.T) {
+	somas := Somas{II: 100, Siscomex: 10}
+	custos := Custos{Rodoviario: 1, Marinha: 2, Origem: 4, Armazenagem: 8, Honorarios: 16, FreteIntl: 32}
+
+	cheio := RegrasPadrao()
+	if got := cheio.Total(somas, custos); !perto(got, 173) {
+		t.Errorf("total cheio = %v, queria 173", got)
+	}
+	if got := cheio.FormulaTotal("SEA", 4); got != "SUM(L4:T4)" {
+		t.Errorf("com tudo ligado a fórmula tem que ser contígua, veio %q", got)
+	}
+	if got := cheio.FormulaTotal("AIR", 3); got != "SUM(L3:S3)" {
+		t.Errorf("fórmula do aéreo = %q", got)
+	}
+
+	// Só logística: sai o imposto, e as colunas deixam de ser contíguas.
+	semImposto := Regras{Faixa: cheio.Faixa, Custo: []string{"rodoviario", "marinha", "origem", "armazenagem", "honorarios", "freteIntl"}}
+	if got := semImposto.Total(somas, custos); !perto(got, 63) {
+		t.Errorf("total sem imposto = %v, queria 63", got)
+	}
+	if got := semImposto.Imposto(somas); got != 0 {
+		t.Errorf("imposto devia ser zero, veio %v", got)
+	}
+	if got := semImposto.FormulaTotal("SEA", 4); got != "SUM(N4:T4)" {
+		t.Errorf("fórmula sem imposto = %q", got)
+	}
+	// Marinha mercante não existe no aéreo: não pode entrar na fórmula.
+	if got := cheio.FormulaTotal("AIR", 3); strings.Contains(got, "+") {
+		t.Errorf("aéreo com tudo ligado ainda é contíguo, veio %q", got)
+	}
+	// Buraco no meio força a soma explícita, com Outros sempre no fim.
+	furado := Regras{Faixa: cheio.Faixa, Custo: []string{"ii", "armazenagem"}}
+	if got := furado.FormulaTotal("SEA", 4); got != "L4+Q4+T4" {
+		t.Errorf("fórmula furada = %q, queria L4+Q4+T4", got)
+	}
+}
+
+func TestFaixaConfiguravelMudaOsAvisos(t *testing.T) {
+	raiz, planilha := arvore(t)
+	// O pedido SEA de teste dá fator bem acima de 30%: com a faixa larga some.
+	larga := Regras{Faixa: Faixa{0.10, 3.00}, Custo: RegrasPadrao().Custo}
+	r, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}, DryRun: true, Regras: larga})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Avisos) != 0 {
+		t.Errorf("faixa larga não devia gerar aviso, veio %d", len(r.Avisos))
+	}
+	estreita := Regras{Faixa: Faixa{0.24, 0.2401}, Custo: RegrasPadrao().Custo}
+	r2, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}, DryRun: true, Regras: estreita})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r2.Avisos) != len(r2.Adicionados) {
+		t.Errorf("faixa estreita devia avisar de todos: %d de %d", len(r2.Avisos), len(r2.Adicionados))
+	}
+}
+
+func TestLerConsolidadoAlimentaOsGraficos(t *testing.T) {
+	raiz, planilha := arvore(t)
+	regras := RegrasPadrao()
+	if _, err := Consolidar(OpcoesConsolidar{Raiz: raiz, Planilha: planilha, Meses: []string{"2026-08"}, Regras: regras}); err != nil {
+		t.Fatal(err)
+	}
+	c, err := LerConsolidado(planilha, regras)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Pedidos) != 2 {
+		t.Fatalf("queria 2 pedidos lidos da planilha, veio %d (%+v)", len(c.Pedidos), c.Pedidos)
+	}
+	porNRef := map[string]PedidoGravado{}
+	for _, p := range c.Pedidos {
+		porNRef[p.NRef] = p
+	}
+	sea := porNRef["B26TESTE01"]
+	if sea.Modal != "SEA" || sea.Linhas != 2 {
+		t.Errorf("linha de total lida errado: %+v", sea)
+	}
+	if !perto(sea.CIF, 5900.99) {
+		t.Errorf("CIF lido = %v, queria 5900.99", sea.CIF)
+	}
+	// O Total vem somado das colunas, porque a célula Total guarda fórmula.
+	logistico := 8370.25 + 1417.79 + 500.0 + 200.0 + 1000.0 + 273.50
+	if !perto(sea.Total, 120.27+1046.57+154.23+logistico) {
+		t.Errorf("total recalculado = %v", sea.Total)
+	}
+	if !perto(sea.Imposto, 120.27+1046.57+154.23) {
+		t.Errorf("imposto = %v", sea.Imposto)
+	}
+	if sea.Mes != "2026-08" {
+		t.Errorf("mês tirado da data das linhas de material = %q, queria 2026-08", sea.Mes)
+	}
+	if !perto(sea.Fator, sea.Total/sea.CIF) || !perto(sea.FatorLogistico, (sea.Total-sea.Imposto)/sea.CIF) {
+		t.Errorf("fatores errados: %+v", sea)
+	}
+	// 06/04/2026 do .xlsx continua abril, não junho.
+	if porNRef["B26TESTE02"].Mes != "2026-04" {
+		t.Errorf("mês do pedido aéreo = %q, queria 2026-04", porNRef["B26TESTE02"].Mes)
+	}
+}
+
+func TestLerConsolidadoSemPlanilhaNaoQuebra(t *testing.T) {
+	c, err := LerConsolidado(filepath.Join(t.TempDir(), "nao-existe.xlsx"), RegrasPadrao())
+	if err != nil {
+		t.Fatalf("planilha ausente não pode virar erro: %v", err)
+	}
+	if len(c.Pedidos) != 0 || c.Aviso == "" {
+		t.Errorf("queria aviso e lista vazia, veio %+v", c)
 	}
 }

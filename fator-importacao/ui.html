@@ -97,6 +97,21 @@ input[type=text]{font:var(--fs-body)/20px var(--font);flex:1;min-width:0;padding
 .regras dl{padding:4px 20px 20px}
 .regras dt{font-weight:500;margin-top:14px}
 .regras dd{color:var(--muted);margin-top:2px}
+@media print{
+  @page{size:A4 portrait;margin:14mm}
+  body{background:#fff}
+  .side,.titlerow .ml,.paths .pa,.lnk,.btn{display:none!important}
+  .app{display:block}
+  .canvas{padding:0;max-width:none}
+  .card{break-inside:avoid;border-color:#ccc}
+  section,.sechead{break-inside:avoid}
+  .band .row{height:30px}
+  .track .zone{background:#e8eef7!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .track .bar,.legend i,[style*="background:#1d5fbf"],[style*="background:#9fb6d8"],[style*="background:#8aa0bd"]{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cabecalho-impressao{display:block!important;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid #ccc}
+  pre{display:none}
+}
+.cabecalho-impressao{display:none}
 @media (max-width:1100px){
   .titlerow{flex-wrap:wrap}.finding{max-width:100%}.ml{margin-left:0;width:100%}
   .cols{grid-template-columns:1fr}
@@ -163,7 +178,7 @@ async function carregar(preservarMarcados) {
   render()
 }
 
-const VIEWS = { consolidar: viewConsolidar, historico: viewHistorico, erros: viewErros, caminhos: viewCaminhos, regras: viewRegras }
+const VIEWS = { consolidar: viewConsolidar, graficos: viewGraficos, historico: viewHistorico, erros: viewErros, caminhos: viewCaminhos, regras: viewRegras }
 
 function render() {
   const raiz = estado.cfg.raiz || ''
@@ -173,16 +188,28 @@ function render() {
   menu('nav1', [
     ['consolidar', 'Consolidar', null],
     ['historico', 'Histórico', (estado.historico || []).length || null],
+    ['graficos', 'Gráficos', null],
     ['erros', 'Pastas com erro', nErros ? { alerta: nErros } : null],
   ])
   menu('nav2', [['caminhos', 'Pastas e planilha', null], ['regras', 'Regras de cálculo', null]])
 
   const c = document.getElementById('canvas')
   c.innerHTML = ''
+  c.append(cabecalhoImpressao())
   c.append(tituloEAcoes())
   if (estado.erro) c.append($(`<div class="card erro">${esc(estado.erro)}</div>`))
   c.append(barraCaminhos())
   c.append(VIEWS[aba]())
+}
+
+// Só aparece no PDF: sem isto a folha sai sem dizer de onde vieram os números.
+function cabecalhoImpressao() {
+  const agora = new Date().toLocaleString('pt-BR')
+  return $(`<div class="cabecalho-impressao">
+    <div style="font-size:16px;font-weight:600">Fator de importação — ${esc(TITULOS[aba])}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">
+      ${esc(estado.cfg.planilha)}<br>
+      Faixa ${pct(estado.faixa.min)} a ${pct(estado.faixa.max)} · gerado em ${esc(agora)}</div></div>`)
 }
 
 function menu(id, itens) {
@@ -219,17 +246,20 @@ function frase() {
   return partes.join(' ')
 }
 
-const TITULOS = { consolidar:'Consolidar', historico:'Histórico', erros:'Pastas com erro', caminhos:'Pastas e planilha', regras:'Regras de cálculo' }
+const TITULOS = { consolidar:'Consolidar', graficos:'Gráficos', historico:'Histórico', erros:'Pastas com erro', caminhos:'Pastas e planilha', regras:'Regras de cálculo' }
 
 function tituloEAcoes() {
   const n = novosMarcados()
   const el = $(`<div class="titlerow">
     <div><h1>${TITULOS[aba]}</h1>${aba === 'consolidar' ? `<p class="finding">${esc(frase())}</p>` : ''}</div>
     <div class="ml">
+      ${aba === 'graficos' || aba === 'consolidar' ? '<button class="btn ghost" id="b-pdf" title="Abre a janela de impressão: escolha Salvar como PDF">Exportar PDF</button>' : ''}
       <button class="btn ghost" id="b-atualizar" title="Reler as pastas e a planilha">${ocupado ? 'Trabalhando…' : 'Atualizar'}</button>
       <button class="btn ghost" id="b-dry" ${marcados.size && !ocupado ? '' : 'disabled'}>Conferir sem gravar</button>
       <button class="btn" id="b-go" ${n && !ocupado ? '' : 'disabled'}>Consolidar ${n} pedido${n === 1 ? '' : 's'}</button>
     </div></div>`)
+  const pdf = el.querySelector('#b-pdf')
+  if (pdf) pdf.onclick = () => window.print()
   el.querySelector('#b-atualizar').onclick = atualizar
   el.querySelector('#b-dry').onclick = () => executar({ dryRun: true })
   el.querySelector('#b-go').onclick = () => executar({ dryRun: false })
@@ -325,6 +355,11 @@ function cardUltima() {
 function cardFaixa() {
   const ps = [...((ultima && ultima.adicionados) || [])].sort((a, b) => a.cif - b.cif)
   if (!ps.length) return null
+  return banda(ps, `Fator dos ${ps.length} pedido${ps.length === 1 ? '' : 's'} consolidado${ps.length === 1 ? '' : 's'}`)
+}
+
+// Faixa configurável: cada pedido sobre a faixa, ordenado por valor de carga.
+function banda(ps, titulo) {
   const min = estado.faixa.min, max = estado.faixa.max
   const MAX = Math.max(0.7, ...ps.map((p) => p.fator)) * 1.06
   const x = (f) => Math.min(100, (f / MAX) * 100)
@@ -337,7 +372,7 @@ function cardFaixa() {
   const ponderado = cif ? total / cif : 0
 
   const box = $('<div></div>')
-  box.append($(`<div class="sechead"><h2>Fator dos ${ps.length} pedido${ps.length === 1 ? '' : 's'} consolidado${ps.length === 1 ? '' : 's'}</h2>
+  box.append($(`<div class="sechead"><h2>${esc(titulo)}</h2>
     <span class="legend">
       <span><i style="background:#dfe6f2"></i>faixa ${pct(min)} a ${pct(max)}</span>
       <span><i style="background:#1d5fbf"></i>dentro</span>
@@ -448,19 +483,167 @@ function viewCaminhos() {
 }
 
 function viewRegras() {
-  const min = estado.faixa.min, max = estado.faixa.max
+  const r = estado.regras
   const sec = $('<section></section>')
-  sec.append($(`<div class="card regras"><dl>
-    <dt>Fator de importação</dt><dd>Custo total ÷ soma do CIF Total. A faixa esperada é ${pct(min)} a ${pct(max)}.</dd>
-    <dt>O que entra no custo</dt><dd>II Recolhido + Tx. Siscomex + frete rodoviário + marinha mercante (zero no aéreo) + despesas na origem + armazenagem + honorários + frete internacional.</dd>
-    <dt>O que fica de fora</dt><dd>PIS, COFINS e ICMS. São recuperáveis — a empresa credita depois, então não são despesa de importação.</dd>
-    <dt>Armazenagem</dt><dd>Uma nota traz uma cobrança por período de permanência. Todas são somadas, não só a primeira.</dd>
-    <dt>PDFs descartados</dt><dd>Arquivo com <code>Extrato</code> no nome, e nota que contenha <code>DESPACHANTES ADUANEIROS</code>: esses valores já entram por outra via.</dd>
-    <dt>Coluna Outros</dt><dd>Fica sempre vazia, para você digitar à mão. O Total é fórmula do Excel e inclui essa coluna, então acompanha o que for digitado.</dd>
-    <dt>Fator logístico</dt><dd>O custo sem II e sem Tx. Siscomex, dividido pelo CIF. É a parcela sobre a qual uma decisão de compra ou de despachante muda alguma coisa.</dd>
-    <dt>Pedido já gravado</dt><dd>A N/Ref. na coluna A é a chave. Se já aparece na aba, o pedido é pulado inteiro.</dd>
-  </dl></div>`))
+  const comps = estado.componentes || []
+  const card = $(`<div class="card" style="padding:4px 20px 20px">
+    <div style="padding:16px 0">
+      <div style="font-weight:500;margin-bottom:4px">Faixa esperada</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Fora dela o pedido entra na lista de avisos e aparece destacado no gráfico. Não impede a gravação.</div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input type="number" id="f-min" step="0.5" min="0" max="999" value="${(r.faixa.min * 100).toFixed(1)}" style="width:90px">
+        <span class="dim">% até</span>
+        <input type="number" id="f-max" step="0.5" min="0" max="999" value="${(r.faixa.max * 100).toFixed(1)}" style="width:90px">
+        <span class="dim">%</span></div></div>
+
+    <div style="padding:16px 0;border-top:1px solid var(--rule)">
+      <div style="font-weight:500;margin-bottom:4px">O que entra no custo</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Muda o Total, o Percentual e a fórmula gravada na planilha. Vale para as próximas consolidações; o que já está gravado só muda ao reprocessar o mês.</div>
+      ${comps.map((c) => `<label class="mes" style="padding:5px 0">
+        <input type="checkbox" data-comp="${esc(c.chave)}" ${r.custo.includes(c.chave) ? 'checked' : ''}>
+        ${esc(c.rotulo)}${c.imposto ? ' <span class="dim" style="font-size:12px">· imposto</span>' : ''}</label>`).join('')}
+      <div style="font-size:12px;color:var(--muted);margin-top:10px">A coluna <code>Outros</code> entra sempre: é o campo que você preenche à mão na planilha.</div></div>
+
+    <div style="padding:16px 0;border-top:1px solid var(--rule)">
+      <div style="font-weight:500;margin-bottom:4px">Fora da conta, de propósito</div>
+      <div style="font-size:12px;color:var(--muted)">PIS, COFINS e ICMS não aparecem acima porque são recuperáveis — a empresa credita depois, então não são despesa de importação. O app nem chega a ler essas colunas. Incluí-los já fez o fator aparecer entre 69% e 200%, o que parecia bug e era a conta errada.</div></div>
+
+    <div style="display:flex;gap:10px;padding-top:4px;align-items:center">
+      <button class="btn" id="b-salvar">Salvar regras</button>
+      <button class="btn ghost" id="b-padrao">Voltar ao padrão</button>
+      <span class="dim" id="aviso-regras" style="font-size:13px"></span></div></div>`)
+
+  const lidas = () => ({
+    faixa: { min: Number(card.querySelector('#f-min').value) / 100, max: Number(card.querySelector('#f-max').value) / 100 },
+    custo: [...card.querySelectorAll('input[data-comp]:checked')].map((c) => c.dataset.comp),
+  })
+  const salvar = async (regras, botao) => {
+    botao.disabled = true
+    try {
+      estado = await api('/api/regras', regras)
+      planilha = null // os gráficos são recalculados com as regras novas
+      render()
+    } catch (e) { botao.disabled = false; alert(e.message) }
+  }
+  card.querySelector('#b-salvar').onclick = (e) => {
+    const v = lidas()
+    if (!(v.faixa.min >= 0 && v.faixa.max > v.faixa.min)) {
+      card.querySelector('#aviso-regras').textContent = 'A faixa máxima tem que ser maior que a mínima.'
+      return
+    }
+    if (!v.custo.length) {
+      card.querySelector('#aviso-regras').textContent = 'Escolha pelo menos um componente.'
+      return
+    }
+    salvar(v, e.target)
+  }
+  card.querySelector('#b-padrao').onclick = (e) => salvar({ faixa: { min: 0.24, max: 0.30 }, custo: comps.map((c) => c.chave) }, e.target)
+  sec.append(card)
   return sec
+}
+
+
+let planilha = null // o que já está gravado, carregado sob demanda
+
+function viewGraficos() {
+  const sec = $('<section></section>')
+  if (!planilha) {
+    sec.append($('<div class="card"><p class="vazio">Lendo a planilha…</p></div>'))
+    api('/api/planilha').then((r) => { planilha = r; if (aba === 'graficos') render() })
+      .catch((e) => { planilha = { pedidos: [], aviso: e.message }; if (aba === 'graficos') render() })
+    return sec
+  }
+  const ps = planilha.pedidos || []
+  if (!ps.length) {
+    sec.append($(`<div class="card"><p class="vazio">${esc(planilha.aviso || 'A planilha ainda não tem pedidos consolidados.')}</p></div>`))
+    return sec
+  }
+  sec.append(resumoGeral(ps))
+  sec.append(graficoMeses(ps))
+  sec.append(graficoComposicao(ps))
+  const b = banda([...ps].sort((a, b) => a.cif - b.cif), `Fator dos ${ps.length} pedidos da planilha`)
+  const wrap = $('<div style="margin-top:40px"></div>')
+  wrap.append(b)
+  sec.append(wrap)
+  return sec
+}
+
+const ponderado = (ps) => {
+  const cif = ps.reduce((a, p) => a + p.cif, 0)
+  return { cif, total: ps.reduce((a, p) => a + p.total, 0), imposto: ps.reduce((a, p) => a + p.imposto, 0),
+           fator: cif ? ps.reduce((a, p) => a + p.total, 0) / cif : 0,
+           logistico: cif ? (ps.reduce((a, p) => a + p.total, 0) - ps.reduce((a, p) => a + p.imposto, 0)) / cif : 0 }
+}
+
+function resumoGeral(ps) {
+  const box = $('<div></div>')
+  box.append($('<div class="sechead"><h2>Resumo da planilha</h2><span class="meta">fator ponderado: soma dos custos ÷ soma do CIF</span></div>'))
+  const linha = (rot, lista) => {
+    if (!lista.length) return ''
+    const t = ponderado(lista)
+    return `<div class="runrow"><span class="k">${rot} · ${lista.length} pedido${lista.length === 1 ? '' : 's'}</span>
+      <span><span class="v num">${pct(t.fator)}</span>
+      <span class="dim" style="font-size:12px;margin-left:10px">logístico ${pct(t.logistico)} · R$ ${brl0(t.cif)} de carga</span></span></div>`
+  }
+  box.append($(`<div class="card">
+    ${linha('Tudo', ps)}
+    ${linha('SEA', ps.filter((p) => p.modal === 'SEA'))}
+    ${linha('AIR', ps.filter((p) => p.modal === 'AIR'))}</div>`))
+  return box
+}
+
+// Fator ponderado por mês, separado por modal: responde se está melhorando.
+function graficoMeses(ps) {
+  const meses = [...new Set(ps.map((p) => p.mes).filter(Boolean))].sort()
+  const box = $('<div style="margin-top:40px"></div>')
+  if (meses.length < 2) return box
+  const min = estado.faixa.min, max = estado.faixa.max
+  const dados = meses.map((m) => ({ mes: m,
+    SEA: ponderado(ps.filter((p) => p.mes === m && p.modal === 'SEA')),
+    AIR: ponderado(ps.filter((p) => p.mes === m && p.modal === 'AIR')) }))
+  const MAX = Math.max(max * 1.3, ...dados.flatMap((d) => [d.SEA.fator, d.AIR.fator])) * 1.08
+  const alt = (f) => Math.max(1, (f / MAX) * 150)
+
+  box.append($(`<div class="sechead"><h2>Fator ponderado por mês</h2>
+    <span class="legend"><span><i style="background:#1d5fbf"></i>marítimo</span><span><i style="background:#9fb6d8"></i>aéreo</span>
+    <span><i style="background:#dfe6f2"></i>faixa ${pct(min)} a ${pct(max)}</span></span></div>`))
+  box.append($(`<div class="card" style="padding:20px">
+    <div style="position:relative;height:170px;display:flex;align-items:flex-end;gap:18px;border-bottom:1px solid var(--border);padding:0 4px">
+      <div style="position:absolute;left:0;right:0;bottom:${(min / MAX) * 150}px;height:${((max - min) / MAX) * 150}px;background:#dfe6f2"></div>
+      ${dados.map((d) => `<div style="flex:1;display:flex;gap:4px;align-items:flex-end;justify-content:center;position:relative;z-index:1">
+        ${['SEA', 'AIR'].map((m) => d[m].cif ? `<div title="${m} ${pct(d[m].fator)}" style="width:22px;height:${alt(d[m].fator)}px;background:${m === 'SEA' ? '#1d5fbf' : '#9fb6d8'};border-radius:2px 2px 0 0"></div>` : '').join('')}
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:18px;padding:6px 4px 0">
+      ${dados.map((d) => `<div style="flex:1;text-align:center;font-size:12px;color:var(--muted)">${esc(d.mes)}<br>
+        <span style="color:var(--text)">${d.SEA.cif ? pct(d.SEA.fator) : ''}${d.SEA.cif && d.AIR.cif ? ' · ' : ''}${d.AIR.cif ? pct(d.AIR.fator) : ''}</span></div>`).join('')}
+    </div></div>`))
+  return box
+}
+
+// Quanto do custo é imposto e quanto é logística: a parte sobre a qual uma
+// decisão de compra ou de despachante muda alguma coisa.
+function graficoComposicao(ps) {
+  const box = $('<div style="margin-top:40px"></div>')
+  box.append($(`<div class="sechead"><h2>De onde vem o custo</h2>
+    <span class="legend"><span><i style="background:#8aa0bd"></i>imposto</span><span><i style="background:#1d5fbf"></i>logística</span></span></div>`))
+  const barra = (rot, lista) => {
+    if (!lista.length) return ''
+    const t = ponderado(lista)
+    if (!t.total) return ''
+    const fImp = (t.imposto / t.total) * 100
+    return `<div style="padding:14px 20px;border-top:1px solid var(--rule)">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+        <span>${rot}</span><span class="dim num">imposto ${pct(t.imposto / t.cif)} · logística ${pct(t.logistico)}</span></div>
+      <div style="display:flex;height:18px;border-radius:3px;overflow:hidden">
+        <div style="width:${fImp}%;background:#8aa0bd"></div><div style="flex:1;background:#1d5fbf"></div></div></div>`
+  }
+  box.append($(`<div class="card" style="padding-top:2px">
+    ${barra('Marítimo', ps.filter((p) => p.modal === 'SEA'))}
+    ${barra('Aéreo', ps.filter((p) => p.modal === 'AIR'))}
+    <p style="font-size:13px;color:var(--muted);padding:14px 20px 18px;border-top:1px solid var(--rule)">
+      A alíquota de imposto é parecida nos dois modais, então o fator cheio esconde a diferença entre eles. A parte logística é a que responde a decisão de compra.</p></div>`))
+  return box
 }
 
 async function executar(opts) {

@@ -8,14 +8,6 @@ import (
 	"strings"
 )
 
-// Faixa que a área de Procurement espera. Fora dela vira aviso, não erro:
-// pedido pequeno estoura a faixa porque despesa fixa por processo não
-// acompanha o valor da carga.
-var Faixa = struct {
-	Min float64 `json:"min"`
-	Max float64 `json:"max"`
-}{0.24, 0.30}
-
 type Alvo struct {
 	Mes   string `json:"mes"`
 	Modal string `json:"modal"`
@@ -140,7 +132,7 @@ func arquivoDeMateriais(dir string) (string, error) {
 	return filepath.Join(dir, cand[0]), nil
 }
 
-func ProcessarPedido(a Alvo) (*Pedido, error) {
+func ProcessarPedido(a Alvo, r Regras) (*Pedido, error) {
 	arq, err := arquivoDeMateriais(a.Dir)
 	if err != nil {
 		return nil, err
@@ -172,9 +164,10 @@ func ProcessarPedido(a Alvo) (*Pedido, error) {
 		return nil, fmt.Errorf("CIF Total somado é zero — conversão de número suspeita")
 	}
 
-	// Só II e Tx. Siscomex. PIS/COFINS/ICMS são recuperáveis e ficam de fora.
-	logistico := pdfs.Custos.Logistico()
-	total := s.II + s.Siscomex + logistico
+	// Só os componentes escolhidos nas regras. PIS/COFINS/ICMS nunca entram:
+	// são recuperáveis e nem chegam a ser lidos do arquivo de materiais.
+	total := r.Total(s, pdfs.Custos)
+	logistico := total - r.Imposto(s)
 
 	p := &Pedido{
 		Alvo: a, Itens: itens, NumItens: len(itens),
@@ -191,9 +184,11 @@ type OpcoesConsolidar struct {
 	Meses          []string
 	DryRun         bool
 	Reprocessar    bool
+	Regras         Regras
 }
 
 func Consolidar(o OpcoesConsolidar) (*Resultado, error) {
+	regras := o.Regras.Normalizar()
 	alvo := map[string]bool{}
 	for _, m := range o.Meses {
 		alvo[m] = true
@@ -237,7 +232,7 @@ func Consolidar(o OpcoesConsolidar) (*Resultado, error) {
 			r.Pulados = append(r.Pulados, a.NRef)
 			continue
 		}
-		p, err := ProcessarPedido(a)
+		p, err := ProcessarPedido(a, regras)
 		if err != nil {
 			// Pasta que falha não derruba a execução: registra e segue.
 			r.Erros = append(r.Erros, Erro{a.Dir, a.Mes, a.Modal, a.NRef, err.Error()})
@@ -247,13 +242,13 @@ func Consolidar(o OpcoesConsolidar) (*Resultado, error) {
 			r.Pulados = append(r.Pulados, p.NRef)
 			continue
 		}
-		if err := pl.GravarPedido(p); err != nil {
+		if err := pl.GravarPedido(p, regras); err != nil {
 			r.Erros = append(r.Erros, Erro{a.Dir, a.Mes, a.Modal, p.NRef, err.Error()})
 			continue
 		}
 		existentes[a.Modal][p.NRef] = true
 		r.Adicionados = append(r.Adicionados, p)
-		if p.Fator < Faixa.Min || p.Fator > Faixa.Max {
+		if p.Fator < regras.Faixa.Min || p.Fator > regras.Faixa.Max {
 			r.Avisos = append(r.Avisos, p)
 		}
 	}
@@ -265,13 +260,13 @@ func Consolidar(o OpcoesConsolidar) (*Resultado, error) {
 		}
 		r.Gravado = true
 	}
-	r.Totais = agregar(r.Adicionados)
+	r.Totais = agregar(r.Adicionados, regras)
 	return r, nil
 }
 
 // Fator ponderado: soma dos custos / soma dos CIF. A média simples dá o mesmo
 // peso a um pedido de R$ 4,5 mil e a um de R$ 925 mil, e engana.
-func agregar(pedidos []*Pedido) map[string]Agregado {
+func agregar(pedidos []*Pedido, regras Regras) map[string]Agregado {
 	out := map[string]Agregado{}
 	for _, modal := range []string{"AIR", "SEA"} {
 		var ag Agregado
@@ -284,7 +279,7 @@ func agregar(pedidos []*Pedido) map[string]Agregado {
 			ag.Linhas += p.NumItens
 			ag.CIF += p.Somas.CIF
 			ag.Total += p.Total
-			imposto += p.Somas.II + p.Somas.Siscomex
+			imposto += regras.Imposto(p.Somas)
 		}
 		if ag.CIF > 0 {
 			ag.FatorPonderado = ag.Total / ag.CIF

@@ -69,6 +69,52 @@ Para pôr um ícone no arquivo `.exe` (e não só na janela) é preciso compilar
 próprio Windows, com um `.syso` de recursos. Hoje o ícone vem do favicon
 embutido em `ui.html`, que é o que aparece na barra de tarefas.
 
+## Regras de cálculo editáveis
+
+A aba **Regras de cálculo** muda duas coisas, gravadas em `config.json`:
+
+- **A faixa esperada.** O padrão é 24% a 30%. Fora dela o pedido entra na lista
+  de avisos e aparece destacado no gráfico — nunca impede a gravação.
+- **Quais componentes entram no custo.** Os oito que o app extrai: II, Tx.
+  Siscomex, frete rodoviário, marinha mercante, despesas na origem, armazenagem,
+  honorários e frete internacional. Desligar um deles muda o Total, o Percentual
+  e a fórmula gravada na planilha; a coluna `Outros` entra sempre.
+
+```json
+{ "faixa": { "min": 0.24, "max": 0.30 },
+  "custo": ["ii","siscomex","rodoviario","marinha","origem","armazenagem","honorarios","freteIntl"] }
+```
+
+Com todos ligados a fórmula sai contígua (`SUM(L4:T4)`); desligando um componente
+do meio ela vira soma explícita (`L4+Q4+T4`). Configuração editada à mão com
+chave desconhecida ou faixa invertida volta ao padrão em vez de derrubar o app.
+
+Vale só para as próximas consolidações: o que já está gravado só muda ao
+reprocessar o mês.
+
+**PIS, COFINS e ICMS não estão na lista de propósito.** São recuperáveis — a
+empresa credita depois — e o app nem chega a ler essas colunas do arquivo de
+materiais. Incluí-los já fez o fator aparecer entre 69% e 200%.
+
+## Gráficos
+
+A aba **Gráficos** lê o `ConsolidadoPath.xlsx` inteiro, não só a última execução:
+
+- resumo com o fator ponderado de tudo, do marítimo e do aéreo;
+- fator ponderado por mês, lado a lado por modal, sobre a faixa;
+- de onde vem o custo: quanto é imposto e quanto é logística em cada modal;
+- cada pedido sobre a faixa, ordenado por valor de carga.
+
+O Total é recalculado somando as colunas de custo em vez de lido da coluna
+`Total`: lá mora uma fórmula, cujo valor só fica em cache depois que o Excel
+abre o arquivo. O mês vem da data das linhas de material, porque a linha de
+total não tem data.
+
+**Exportar PDF** abre a janela de impressão do navegador — escolha "Salvar como
+PDF". O CSS de impressão esconde a barra lateral e os botões, força retrato e
+evita cortar card ao meio; o cabeçalho da folha diz qual planilha, qual faixa e
+quando foi gerado.
+
 ## Decisões que não são óbvias
 
 **Excel nunca é aberto.** `.xlsx`, `.csv` e `.pdf` são lidos por biblioteca

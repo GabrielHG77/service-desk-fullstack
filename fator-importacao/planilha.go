@@ -173,7 +173,7 @@ func (p *Planilha) moeda(modal string, col, linha int, v float64) {
 	p.f.SetCellStyle(modal, c, c, p.estMoeda)
 }
 
-func (p *Planilha) GravarPedido(ped *Pedido) error {
+func (p *Planilha) GravarPedido(ped *Pedido, regras Regras) error {
 	modal := ped.Modal
 	L := layouts[modal]
 
@@ -222,8 +222,7 @@ func (p *Planilha) GravarPedido(ped *Pedido) error {
 	// Outros fica vazia de propósito: a analista digita ali à mão. Zero obrigaria
 	// a apagar antes. Como Total é fórmula até Outros, o que ela digitar entra.
 	cTotal := cel(L.total, n)
-	if err := p.f.SetCellFormula(modal, cTotal,
-		fmt.Sprintf("SUM(%s%d:%s%d)", colNome(12), n, colNome(L.outros), n)); err != nil {
+	if err := p.f.SetCellFormula(modal, cTotal, regras.FormulaTotal(modal, n)); err != nil {
 		return err
 	}
 	p.f.SetCellStyle(modal, cTotal, cTotal, p.estMoeda)
@@ -268,3 +267,122 @@ func copiar(de, para string) error {
 }
 
 func (p *Planilha) Close() { p.f.Close() }
+
+type PedidoGravado struct {
+	NRef           string  `json:"nref"`
+	Modal          string  `json:"modal"`
+	Mes            string  `json:"mes"`
+	Exportador     string  `json:"exportador"`
+	CIF            float64 `json:"cif"`
+	Total          float64 `json:"total"`
+	Imposto        float64 `json:"imposto"`
+	Outros         float64 `json:"outros"`
+	Fator          float64 `json:"fator"`
+	FatorLogistico float64 `json:"fatorLogistico"`
+	Linhas         int     `json:"linhas"`
+}
+
+type Consolidado struct {
+	Pedidos []PedidoGravado `json:"pedidos"`
+	Aviso   string          `json:"aviso,omitempty"`
+}
+
+// LerConsolidado devolve o que já está gravado na planilha, para os gráficos
+// cobrirem o histórico inteiro e não só a última execução.
+//
+// O Total é recalculado a partir das colunas de custo em vez de lido da coluna
+// Total: lá mora uma fórmula, e o valor só fica em cache depois que o Excel
+// abre o arquivo. Somar as colunas dá o mesmo número e funciona sempre.
+func LerConsolidado(caminho string, regras Regras) (*Consolidado, error) {
+	out := &Consolidado{Pedidos: []PedidoGravado{}}
+	st, err := os.Stat(caminho)
+	if err != nil {
+		if os.IsNotExist(err) {
+			out.Aviso = "a planilha ainda não existe"
+			return out, nil
+		}
+		return nil, err
+	}
+	if st.Size() == 0 {
+		out.Aviso = "a planilha está com 0 bytes"
+		return out, nil
+	}
+	f, err := excelize.OpenFile(caminho)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	for _, modal := range []string{"AIR", "SEA"} {
+		if i, _ := f.GetSheetIndex(modal); i == -1 {
+			continue
+		}
+		linhas, err := f.GetRows(modal, excelize.Options{RawCellValue: true})
+		if err != nil {
+			return nil, err
+		}
+		L := layouts[modal]
+		cols := regras.ColunasDe(modal)
+		meses, linhasPorNRef := map[string]string{}, map[string]int{}
+
+		// Primeira passada: a linha de total não tem data, então o mês vem das
+		// linhas de material do mesmo pedido.
+		for i, l := range linhas {
+			if i == 0 || len(l) < 8 {
+				continue
+			}
+			nref := strings.TrimSpace(celDa(l, 1))
+			if nref == "" || strings.TrimSpace(celDa(l, 8)) == "" {
+				continue // não é linha de material
+			}
+			linhasPorNRef[nref]++
+			if _, visto := meses[nref]; !visto {
+				if d, ok := dataCrua(celDa(l, 2)); ok {
+					meses[nref] = d.Format("2006-01")
+				}
+			}
+		}
+
+		for i, l := range linhas {
+			if i == 0 {
+				continue
+			}
+			nref := strings.TrimSpace(celDa(l, 1))
+			// Linha de total: Modal preenchido e Mercadoria vazia.
+			if nref == "" || strings.TrimSpace(celDa(l, 7)) == "" || strings.TrimSpace(celDa(l, 8)) != "" {
+				continue
+			}
+			p := PedidoGravado{
+				NRef: nref, Modal: modal, Mes: meses[nref],
+				Exportador: strings.TrimSpace(celDa(l, 6)),
+				CIF:        numCru(celDa(l, 11)),
+				Outros:     numCru(celDa(l, L.outros)),
+				Linhas:     linhasPorNRef[nref],
+			}
+			for _, c := range cols {
+				p.Total += numCru(celDa(l, c))
+			}
+			if regras.Usa("ii") {
+				p.Imposto += numCru(celDa(l, 12))
+			}
+			if regras.Usa("siscomex") {
+				p.Imposto += numCru(celDa(l, 13))
+			}
+			if p.CIF > 0 {
+				p.Fator = p.Total / p.CIF
+				p.FatorLogistico = (p.Total - p.Imposto) / p.CIF
+			}
+			out.Pedidos = append(out.Pedidos, p)
+		}
+	}
+	sort.Slice(out.Pedidos, func(a, b int) bool { return out.Pedidos[a].CIF > out.Pedidos[b].CIF })
+	return out, nil
+}
+
+// celDa lê a coluna 1-based de uma linha que pode vir mais curta que o cabeçalho.
+func celDa(linha []string, col int) string {
+	if col > 0 && col <= len(linha) {
+		return linha[col-1]
+	}
+	return ""
+}

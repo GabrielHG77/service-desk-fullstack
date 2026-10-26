@@ -13,31 +13,31 @@
   --primary:#f2d740; --ink:#0c0e0f; --secondary:#3dc2ff;
   --ok:#2dd36f; --atencao:#ffc409; --ruim:#eb445a; --medium:#92949c;
   --bg:#eceff2; --card:#fff; --card2:#f3f5f7; --fg:#16191c; --line:#dcdfe3; --sub:#5f666e;
-  --shadow:0 1px 2px #0000000d,0 8px 24px #00000010;
+  --shadow:0 1px 2px #00000008,0 4px 16px #0000000d;
   /* Fundo fraco de cada cor, para faixa e etiquetas. */
   --ok-fraca:#2dd36f1f; --atencao-fraca:#ffc4091f; --ruim-fraca:#eb445a1f; --primary-fraca:#f2d7402e;
-  --radius-card:8px; --radius-control:6px; --gap:12px;
+  --radius-card:12px; --radius-control:9px; --gap:14px;
   --fs-title:24px; --fs-body:14px; --fs-small:12px;
-  --font:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
   --bg:#0d0f11; --card:#16191c; --card2:#1e2226; --fg:#eceef0; --line:#2a3035; --sub:#98a0a8;
-  --shadow:0 1px 2px #0008,0 8px 24px #0004; color-scheme:dark}}
+  --shadow:0 1px 2px #00000060,0 4px 16px #00000040; color-scheme:dark}}
 :root[data-theme=dark]{
   --bg:#0d0f11; --card:#16191c; --card2:#1e2226; --fg:#eceef0; --line:#2a3035; --sub:#98a0a8;
-  --shadow:0 1px 2px #0008,0 8px 24px #0004; color-scheme:dark}
+  --shadow:0 1px 2px #00000060,0 4px 16px #00000040; color-scheme:dark}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--font);background:var(--bg);color:var(--fg);font-size:var(--fs-body);line-height:20px;-webkit-font-smoothing:antialiased}
+body{font-family:var(--font);background:var(--bg);color:var(--fg);font-size:var(--fs-body);line-height:20px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;letter-spacing:-.011em}
 .num{font-variant-numeric:tabular-nums}
 .app{display:grid;grid-template-columns:256px minmax(0,1fr);min-height:100vh}
 .side{padding:20px 12px;display:flex;flex-direction:column;gap:4px;min-width:0}
 .brand{display:flex;gap:10px;align-items:center;padding:6px 12px 2px;color:var(--fg)}
 .brand b{font-size:15px;font-weight:600;letter-spacing:-.01em}
-.scope{margin:10px 12px 22px;padding:8px 10px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-control);min-width:0}
+.scope{margin:10px 12px 22px;padding:9px 11px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-control);box-shadow:var(--shadow);min-width:0}
 .scope .s1{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .scope .s2{font-size:var(--fs-small);color:var(--sub);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .navlbl{font-size:13px;color:var(--sub);padding:0 12px;margin:0 0 8px}
-.nav button{display:flex;align-items:center;gap:10px;width:100%;height:32px;padding:0 12px;border:0;border-radius:var(--radius-control);background:none;color:var(--fg);font:var(--fs-body)/20px var(--font);text-align:left;cursor:pointer}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;height:34px;padding:0 12px;border:0;border-radius:var(--radius-control);background:none;color:var(--fg);font:var(--fs-body)/20px var(--font);letter-spacing:-.01em;text-align:left;cursor:pointer;transition:background .12s}
 .nav button:hover{background:var(--card2)}
 .nav button[aria-current]{background:var(--primary-fraca);font-weight:600}
 .nav button .c{margin-left:auto;font-size:var(--fs-small);color:var(--sub)}
@@ -47,9 +47,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--fg);font-size:var(
 .side .foot .u2{font-size:var(--fs-small);color:var(--sub)}
 .canvas{padding:32px;max-width:1184px;min-width:0}
 .titlerow{display:flex;align-items:flex-start;gap:24px;margin-bottom:28px}
-h1{font-size:var(--fs-title);font-weight:700;letter-spacing:-.02em;line-height:30px}
+h1{font-size:28px;font-weight:700;letter-spacing:-.024em;line-height:34px}
 .finding{font-size:15px;line-height:22px;color:var(--sub);margin-top:6px;max-width:620px}
-.btn{height:36px;padding:0 16px;border:0;border-radius:var(--radius-control);background:var(--primary);color:var(--ink);font:600 var(--fs-body)/36px var(--font);cursor:pointer;white-space:nowrap}
+.btn{height:36px;padding:0 16px;border:0;border-radius:var(--radius-control);background:var(--primary);color:var(--ink);font:590 var(--fs-body)/36px var(--font);letter-spacing:-.01em;cursor:pointer;white-space:nowrap;transition:filter .12s,background .12s}
 .btn:hover:not(:disabled){filter:brightness(1.07)}
 .btn:active:not(:disabled){filter:brightness(.82)}
 .btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
@@ -58,9 +58,9 @@ h1{font-size:var(--fs-title);font-weight:700;letter-spacing:-.02em;line-height:3
 .ml{margin-left:auto;display:flex;gap:8px;align-items:center}
 section{margin-bottom:40px}
 .sechead{display:flex;align-items:baseline;gap:12px;margin-bottom:10px;flex-wrap:wrap}
-h2{font-size:18px;font-weight:500}
+h2{font-size:17px;font-weight:600;letter-spacing:-.014em}
 .sechead .meta{font-size:var(--fs-body);color:var(--sub)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-card)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-card);box-shadow:var(--shadow)}
 .paths{display:flex;align-items:center;gap:10px;padding:0 16px;height:44px;margin-bottom:32px;font-size:13px;min-width:0;overflow:hidden}
 .paths .pk{color:var(--sub);font-size:var(--fs-small);flex:none}
 .paths .pv{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -73,7 +73,7 @@ h2{font-size:18px;font-weight:500}
 table{width:100%;border-collapse:collapse}
 th{font-size:var(--fs-small);font-weight:400;color:var(--sub);text-align:left;padding:0 0 8px}
 th.r,td.r{text-align:right}
-td{padding:0;height:44px;border-top:1px solid var(--line);font-size:var(--fs-body)}
+td{padding:0;height:46px;border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent);font-size:var(--fs-body)}
 tbody tr:first-child td{border-top:1px solid var(--line)}
 tr.sel td{background:var(--card2);font-weight:500}
 tr.sel td.dim{font-weight:400}
@@ -82,11 +82,11 @@ label.mes{display:flex;align-items:center;gap:10px;cursor:pointer}
 .dim{color:var(--sub)}
 .neg{color:var(--ruim)}
 .runcard{display:flex;flex-direction:column}
-.runrow{display:flex;align-items:baseline;justify-content:space-between;padding:12px 20px;border-top:1px solid var(--line)}
+.runrow{display:flex;align-items:baseline;justify-content:space-between;padding:13px 20px;border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
 .runrow:first-of-type{border-top:0}
 .runrow .k{font-size:var(--fs-body);color:var(--sub)}
-.runrow .v{font-size:22px;font-weight:500}
-.errbox{margin:12px 20px 0;padding:12px;background:var(--card2);border-radius:var(--radius-control)}
+.runrow .v{font-size:22px;font-weight:600;letter-spacing:-.02em}
+.errbox{margin:12px 20px 0;padding:12px 14px;background:var(--card2);border-radius:var(--radius-control)}
 .errbox .e1{font-size:13px;font-weight:500;word-break:break-all}
 .errbox .e2{font-size:var(--fs-small);color:var(--sub);margin-top:3px;word-break:break-all}
 .runfoot{margin-top:auto;padding:14px 20px;border-top:1px solid var(--line)}
@@ -95,7 +95,7 @@ label.mes{display:flex;align-items:center;gap:10px;cursor:pointer}
 .band .lbl .m{font-size:var(--fs-small);color:var(--sub)}
 .track{position:relative;height:16px;overflow:hidden}
 .track .zone{position:absolute;top:0;bottom:0;background:var(--ok-fraca);border-left:1px solid var(--ok);border-right:1px solid var(--ok)}
-.track .bar{position:absolute;top:4px;height:10px;border-radius:2px;background:var(--ok)}
+.track .bar{position:absolute;top:4px;height:10px;border-radius:5px;background:var(--ok)}
 .track .bar.atencao{background:var(--atencao)}
 .track .bar.ruim{background:var(--ruim)}
 .val.ok{color:var(--ok)} .val.atencao{color:var(--atencao)} .val.ruim{color:var(--ruim)}
@@ -107,9 +107,25 @@ label.mes{display:flex;align-items:center;gap:10px;cursor:pointer}
 .legend{display:flex;gap:18px;align-items:center;font-size:var(--fs-small);color:var(--sub);flex-wrap:wrap}
 .legend i{display:inline-block;width:10px;height:8px;border-radius:2px;margin-right:6px}
 .vazio{color:var(--sub);padding:20px}
+.graf{display:grid;grid-template-columns:48px minmax(0,1fr);gap:10px;padding:20px 20px 6px}
+.graf .eixo{position:relative}
+.graf .eixo span{position:absolute;right:0;transform:translateY(50%);font-size:11px;color:var(--sub);font-variant-numeric:tabular-nums}
+.plot{position:relative;border-bottom:1px solid var(--line)}
+.plot .grade{position:absolute;left:0;right:0;border-top:1px solid color-mix(in srgb,var(--line) 50%,transparent)}
+.plot .zona{position:absolute;left:0;right:0;background:color-mix(in srgb,var(--ok) 12%,transparent);border-top:1px solid color-mix(in srgb,var(--ok) 35%,transparent);border-bottom:1px solid color-mix(in srgb,var(--ok) 35%,transparent)}
+.plot .cols{position:absolute;inset:0;display:flex;align-items:flex-end;gap:10px}
+.plot .col{flex:1;display:flex;justify-content:center;align-items:flex-end;gap:5px;height:100%}
+.barra{width:26px;border-radius:6px 6px 0 0;position:relative;min-height:3px}
+.barra.ok{background:var(--ok)} .barra.atencao{background:var(--atencao)} .barra.ruim{background:var(--ruim)}
+.barra b{position:absolute;top:-19px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
+.barra i{position:absolute;bottom:-17px;left:50%;transform:translateX(-50%);font-size:10px;font-style:normal;color:var(--sub)}
+.rotulos{display:flex;gap:10px;padding:22px 20px 18px 78px}
+.rotulos div{flex:1;text-align:center;font-size:12px;color:var(--sub)}
 .erro{background:var(--ruim-fraca);border-color:var(--ruim);color:var(--ruim);padding:12px 16px;margin-bottom:24px}
 pre{background:var(--ink);color:#eceef0;padding:16px;border-radius:var(--radius-card);overflow:auto;font-size:12.5px;max-height:420px;white-space:pre-wrap;word-break:break-word;margin:16px 0}
-input[type=text]{font:var(--fs-body)/20px var(--font);flex:1;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius-control)}
+input[type=text],input[type=number]{font:var(--fs-body)/20px var(--font);flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-control);background:var(--card);color:var(--fg)}
+input:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+.legend{letter-spacing:-.005em}
 .regras dl{padding:4px 20px 20px}
 .regras dt{font-weight:500;margin-top:14px}
 .regras dd{color:var(--sub);margin-top:2px}
@@ -628,6 +644,8 @@ function resumoGeral(ps) {
 }
 
 // Fator ponderado por mês, separado por modal: responde se está melhorando.
+// As barras usam classe, não nome de variável montado em texto: assim renomear
+// uma cor não deixa o gráfico transparente em silêncio.
 function graficoMeses(ps) {
   const meses = [...new Set(ps.map((p) => p.mes).filter(Boolean))].sort()
   const box = $('<div style="margin-top:40px"></div>')
@@ -636,23 +654,36 @@ function graficoMeses(ps) {
   const dados = meses.map((m) => ({ mes: m,
     SEA: ponderado(ps.filter((p) => p.mes === m && p.modal === 'SEA')),
     AIR: ponderado(ps.filter((p) => p.mes === m && p.modal === 'AIR')) }))
-  const MAX = Math.max(max * 1.3, ...dados.flatMap((d) => [d.SEA.fator, d.AIR.fator])) * 1.08
-  const alt = (f) => Math.max(1, (f / MAX) * 150)
 
-  box.append($(`<div class="sechead"><h2>Fator ponderado por mês</h2>
-    ${LEGENDA_SEMAFORO()}</div>`))
-  box.append($(`<div class="card" style="padding:20px">
-    <div style="position:relative;height:170px;display:flex;align-items:flex-end;gap:18px;border-bottom:1px solid var(--line);padding:0 4px">
-      <div class="barra-mes" style="position:absolute;left:0;right:0;bottom:${(min / MAX) * 150}px;height:${((max - min) / MAX) * 150}px;background:var(--ok-fraca)"></div>
-      ${dados.map((d) => `<div style="flex:1;display:flex;gap:4px;align-items:flex-end;justify-content:center;position:relative;z-index:1">
-        ${['SEA', 'AIR'].map((m) => d[m].cif ? `<div class="barra-mes" title="${m === 'SEA' ? 'marítimo' : 'aéreo'} ${pct(d[m].fator)}" style="width:22px;height:${alt(d[m].fator)}px;background:var(--${nivel(d[m].fator)}-barra);border-radius:2px 2px 0 0;position:relative">
-          <span style="position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:10px;color:var(--sub)">${m === 'SEA' ? 'M' : 'A'}</span></div>` : '').join('')}
-      </div>`).join('')}
+  const ALT = 210
+  const topo = Math.max(max * 1.3, ...dados.flatMap((d) => [d.SEA.fator, d.AIR.fator])) * 1.14
+  const y = (f) => (f / topo) * ALT
+  const passo = topo > 1.2 ? 0.25 : topo > 0.6 ? 0.1 : 0.05
+  const grades = []
+  for (let v = passo; v <= topo; v += passo) grades.push(v)
+
+  const barra = (d, m) => d[m].cif
+    ? `<div class="barra ${nivel(d[m].fator)}" style="height:${Math.max(3, y(d[m].fator))}px"
+         title="${m === 'SEA' ? 'marítimo' : 'aéreo'} · ${pct(d[m].fator)} sobre R$ ${brl0(d[m].cif)}">
+         <b>${pct(d[m].fator)}</b><i>${m === 'SEA' ? 'M' : 'A'}</i></div>`
+    : ''
+
+  box.append($(`<div class="sechead"><h2>Fator ponderado por mês</h2>${LEGENDA_SEMAFORO()}</div>`))
+  box.append($(`<div class="card">
+    <div class="graf">
+      <div class="eixo" style="height:${ALT}px">
+        ${grades.map((v) => `<span style="bottom:${y(v)}px">${Math.round(v * 100)}%</span>`).join('')}
+        <span style="bottom:0">0%</span>
+      </div>
+      <div class="plot" style="height:${ALT}px">
+        ${grades.map((v) => `<div class="grade" style="bottom:${y(v)}px"></div>`).join('')}
+        <div class="zona" style="bottom:${y(min)}px;height:${y(max) - y(min)}px"></div>
+        <div class="cols">${dados.map((d) => `<div class="col">${barra(d, 'SEA')}${barra(d, 'AIR')}</div>`).join('')}</div>
+      </div>
     </div>
-    <div style="display:flex;gap:18px;padding:22px 4px 0">
-      ${dados.map((d) => `<div style="flex:1;text-align:center;font-size:12px;color:var(--sub)">${esc(d.mes)}<br>
-        <span style="color:var(--fg)">${d.SEA.cif ? pct(d.SEA.fator) : ''}${d.SEA.cif && d.AIR.cif ? ' · ' : ''}${d.AIR.cif ? pct(d.AIR.fator) : ''}</span></div>`).join('')}
-    </div></div>`))
+    <div class="rotulos">${dados.map((d) => `<div>${esc(d.mes)}</div>`).join('')}</div>
+  </div>`))
+  box.append($(`<p style="font-size:13px;color:var(--sub);margin-top:10px">M é marítimo, A é aéreo. A faixa verde é a tolerância de ${pct(min)} a ${pct(max)}; a barra só fica verde quando a média ponderada do mês cai dentro dela.</p>`))
   return box
 }
 

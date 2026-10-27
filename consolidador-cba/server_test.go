@@ -186,13 +186,13 @@ func TestScanReadExport(t *testing.T) {
 func TestConfigRoundTrip(t *testing.T) {
 	a, h := newTestApp(t, &fakeDesk{})
 	a.saveConfig(Config{Folder: `Y:\DadosCBA`, ExportDir: `C:\Saida`})
-	body := `{"folder":"C:\\outra","sheet":"Plan1","decimal":".","columns":["Item","AT_X"],"extras":true}`
+	body := `{"folder":"C:\\outra","sheet":"Plan1","decimal":".","columns":["Item","AT_X"],"extras":true,"repeated":"all"}`
 	if w := do(h, a, "PUT", "/api/config", strings.NewReader(body), true); w.Code != 200 {
 		t.Fatalf("put: %d %s", w.Code, w.Body.String())
 	}
 	b := newApp(a.host, a.cfgPath, &fakeDesk{}) // reads the file again, as the next start would
 	c := b.config()
-	if c.Folder != `Y:\DadosCBA` || c.ExportDir != `C:\Saida` || c.Sheet != "Plan1" || c.Decimal != "." || len(c.Columns) != 2 || !c.Extras {
+	if c.Folder != `Y:\DadosCBA` || c.ExportDir != `C:\Saida` || c.Sheet != "Plan1" || c.Decimal != "." || len(c.Columns) != 2 || !c.Extras || c.Repeated != "all" {
 		t.Errorf("config after restart = %+v", c)
 	}
 }

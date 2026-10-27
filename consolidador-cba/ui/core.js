@@ -19,7 +19,7 @@ const SRC = {
 const EPOCH = Date.UTC(1899, 11, 30);
 
 function defaultSettings() {
-  return { sheet: "Data", decimal: ",", columns: DEFAULT_COLUMNS.slice(), extras: false };
+  return { sheet: "Data", decimal: ",", columns: DEFAULT_COLUMNS.slice(), extras: false, repeated: "first" };
 }
 
 // ---------- conversões ----------
@@ -39,6 +39,9 @@ function parseNum(v, dec) {
   if (v == null || typeof v === "boolean") return null;
   let s = String(v).trim().replace(/[\s ]/g, "");
   if (!s) return null;
+  // Exportação crua do SAP: " 1,2340000000000000E+01" (notação científica, com vírgula ou ponto).
+  const sci = s.match(/^(-?\d+)(?:[.,](\d+))?[eE]([+-]?\d+)$/);
+  if (sci) return Number(`${sci[1]}.${sci[2] || "0"}e${sci[3]}`);
   const th = dec === "," ? "." : ",";
   if (new RegExp("^-?\\d{1,3}(\\" + th + "\\d{3})+(\\" + dec + "\\d+)?$").test(s)) s = s.split(th).join("");
   s = s.replace(dec, ".");
@@ -103,6 +106,10 @@ function readError(err) {
   return "Não foi possível abrir o arquivo. Ele pode estar corrompido ou não ser um Excel válido.";
 }
 
+const REQUIRED = ["salesDoc", "item", "charNo"];
+const headerOf = (aoa) => (aoa.find((r) => Array.isArray(r) && r.some((c) => !blank(c))) || []).map(norm);
+const hasColumns = (head) => REQUIRED.every((k) => head.includes(norm(SRC[k])));
+
 function readWorkbook(XLSX, bytes, sheet) {
   const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   // .xlsx/.xlsm são ZIP ("PK"); com senha o Excel grava em outro formato (D0 CF 11 E0).
@@ -111,14 +118,23 @@ function readWorkbook(XLSX, bytes, sheet) {
   let names;
   try { names = XLSX.read(data, { type: "array", bookSheets: true }).SheetNames; }
   catch (err) { throw userErr(readError(err)); }
-  const actual = names.find((n) => n === sheet) ?? names.find((n) => norm(n) === norm(sheet));
-  if (!actual) throw userErr(`Não tem a aba "${sheet}". Abas do arquivo: ${names.join(", ") || "nenhuma"}.`);
+  let actual = names.find((n) => n === sheet) ?? names.find((n) => norm(n) === norm(sheet));
+  let note = null;
+  if (!actual) {
+    // Sem a aba com esse nome (alguém salvou o mês com a aba renomeada): vale a primeira aba com as colunas da consulta.
+    let peek;
+    try { peek = XLSX.read(data, { type: "array", sheetRows: 20, cellText: false, cellHTML: false, cellFormula: false }); }
+    catch (err) { throw userErr(readError(err)); }
+    actual = names.find((n) => peek.Sheets[n] && hasColumns(headerOf(XLSX.utils.sheet_to_json(peek.Sheets[n], { header: 1, raw: true, defval: null, blankrows: false }))));
+    if (!actual) throw userErr(`Não tem a aba "${sheet}", e nenhuma outra aba tem as colunas Sales Doc., Item e Internal char no. Abas do arquivo: ${names.join(", ") || "nenhuma"}.`);
+    note = `A aba se chama "${actual}" em vez de "${sheet}". Foi lida assim mesmo, porque tem as colunas certas.`;
+  }
   let wb;
   try { wb = XLSX.read(data, { type: "array", sheets: actual, cellText: false, cellHTML: false, cellFormula: false }); }
   catch (err) { throw userErr(readError(err)); }
   const ws = wb.Sheets[actual];
   const aoa = ws ? XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: false }) : [];
-  return { aoa, date1904: !!(wb.Workbook && wb.Workbook.WBProps && wb.Workbook.WBProps.date1904) };
+  return { aoa, date1904: !!(wb.Workbook && wb.Workbook.WBProps && wb.Workbook.WBProps.date1904), note };
 }
 
 // ---------- a transformação (equivale à função ProcessarArquivo) ----------
@@ -142,7 +158,11 @@ function processSheet(aoa, fileName, date1904, opt) {
   const groups = new Map();
   const chars = [];
   const seen = new Set();
-  let badDates = 0, conflicts = 0;
+  const all = opt.repeated === "all";
+  // Só conta repetição de característica que vai para a tabela: listas como CC_SDCOM_VKOND ficam de fora de qualquer jeito.
+  const wanted = opt.extras || !opt.columns ? null : new Set(opt.columns);
+  const examples = [];
+  let badDates = 0, repeats = 0;
 
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
@@ -176,17 +196,27 @@ function processSheet(aoa, fileName, date1904, opt) {
       groups.set(key, g);
     }
     if (!seen.has(code)) { seen.add(code); chars.push(code); }
+    // A mesma característica de novo no mesmo item: a consulta ficava com o primeiro valor (List.First).
+    // Com "Todos", os valores diferentes ficam juntos na célula.
     const prev = g.c.get(code);
     if (prev === undefined || prev === "") g.c.set(code, fin);
-    else if (fin !== "" && fin !== prev) conflicts++;
+    else if (fin !== "" && !prev.split(" | ").includes(fin)) {
+      if (!wanted || wanted.has(code)) repeats++;
+      if ((!wanted || wanted.has(code)) && examples.length < 2) examples.push(`Sales Doc. ${sd}, item ${it}, ${code}: "${prev.split(" | ")[0]}" e "${fin}"`);
+      if (all) g.c.set(code, prev + " | " + fin);
+    }
   }
 
   if (badDates) msgs.push({ level: "warn", text: badDates === 1
     ? '1 linha com "Created On" que não é uma data. A data ficou em branco.'
     : `${badDates} linhas com "Created On" que não é uma data. As datas ficaram em branco.` });
-  if (conflicts) msgs.push({ level: "warn", text: conflicts === 1
-    ? "1 característica aparece repetida no mesmo item com valores diferentes. Ficou o primeiro valor."
-    : `${conflicts} características aparecem repetidas no mesmo item com valores diferentes. Ficou o primeiro valor de cada uma.` });
+  if (repeats) {
+    const n = repeats.toLocaleString("pt-BR");
+    const ex = ` Exemplo: ${examples.join("; ")}.`;
+    msgs.push({ level: "info", text: all
+      ? `${n} ${repeats === 1 ? "vez" : "vezes"} a mesma característica veio de novo no mesmo item com outro valor. Os valores ficaram juntos na célula, separados por " | ".${ex}`
+      : `${n} ${repeats === 1 ? "valor ficou" : "valores ficaram"} de fora: a mesma característica vem mais de uma vez no mesmo item, com valores diferentes, e fica o primeiro (a consulta do Power Query fazia igual).${ex} Para ver todos os valores, mude em Ajustes > Característica repetida.` });
+  }
   if (!groups.size) msgs.push({ level: "warn", text: 'Nenhuma linha com "Internal char no." preenchido.' });
   return { rows: [...groups.values()], chars, msgs };
 }

@@ -38,6 +38,7 @@ type Config struct {
 	Decimal   string   `json:"decimal"`
 	Columns   []string `json:"columns"`
 	Extras    bool     `json:"extras"`
+	Repeated  string   `json:"repeated"`
 }
 
 type fileInfo struct {

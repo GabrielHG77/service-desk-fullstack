@@ -172,7 +172,8 @@ class AppModel {
         sheet: c.sheet || d.sheet,
         decimal: c.decimal === "." ? "." : ",",
         columns: Array.isArray(c.columns) && c.columns.length ? c.columns : d.columns,
-        extras: !!c.extras
+        extras: !!c.extras,
+        repeated: c.repeated === "all" ? "all" : "first"
       };
       if (c.folder) return this.openFolder(c.folder);
     } catch (err) {
@@ -267,7 +268,8 @@ class AppModel {
         const p = CBA.processSheet(data.aoa, f.name, data.date1904, s);
         for (const r of p.rows) r.file = f.rel;
         parts.push(p);
-        f.status = p.msgs.length ? "warn" : "ok";
+        if (data.note) p.msgs.unshift({ level: "info", text: data.note });
+        f.status = p.msgs.some((m) => m.level === "warn") ? "warn" : "ok";
         f.rows = p.rows.length;
         for (const m of p.msgs) msgs.push({ ...m, file: f.rel });
       } catch (err) {
@@ -574,7 +576,9 @@ class LazyTable {
       const q = m.search.trim();
       empty.innerHTML = q
         ? `<strong>Nenhum resultado para “${esc(q)}”</strong><span>Confira a grafia ou busque outro termo.</span>`
-        : `<strong>Nenhuma linha</strong><span>Nenhum arquivo trouxe linhas com "Internal char no." preenchido. Veja os erros e avisos acima.</span>`;
+        : m.selection !== "all"
+          ? `<strong>Este arquivo não entrou na tabela</strong><span>O motivo está em Erros e avisos, acima.</span>`
+          : `<strong>Nenhuma linha</strong><span>Nenhum arquivo trouxe linhas com "Internal char no." preenchido. Veja os erros e avisos acima.</span>`;
     }
     this.range = [-1, -1];
     this.paint();
@@ -647,6 +651,7 @@ function SettingsSheet(model) {
     if (document.activeElement !== columns) columns.value = s.columns.join("\n");
     extras.checked = s.extras;
     for (const b of document.querySelectorAll("#opt-decimal [data-decimal]")) b.setAttribute("aria-checked", String(b.dataset.decimal === s.decimal));
+    for (const b of document.querySelectorAll("#opt-repeated [data-repeated]")) b.setAttribute("aria-checked", String(b.dataset.repeated === s.repeated));
     const open = model.settingsOpen;
     if (open && back.hidden) { lastFocus = document.activeElement; back.hidden = false; sheetInput.focus(); }
     if (!open && !back.hidden) { back.hidden = true; if (lastFocus) lastFocus.focus(); }
@@ -665,6 +670,10 @@ function SettingsSheet(model) {
   $("opt-decimal").addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-decimal]");
     if (b) model.updateSettings({ decimal: b.dataset.decimal });
+  });
+  $("opt-repeated").addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-repeated]");
+    if (b) model.updateSettings({ repeated: b.dataset.repeated });
   });
   back.addEventListener("click", (ev) => { if (ev.target === back) model.settingsOpen = false; });
 }

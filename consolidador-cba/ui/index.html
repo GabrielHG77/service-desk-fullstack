@@ -130,7 +130,14 @@
               <button type="button" role="radio" data-decimal=".">Ponto  7.5</button>
             </div>
           </div>
+          <div class="row"><span id="rep-label">Característica repetida no mesmo item</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="rep-label" id="opt-repeated">
+              <button type="button" role="radio" data-repeated="first">Primeiro valor</button>
+              <button type="button" role="radio" data-repeated="all">Todos</button>
+            </div>
+          </div>
         </div>
+        <p class="footer">Primeiro valor é o que a consulta do Power Query fazia. Todos junta na célula os valores diferentes, separados por " | ".</p>
       </section>
       <section class="form-section">
         <h4>Colunas</h4>

@@ -5,10 +5,14 @@ lê a aba **Data** de todos os `.xlsx`/`.xlsm` de uma pasta (com subpastas), tra
 cada característica (`Internal char no.`) em uma coluna e junta tudo em uma tabela,
 uma linha por item de ordem de venda.
 
+Mesmo formato do `mqtt-panel` e do `FatorImportacao`: um executável só, baixado de `dist/`,
+sem instalador e sem privilégio de administrador.
+
 ## Como usar
 
-1. Copie `dist/ConsolidadorCBA.exe` para o computador (por exemplo, na Área de Trabalho) e abra com dois cliques.
-   Não precisa instalar nada.
+1. Baixe `dist/ConsolidadorCBA.exe` (no GitHub, abra o arquivo e clique em **Download raw file**),
+   ponha numa pasta qualquer, por exemplo `C:\Users\<você>\Apps\ConsolidadorCBA`, e dê dois cliques.
+   Para achar fácil depois, clique com o botão direito no ícone da barra de tarefas e em **Fixar na barra de tarefas**.
 2. Clique em **Escolher pasta…** e selecione `Y:\...\Dashboard\2026\DadosCBA`.
    Da próxima vez o app já abre nessa pasta.
 3. Confira os erros e avisos e clique em **Exportar Excel**. Depois de salvar, **Abrir no Excel** abre o arquivo.

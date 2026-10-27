@@ -23,7 +23,7 @@ func (d *fakeDesk) pickFolder(string) (string, error) {
 	}
 	return d.folder, nil
 }
-func (d *fakeDesk) saveFile(name, dir, kind string) (string, error) {
+func (d *fakeDesk) saveFile(title, name, dir, kind string, overwrite bool) (string, error) {
 	if d.saveTo == "" {
 		return "", errCancelled
 	}

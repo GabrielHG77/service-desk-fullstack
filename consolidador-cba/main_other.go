@@ -38,7 +38,7 @@ func (d devDesktop) pickFolder(start string) (string, error) {
 	return d.folder, nil
 }
 
-func (d devDesktop) saveFile(name, dir, kind string) (string, error) {
+func (d devDesktop) saveFile(title, name, dir, kind string, overwrite bool) (string, error) {
 	return filepath.Join(d.out, name), nil
 }
 

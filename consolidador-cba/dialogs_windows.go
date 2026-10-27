@@ -105,13 +105,17 @@ func newFileDialog(clsid, iid *windows.GUID) (fileDialog, error) {
 	return fileDialog{p}, nil
 }
 
-func (d fileDialog) addOptions(opts uint32) error {
+func (d fileDialog) addOptions(opts uint32) error { return d.changeOptions(opts, 0) }
+
+// changeOptions turns options on and off over the window's own defaults (the save window starts with
+// overwrite confirmation on).
+func (d fileDialog) changeOptions(on, off uint32) error {
 	var cur uint32
 	hr, _, _ := syscall.SyscallN(method(d.p, mGetOptions), uintptr(d.p), uintptr(unsafe.Pointer(&cur)))
 	if err := failed(hr); err != nil {
 		return err
 	}
-	hr, _, _ = syscall.SyscallN(method(d.p, mSetOptions), uintptr(d.p), uintptr(cur|opts))
+	hr, _, _ = syscall.SyscallN(method(d.p, mSetOptions), uintptr(d.p), uintptr((cur|on)&^off))
 	return failed(hr)
 }
 
@@ -204,14 +208,20 @@ func folderDialog(owner uintptr, title, start string) (string, error) {
 	})
 }
 
-func saveDialog(owner uintptr, title, folder, name, filterName, pattern, ext string) (string, error) {
+// saveDialog asks where to save; overwrite makes it confirm replacing a file that exists (off when picking
+// the spreadsheet to update, which is meant to exist).
+func saveDialog(owner uintptr, title, folder, name, filterName, pattern, ext string, overwrite bool) (string, error) {
 	return withCOM(func() (string, error) {
 		d, err := newFileDialog(&clsidFileSaveDialog, &iidFileSaveDialog)
 		if err != nil {
 			return "", err
 		}
 		defer release(d.p)
-		if err := d.addOptions(fosOverwritePrompt | fosForceFileSystem | fosPathMustExist | fosNoChangeDir); err != nil {
+		var off uint32
+		if !overwrite {
+			off = fosOverwritePrompt
+		}
+		if err := d.changeOptions(fosForceFileSystem|fosPathMustExist|fosNoChangeDir, off); err != nil {
 			return "", err
 		}
 		d.setString(mSetTitle, title)

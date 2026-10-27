@@ -20,6 +20,20 @@ function today() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// Chave de um item na planilha, igual ao planilha.go: "0005940235", 5940235 e "5940235" são o mesmo pedido.
+function keyPart(v) {
+  if (v == null) return "";
+  const s = String(v).trim();
+  if (!s) return "";
+  const n = Number(s.replace(",", "."));
+  if (Number.isFinite(n) && Number.isInteger(n) && Math.abs(n) < 1e15) return String(n);
+  return s.replace(/^0+/, "");
+}
+function rowKey(r) {
+  const d = keyPart(r["Sales Doc."]), i = keyPart(r.Item);
+  return d || i ? d + "|" + i : "";
+}
+
 // Ícones no estilo SF Symbols.
 const ICON = {
   folder: '<path fill="currentColor" d="M2 5.75C2 4.78 2.78 4 3.75 4h3.6c.46 0 .9.19 1.23.52L9.9 5.8h6.35c.97 0 1.75.78 1.75 1.75v7.7c0 .97-.78 1.75-1.75 1.75H3.75C2.78 17 2 16.22 2 15.25z"/>',
@@ -116,6 +130,9 @@ class NativeBridge {
   open(path) { return this.json("POST", "/api/open", { path }); }
   reveal(path) { return this.json("POST", "/api/reveal", { path }); }
   ping() { return this.call("POST", "/api/ping").catch(() => {}); }
+  planilha() { return this.json("GET", "/api/planilha"); }
+  async choosePlanilha() { const r = await this.json("POST", "/api/planilha/escolher"); return r.cancelled ? null : r; }
+  gravar(body) { return this.json("POST", "/api/planilha/gravar", body); }
 }
 
 // Duas fontes com o mesmo formato, como um repositório com uma implementação real e uma de exemplo (a "preview").
@@ -159,8 +176,11 @@ class AppModel {
     this.settings = CBA.defaultSettings();
     this.settingsOpen = false;
     this.toast = null;
+    this.planilha = null;      // { path, exists, rows, keys: Map "doc|item" -> arquivo, error }
+    this.show = "all";         // all | new | saved: filtro da tabela
+    this.confirm = null;       // pergunta aberta antes de regravar
     observable(this, ["phase", "mode", "folder", "failure", "files", "busy", "progress", "result", "updatedAt",
-      "selection", "search", "sort", "settings", "settingsOpen", "toast"]);
+      "selection", "search", "sort", "settings", "settingsOpen", "toast", "planilha", "show", "confirm"]);
   }
 
   // Como .task {}: roda uma vez quando a tela aparece.
@@ -175,6 +195,7 @@ class AppModel {
         extras: !!c.extras,
         repeated: c.repeated === "all" ? "all" : "first"
       };
+      await this.loadPlanilha();
       if (c.folder) return this.openFolder(c.folder);
     } catch (err) {
       this.notify(err.message, "error");
@@ -212,6 +233,7 @@ class AppModel {
     const run = ++this.run;
     this.busy = true;
     this.progress = "Lendo a pasta…";
+    if (this.planilha) await this.loadPlanilha(); // alguém pode ter gravado nela desde a última vez
     let list;
     try {
       list = await this.source.list();
@@ -323,14 +345,125 @@ class AppModel {
     this.sort = !s || s.col !== col ? { col, dir: "asc" } : s.dir === "asc" ? { col, dir: "desc" } : null;
   }
 
-  // Derivado e memorizado: só recalcula quando resultado, seleção, busca ou ordem mudam.
+  // ---------- a planilha consolidada (como o ConsolidadoPath.xlsx do Fator de Importação) ----------
+
+  async loadPlanilha() {
+    try { this.setPlanilha(await this.native.planilha()); }
+    catch (err) { this.notify(err.message, "error"); }
+  }
+
+  setPlanilha(p) {
+    this.planilha = p && p.path
+      ? { path: p.path, exists: !!p.exists, rows: p.rows || 0, keys: new Map(Object.entries(p.keys || {})), error: p.error || "" }
+      : null;
+    if (!this.planilha) this.show = "all";
+  }
+
+  async choosePlanilha() {
+    try {
+      const p = await this.native.choosePlanilha();
+      if (p) this.setPlanilha(p);
+    } catch (err) {
+      this.notify(err.message, "error");
+    }
+  }
+
+  // Itens que ainda não estão na planilha: o primeiro de cada Sales Doc. + Item, na ordem dos arquivos.
+  pending() {
+    const res = this.result, pl = this.planilha;
+    if (this.pendKey && this.pendKey[0] === res && this.pendKey[1] === pl) return this.pend;
+    const out = { rows: [], set: new Set(), byFile: new Map() };
+    if (res && pl && !pl.error) {
+      const seen = new Set();
+      for (const r of res.rows) {
+        const k = rowKey(r);
+        if (!k || pl.keys.has(k) || seen.has(k)) continue;
+        seen.add(k);
+        out.rows.push(r);
+        out.set.add(r);
+        out.byFile.set(r.file, (out.byFile.get(r.file) || 0) + 1);
+      }
+    }
+    this.pendKey = [res, pl];
+    this.pend = out;
+    return out;
+  }
+
+  isSaved(r) { return !!(this.planilha && this.planilha.keys.has(rowKey(r))); }
+
+  savedInFile(rel) { return this.result ? this.result.rows.filter((r) => r.file === rel && this.isSaved(r)).length : 0; }
+
+  canWrite() {
+    const cols = this.result ? this.result.cols : [];
+    if (!cols.includes("Sales Doc.") || !cols.includes("Item")) {
+      this.notify("Para gravar na planilha, a lista de colunas (em Ajustes) precisa ter Sales Doc. e Item.", "error");
+      return false;
+    }
+    return this.mode === "folder" && !!this.planilha && !this.planilha.error && !this.busy;
+  }
+
+  async gravar() {
+    const rows = this.pending().rows;
+    if (!rows.length || !this.canWrite()) return;
+    const out = await this.write(rows, false);
+    if (out) this.notify(`${plural(out.added, "item novo gravado", "itens novos gravados")} em ${baseName(out.path)}.${out.backup ? ` A versão anterior ficou em ${baseName(out.backup)}.` : ""}`, "saved", out.path);
+  }
+
+  askRegravar() {
+    const rel = this.selection;
+    if (rel === "all" || !this.planilha) return;
+    const saved = this.savedInFile(rel);
+    const fresh = this.pending().byFile.get(rel) || 0;
+    this.confirm = {
+      title: `Regravar ${this.fileName(rel)}?`,
+      text: `${plural(saved, "item deste arquivo que já está na planilha recebe", "itens deste arquivo que já estão na planilha recebem")} os valores de agora` +
+        (fresh ? ` e ${plural(fresh, "item novo entra", "itens novos entram")} no fim` : "") +
+        `. As outras abas e as colunas escritas à mão não mudam, e a versão anterior fica numa cópia .bak.xlsx.`,
+      yes: "Regravar",
+      run: () => this.regravar(rel)
+    };
+  }
+
+  async regravar(rel) {
+    if (!this.canWrite()) return;
+    const seen = new Set();
+    const rows = this.result.rows.filter((r) => {
+      const k = rowKey(r);
+      if (r.file !== rel || !k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    const out = await this.write(rows, true);
+    if (out) this.notify(`${this.fileName(rel)} regravado: ${plural(out.updated, "item atualizado", "itens atualizados")}, ${plural(out.added, "novo", "novos")}.`, "saved", out.path);
+  }
+
+  async write(rows, replace) {
+    const res = this.result;
+    this.busy = true;
+    this.progress = "Gravando na planilha…";
+    try {
+      const out = await this.native.gravar({ columns: res.cols, rows: rows.map((r) => res.cols.map((c) => CBA.cellValue(r, c))), replace });
+      await this.loadPlanilha();
+      return out;
+    } catch (err) {
+      this.notify(err.message, "error");
+      return null;
+    } finally {
+      this.busy = false;
+      this.progress = "";
+    }
+  }
+
+  // Derivado e memorizado: só recalcula quando resultado, seleção, busca, ordem, filtro ou planilha mudam.
   visibleRows() {
     const res = this.result;
     if (!res) return [];
-    const key = [res, this.selection, this.search, this.sort];
+    const key = [res, this.selection, this.search, this.sort, this.show, this.planilha];
     if (this.visKey && key.every((v, i) => v === this.visKey[i])) return this.vis;
     let rows = res.rows;
     if (this.selection !== "all") rows = rows.filter((r) => r.file === this.selection);
+    if (this.show === "new") { const set = this.pending().set; rows = rows.filter((r) => set.has(r)); }
+    if (this.show === "saved") rows = rows.filter((r) => this.isSaved(r));
     const q = fold(this.search.trim());
     if (q) {
       const dec = this.settings.decimal;
@@ -420,24 +553,48 @@ function FolderCard(model) {
   });
 }
 
+function PlanilhaCard(model) {
+  const el = $("planilha-card");
+  const sheetIcon = () => icon("table", "sheet");
+  model.observe(["planilha"], () => {
+    const pl = model.planilha;
+    if (!pl) {
+      el.innerHTML = `${icon("table", "tint-gray")}<strong>Nenhuma planilha</strong><span class="path">Escolha onde gravar o consolidado. Cada atualização acrescenta só os itens novos.</span>
+        <button class="link" type="button" data-action="choose-planilha">Escolher planilha…</button>`;
+      return;
+    }
+    const name = baseName(pl.path);
+    const parent = pl.path.slice(0, pl.path.length - name.length).replace(/[\\/]+$/, "");
+    const status = pl.error
+      ? `<span class="status err">${esc(pl.error)}</span>`
+      : !pl.exists
+        ? `<span class="status">Ainda não existe: é criada na primeira gravação.</span>`
+        : `<span class="status">${plural(pl.rows, "item gravado", "itens gravados")}</span>`;
+    el.innerHTML = `${sheetIcon()}<strong title="${esc(pl.path)}">${esc(name)}</strong><span class="path" title="${esc(pl.path)}">${esc(parent)}</span>${status}
+      <button class="link" type="button" data-action="choose-planilha">Trocar planilha…</button>`;
+  });
+}
+
 function FileList(model) {
   const el = $("file-list");
-  model.observe(["files", "selection", "result"], () => {
+  model.observe(["files", "selection", "result", "planilha"], () => {
     if (!model.files.length) { el.innerHTML = ""; return; }
+    const pend = model.pending();
+    const badge = (n) => (n ? `<span class="new-badge" title="${plural(n, "item novo", "itens novos")} para gravar">+${fmtInt(n)}</span>` : "");
     const total = model.result ? model.result.rows.length : 0;
-    let h = row("all", icon("table", "tint-blue"), "Todos os arquivos", "", total ? fmtInt(total) : "", "Todos os arquivos");
+    let h = row("all", icon("table", "tint-blue"), "Todos os arquivos", "", total ? fmtInt(total) : "", "Todos os arquivos", badge(pend.rows.length));
     h += '<li class="divider" role="separator"></li>';
     for (const f of model.files) {
       const dir = f.rel.includes("/") ? f.rel.slice(0, f.rel.lastIndexOf("/") + 1) : "";
       const count = f.status === "ok" || f.status === "warn" ? fmtInt(f.rows) : "";
       const tip = f.rel + (f.note ? " — " + f.note : f.status === "temp" ? " — arquivo temporário, ignorado" : "");
-      h += row(f.rel, STATUS_ICON[f.status](), f.name, dir, count, tip);
+      h += row(f.rel, STATUS_ICON[f.status](), f.name, dir, count, tip, badge(pend.byFile.get(f.rel) || 0));
     }
     el.innerHTML = h;
-    function row(key, sym, name, dir, count, tip) {
+    function row(key, sym, name, dir, count, tip, extra) {
       const sel = model.selection === key;
       return `<li role="option" aria-selected="${sel}" data-select="${esc(key)}" title="${esc(tip)}">${sym}` +
-        `<span class="name">${dir ? `<span class="dim">${esc(dir)}</span>` : ""}${esc(name)}</span><span class="count">${count}</span></li>`;
+        `<span class="name">${dir ? `<span class="dim">${esc(dir)}</span>` : ""}${esc(name)}</span>${extra || `<span class="count">${count}</span>`}</li>`;
     }
   });
   el.addEventListener("click", (ev) => {
@@ -455,7 +612,7 @@ function FileList(model) {
 }
 
 function Toolbar(model) {
-  model.observe(["selection", "files", "result", "busy", "progress", "updatedAt", "phase", "mode"], () => {
+  model.observe(["selection", "files", "result", "busy", "progress", "updatedAt", "phase", "mode", "planilha"], () => {
     const ready = model.phase === "ready";
     $("title").textContent = !ready ? "Consolidador CBA" : model.selection === "all" ? "Todos os arquivos" : model.fileName(model.selection);
     const sub = $("subtitle");
@@ -470,7 +627,21 @@ function Toolbar(model) {
       sub.textContent = "";
     }
     const hasRows = !!(ready && model.result && model.result.rows.length);
-    $("export").disabled = !hasRows || model.busy;
+    // Botão principal: escolher a planilha, gravar os novos, ou nada a fazer.
+    const primary = $("primary");
+    const n = model.pending().rows.length;
+    const pl = model.planilha;
+    let label = "Gravar na planilha", action = "gravar", enabled = false, tip = "";
+    if (model.mode === "sample") tip = "Os dados de exemplo não são gravados.";
+    else if (!pl) { label = "Escolher planilha…"; action = "choose-planilha"; enabled = ready; }
+    else if (pl.error) tip = pl.error;
+    else if (n) { label = `Gravar ${plural(n, "novo", "novos")}`; enabled = hasRows; tip = "Acrescenta na planilha só os itens que ainda não estão nela (Ctrl+S)."; }
+    else if (hasRows) { label = "Planilha em dia"; tip = "Todos os itens da pasta já estão na planilha."; }
+    primary.dataset.action = action;
+    primary.innerHTML = (label === "Planilha em dia" ? icon("ok") : "") + `<span>${esc(label)}</span>`;
+    primary.disabled = !enabled || model.busy;
+    primary.title = tip;
+    for (const b of document.querySelectorAll('#more-menu [data-action="export"]')) b.disabled = !hasRows;
     $("refresh").disabled = model.busy || model.mode === "none";
     $("search").disabled = !ready;
     for (const b of document.querySelectorAll('#more-menu [data-action="csv"], #more-menu [data-action="copy"]')) b.disabled = !hasRows;
@@ -502,7 +673,7 @@ function Screens(model) {
 }
 
 function Stats(model) {
-  model.observe(["result", "selection"], () => {
+  model.observe(["result", "selection", "planilha"], () => {
     const r = model.result;
     if (!r) { $("stats").innerHTML = ""; return; }
     const all = model.selection === "all";
@@ -518,7 +689,12 @@ function Stats(model) {
     const [situation, sitTint] = file ? SITUATION[file.status] || ["—", ""] : ["", ""];
     $("stats").innerHTML =
       stat("Linhas", fmtInt(rows)) +
-      stat("Colunas", fmtInt(r.cols.length)) +
+      (() => {
+        if (!model.planilha || model.planilha.error) return stat("Novos", "—");
+        const pend = model.pending();
+        const n = all ? pend.rows.length : pend.byFile.get(model.selection) || 0;
+        return stat("Novos para gravar", n ? fmtInt(n) : "Nenhum", n ? "tint-blue" : "");
+      })() +
       (all ? stat("Arquivos lidos", fmtInt(r.fileCount)) : stat("Situação", situation, sitTint)) +
       stat(errors ? "Erros e avisos" : "Avisos", attention ? fmtInt(attention) : "Nenhum", tint);
   });
@@ -564,7 +740,7 @@ class LazyTable {
       const b = ev.target.closest("[data-col]");
       if (b) model.toggleSort(b.dataset.col);
     });
-    model.observe(["result", "selection", "search", "sort"], () => this.update());
+    model.observe(["result", "selection", "search", "sort", "show", "planilha"], () => this.update());
   }
 
   update() {
@@ -629,11 +805,13 @@ class LazyTable {
     if (start === this.range[0] && end === this.range[1]) return;
     this.range = [start, end];
     const dec = this.model.settings.decimal;
+    const pend = this.model.pending().set;
     const spacer = (rows) => `<tr class="spacer" aria-hidden="true"><td colspan="${cols.length}" style="height:${rows * this.rowH}px"></td></tr>`;
     let h = start ? spacer(start) : "";
     for (let i = start; i < end; i++) {
       const r = this.rows[i];
-      h += `<tr${i % 2 ? ' class="alt"' : ""}>` + cols.map((c) => {
+      const cls = [i % 2 ? "alt" : "", pend.has(r) ? "new" : ""].join(" ").trim();
+      h += `<tr${cls ? ` class="${cls}"` : ""}${pend.has(r) ? ' title="Novo: ainda não está na planilha"' : ""}>` + cols.map((c) => {
         const t = CBA.displayValue(r, c, dec);
         const n = CBA.NUM_COLS.has(c);
         return `<td${n ? ' class="n"' : ""}${t.length > 36 ? ` title="${esc(t)}"` : ""}>${esc(t)}</td>`;
@@ -683,6 +861,35 @@ function SettingsSheet(model) {
   back.addEventListener("click", (ev) => { if (ev.target === back) model.settingsOpen = false; });
 }
 
+// Em cima da tabela: Todas / Novas / Já gravadas, para conferir antes de gravar, e Regravar o arquivo aberto.
+function TableBar(model) {
+  model.observe(["planilha", "show", "selection", "result", "mode"], () => {
+    const pl = model.planilha;
+    $("table-bar").hidden = !pl || !!pl.error || model.mode !== "folder";
+    for (const b of document.querySelectorAll("#show-filter [data-show]")) b.setAttribute("aria-checked", String(b.dataset.show === model.show));
+    $("regravar").hidden = model.selection === "all" || !pl || model.savedInFile(model.selection) === 0;
+  });
+  $("show-filter").addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-show]");
+    if (b) model.show = b.dataset.show;
+  });
+}
+
+// Como um .alert do SwiftUI: pergunta antes de uma ação que muda a planilha.
+function ConfirmAlert(model) {
+  const back = $("confirm");
+  model.observe(["confirm"], () => {
+    const c = model.confirm;
+    back.hidden = !c;
+    if (!c) return;
+    $("confirm-title").textContent = c.title;
+    $("confirm-text").textContent = c.text;
+    $("confirm-yes").textContent = c.yes;
+    $("confirm-yes").focus();
+  });
+  back.addEventListener("click", (ev) => { if (ev.target === back) model.confirm = null; });
+}
+
 function Toast(model) {
   const el = $("toast");
   let timer;
@@ -712,6 +919,9 @@ function mount(model) {
   Issues(model);
   new LazyTable(model);
   SettingsSheet(model);
+  PlanilhaCard(model);
+  TableBar(model);
+  ConfirmAlert(model);
   Toast(model);
 
   const actions = {
@@ -719,6 +929,11 @@ function mount(model) {
     sample: () => model.showSample(),
     refresh: () => model.refresh(),
     export: () => model.exportFile("xlsx"),
+    gravar: () => model.gravar(),
+    "choose-planilha": () => model.choosePlanilha(),
+    "ask-regravar": () => model.askRegravar(),
+    "confirm-yes": () => { const c = model.confirm; model.confirm = null; if (c) c.run(); },
+    "confirm-no": () => { model.confirm = null; },
     csv: () => model.exportFile("csv"),
     copy: () => model.copyTable(),
     settings: () => { model.settingsOpen = true; },
@@ -737,10 +952,12 @@ function mount(model) {
     const k = ev.key.toLowerCase();
     if (ev.key === "F5" || (ev.ctrlKey && k === "r")) { ev.preventDefault(); if (!model.busy && model.mode !== "none") model.refresh(); }
     else if (ev.ctrlKey && k === "f") { ev.preventDefault(); $("search").focus(); $("search").select(); }
-    else if (ev.ctrlKey && k === "e") { ev.preventDefault(); if (!$("export").disabled) model.exportFile("xlsx"); }
+    else if (ev.ctrlKey && k === "e") { ev.preventDefault(); if (model.result && model.result.rows.length) model.exportFile("xlsx"); }
+    else if (ev.ctrlKey && k === "s") { ev.preventDefault(); if (!$("primary").disabled && $("primary").dataset.action === "gravar") model.gravar(); }
+    else if (ev.key === "Escape" && model.confirm) model.confirm = null;
     else if (ev.ctrlKey && k === ",") { ev.preventDefault(); model.settingsOpen = true; }
     else if (ev.key === "Escape" && model.settingsOpen) model.settingsOpen = false;
-    else if (ev.ctrlKey && (k === "p" || k === "s" || k === "u")) ev.preventDefault();
+    else if (ev.ctrlKey && (k === "p" || k === "u")) ev.preventDefault();
   });
   $("path-form").addEventListener("submit", (ev) => {
     ev.preventDefault();

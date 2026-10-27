@@ -39,6 +39,7 @@ type Config struct {
 	Columns   []string `json:"columns"`
 	Extras    bool     `json:"extras"`
 	Repeated  string   `json:"repeated"`
+	Planilha  string   `json:"planilha"` // the consolidated spreadsheet the app keeps up to date
 }
 
 type fileInfo struct {
@@ -60,14 +61,14 @@ type scanResult struct {
 // desktop is what only the operating system can do: its dialogs and opening files in their programs.
 type desktop interface {
 	pickFolder(start string) (string, error)
-	saveFile(name, dir, kind string) (string, error)
+	saveFile(title, name, dir, kind string, overwrite bool) (string, error)
 	open(path string) error
 	reveal(path string) error
 }
 
 var errCancelled = errors.New("cancelled")
 
-const version = "1.1.0"
+const version = "1.2.0"
 
 // command is what the arguments ask for instead of opening the window: "instalar", "desinstalar" or "".
 func command(args []string) string {
@@ -86,7 +87,8 @@ func command(args []string) string {
 const maxEntries = 50000
 
 // scanFolder lists the .xlsx and .xlsm files under root, subfolders included, like Folder.Files in the query.
-func scanFolder(root string) (scanResult, map[string]string, error) {
+// The paths in ignore (the consolidated spreadsheet and its copy, when they live in the folder) are left out.
+func scanFolder(root string, ignore ...string) (scanResult, map[string]string, error) {
 	res := scanResult{Folder: root, Files: []fileInfo{}}
 	info, err := os.Stat(root)
 	if err != nil {
@@ -114,6 +116,14 @@ func scanFolder(root string) (scanResult, map[string]string, error) {
 		}
 		if d.IsDir() {
 			return nil
+		}
+		if strings.HasPrefix(d.Name(), "~cba-gravando-") {
+			return nil
+		}
+		for _, skip := range ignore {
+			if skip != "" && strings.EqualFold(filepath.Clean(skip), filepath.Clean(p)) {
+				return nil
+			}
 		}
 		ext := strings.ToLower(filepath.Ext(d.Name()))
 		if ext != ".xlsx" && ext != ".xlsm" {
@@ -153,6 +163,39 @@ type app struct {
 	cfg      Config
 	files    map[string]string // id -> path, from the last scan
 	exported map[string]bool   // files this app saved: the only ones it opens or shows in Explorer
+	writing  sync.Mutex        // one write to the spreadsheet at a time
+}
+
+func (a *app) allow(path string) {
+	a.mu.Lock()
+	a.exported[path] = true
+	a.mu.Unlock()
+}
+
+// answerPlanilha tells the screen which items the spreadsheet already has; a spreadsheet that cannot be read
+// comes back with its error, so the screen can say what is wrong with it.
+func (a *app) answerPlanilha(w http.ResponseWriter, path string) {
+	if path == "" {
+		writeJSON(w, http.StatusOK, planilhaInfo{Keys: map[string]string{}})
+		return
+	}
+	info, err := readPlanilha(path)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"path": path, "exists": info.Exists, "keys": map[string]string{}, "error": err.Error()})
+		return
+	}
+	a.allow(path)
+	writeJSON(w, http.StatusOK, info)
+}
+
+func planilhaFailure(err error) string {
+	if sharingViolation(err) {
+		return "A planilha está aberta no Excel. Feche-a e grave de novo."
+	}
+	if errors.Is(err, fs.ErrPermission) {
+		return "Sem permissão para gravar na planilha (ela pode estar aberta no Excel)."
+	}
+	return "Não foi possível gravar na planilha: " + err.Error()
 }
 
 func newApp(host, cfgPath string, desk desktop) *app {
@@ -236,7 +279,7 @@ func (a *app) handler() http.Handler {
 			return
 		}
 		old := a.config()
-		c.Folder, c.ExportDir = old.Folder, old.ExportDir // these two change only through the dialogs and the scan
+		c.Folder, c.ExportDir, c.Planilha = old.Folder, old.ExportDir, old.Planilha // these change only through the dialogs and the scan
 		if err := a.saveConfig(c); err != nil {
 			writeError(w, http.StatusInternalServerError, "Não foi possível guardar os ajustes: "+err.Error())
 			return
@@ -264,7 +307,8 @@ func (a *app) handler() http.Handler {
 			writeError(w, http.StatusNotFound, "Nenhuma pasta escolhida.")
 			return
 		}
-		res, paths, err := scanFolder(root)
+		pl := a.config().Planilha
+		res, paths, err := scanFolder(root, pl, backupPath(pl))
 		if err != nil {
 			msg := "Não foi possível ler a pasta " + root + "."
 			if errors.Is(err, fs.ErrNotExist) {
@@ -318,7 +362,7 @@ func (a *app) handler() http.Handler {
 		if dir == "" {
 			dir = c.Folder
 		}
-		p, err := a.desk.saveFile(name, dir, kind)
+		p, err := a.desk.saveFile("Salvar uma cópia do consolidado", name, dir, kind, true)
 		if errors.Is(err, errCancelled) {
 			writeJSON(w, http.StatusOK, map[string]any{"cancelled": true})
 			return
@@ -361,6 +405,50 @@ func (a *app) handler() http.Handler {
 			writeJSON(w, http.StatusOK, map[string]any{})
 		})
 	}
+	mux.HandleFunc("GET /api/planilha", func(w http.ResponseWriter, r *http.Request) {
+		a.answerPlanilha(w, a.config().Planilha)
+	})
+	mux.HandleFunc("POST /api/planilha/escolher", func(w http.ResponseWriter, r *http.Request) {
+		c := a.config()
+		name, dir := "Consolidado_CBA.xlsx", filepath.Dir(c.Folder) // beside DadosCBA, not inside it
+		if c.Planilha != "" {
+			name, dir = filepath.Base(c.Planilha), filepath.Dir(c.Planilha)
+		}
+		p, err := a.desk.saveFile("Escolha a planilha consolidada (uma que já existe ou um nome novo)", name, dir, "xlsx", false)
+		if errors.Is(err, errCancelled) {
+			writeJSON(w, http.StatusOK, map[string]any{"cancelled": true})
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Não foi possível abrir a janela de escolher a planilha: "+err.Error())
+			return
+		}
+		c = a.config()
+		c.Planilha = p
+		a.saveConfig(c)
+		a.answerPlanilha(w, p)
+	})
+	mux.HandleFunc("POST /api/planilha/gravar", func(w http.ResponseWriter, r *http.Request) {
+		p := a.config().Planilha
+		if p == "" {
+			writeError(w, http.StatusBadRequest, "Escolha a planilha primeiro.")
+			return
+		}
+		var req gravarReq
+		if err := json.NewDecoder(io.LimitReader(r.Body, 512<<20)).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Os dados não chegaram inteiros.")
+			return
+		}
+		a.writing.Lock()
+		res, err := writePlanilha(p, req)
+		a.writing.Unlock()
+		if err != nil {
+			writeError(w, http.StatusConflict, planilhaFailure(err))
+			return
+		}
+		a.allow(p)
+		writeJSON(w, http.StatusOK, res)
+	})
 	mux.HandleFunc("POST /api/ping", func(w http.ResponseWriter, r *http.Request) {
 		a.pinged.Store(time.Now().UnixMilli())
 		w.WriteHeader(http.StatusNoContent)

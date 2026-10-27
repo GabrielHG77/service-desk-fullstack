@@ -43,12 +43,31 @@ Para desinstalar: **Configurações > Aplicativos instalados > Consolidador CBA 
    Para achar fácil depois, clique com o botão direito no ícone da barra de tarefas e em **Fixar na barra de tarefas**.
 2. Clique em **Escolher pasta…** e selecione `Y:\...\Dashboard\2026\DadosCBA`.
    Da próxima vez o app já abre nessa pasta.
-3. Confira os erros e avisos e clique em **Exportar Excel**. Depois de salvar, **Abrir no Excel** abre o arquivo.
+3. Clique em **Escolher planilha…**, depois em **Gravar N novos** (veja "A planilha consolidada" abaixo).
+   Uma cópia avulsa em Excel ou CSV fica no menu **⋯**.
 
-Atalhos: F5 atualiza, Ctrl+F busca, Ctrl+E exporta, Ctrl+, abre os Ajustes.
+Atalhos: F5 atualiza, Ctrl+S grava na planilha, Ctrl+F busca, Ctrl+E exporta uma cópia, Ctrl+, abre os Ajustes.
 
 Na primeira vez, o Windows pode mostrar "O Windows protegeu o computador", porque o programa
 não é assinado. Clique em **Mais informações** e depois em **Executar assim mesmo**.
+
+## A planilha consolidada
+
+Mesma lógica do `ConsolidadoPath.xlsx` do Fator de Importação:
+
+- **Escolher planilha…** (barra lateral ou botão azul) define onde o consolidado fica: uma planilha que já existe
+  ou um nome novo. O app lembra.
+- O botão azul mostra **Gravar N novos**: só entram os itens (Sales Doc. + Item) que ainda não estão na
+  planilha. Item já gravado não duplica e não muda. Com tudo gravado, o botão diz **Planilha em dia**.
+- Antes de gravar, para conferir: o filtro **Todas / Novas / Já gravadas** em cima da tabela, o card
+  **Novos para gravar** e o **+N** ao lado de cada arquivo.
+- Antes de cada gravação a planilha é copiada para `<nome>.bak.xlsx`.
+- O app escreve só na aba **Consolidado**. Outras abas (dashboard, tabelas dinâmicas) e colunas escritas à mão
+  ficam como estão. Coluna nova da lista entra no fim.
+- **Regravar este arquivo na planilha…** (com um arquivo selecionado) troca os valores dos itens dele que já
+  estão na planilha pelos de agora, depois de confirmar.
+- Com a planilha aberta no Excel, o Windows não deixa gravar: o app avisa para fechar.
+- A planilha e a cópia `.bak` são ignoradas se estiverem dentro da pasta DadosCBA.
 
 ## Se der problema
 
@@ -76,6 +95,7 @@ pasta não abrir, cole o caminho da pasta no campo **Ou cole o caminho da pasta*
 - `dialogs_windows.go`: as janelas "Escolher pasta" e "Salvar como" do Windows (IFileOpenDialog e
   IFileSaveDialog), chamadas direto.
 - `install_windows.go`: `--instalar` e `--desinstalar`.
+- `planilha.go`: a planilha consolidada (ler o que já está gravado, acrescentar os novos, regravar), com `excelize`.
 - `ui/`: a tela. `core.js` tem a transformação (a mesma lógica da consulta) e `app.js` a interface, organizada
   como um app SwiftUI: view model observável, views pequenas, barra lateral + detalhe, sheet de ajustes e tabela
   que só desenha as linhas visíveis. `xlsx.full.min.js` é a SheetJS 0.18.5 (Apache-2.0, ver `LICENSE-sheetjs.txt`).

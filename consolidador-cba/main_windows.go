@@ -148,10 +148,10 @@ var filters = map[string][2]string{
 	"csv":  {"CSV separado por ponto e vírgula (*.csv)", "*.csv"},
 }
 
-func (d *winDesktop) saveFile(name, dir, kind string) (path string, err error) {
+func (d *winDesktop) saveFile(title, name, dir, kind string, overwrite bool) (path string, err error) {
 	f := filters[kind]
 	err = d.onUI(func() (e error) {
-		path, e = saveDialog(d.hwnd, "Salvar consolidado", existingDir(dir), name, f[0], f[1], kind)
+		path, e = saveDialog(d.hwnd, title, existingDir(dir), name, f[0], f[1], kind, overwrite)
 		return e
 	})
 	return path, err

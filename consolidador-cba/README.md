@@ -21,11 +21,19 @@ com o PowerShell, que usa o proxy da empresa), e o `--instalar` cria os atalhos 
 Trabalho, registra o app em **Configurações > Aplicativos instalados** e abre o app. Só para o seu usuário,
 sem administrador. Para atualizar, feche o app e rode o mesmo comando.
 
-Para desinstalar: **Configurações > Aplicativos instalados > Consolidador CBA > Desinstalar**, ou no cmd:
+O `--instalar` instala o app na pasta onde o `.exe` está. Para outra pasta, por exemplo junto do `mqtt-panel`,
+troque o caminho no começo:
 
 ```bat
-"%LOCALAPPDATA%\Programs\ConsolidadorCBA\ConsolidadorCBA.exe" --desinstalar
+cd /d "C:\Users\<você>\OneDrive - Interroll Management SA\Desktop\MQTT" && (curl -fL -o ConsolidadorCBA.exe https://github.com/GabrielHG77/service-desk-fullstack/raw/refs/heads/claude/understand-query-code-yv85xs/consolidador-cba/dist/ConsolidadorCBA.exe || powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri https://github.com/GabrielHG77/service-desk-fullstack/raw/refs/heads/claude/understand-query-code-yv85xs/consolidador-cba/dist/ConsolidadorCBA.exe -OutFile ConsolidadorCBA.exe") && ConsolidadorCBA.exe --instalar
 ```
+
+O app não grava nada ao lado do `.exe` (os ajustes ficam em `%APPDATA%\ConsolidadorCBA`), então pode morar
+numa pasta do OneDrive sem ficar sincronizando a cada uso.
+
+Para desinstalar: **Configurações > Aplicativos instalados > Consolidador CBA > Desinstalar**, ou no cmd,
+`ConsolidadorCBA.exe --desinstalar` na pasta onde ele está. Saem os atalhos, o registro, os ajustes e o
+`ConsolidadorCBA.exe`; a pasta e os outros arquivos dela ficam.
 
 ## Como usar
 

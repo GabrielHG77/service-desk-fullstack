@@ -3,8 +3,6 @@
 package main
 
 import (
-	"errors"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,15 +15,18 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-// Installation for the current user only, so it needs no administrator:
-// the program in %LOCALAPPDATA%\Programs, shortcuts in the Start menu and on the Desktop,
-// and an entry in Settings > Apps that runs --desinstalar.
+// Installation for the current user only, so it needs no administrator. The program stays where it is
+// (the folder the install command downloaded it to); --instalar adds shortcuts in the Start menu and on the
+// Desktop and an entry in Settings > Apps that runs --desinstalar.
 
 const uninstallKey = `Software\Microsoft\Windows\CurrentVersion\Uninstall\ConsolidadorCBA`
 
-func installDir() string {
+// defaultInstallDir is the folder the first install command used; only there may uninstall remove the folder itself.
+func defaultInstallDir() string {
 	return filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "ConsolidadorCBA")
 }
+
+func samePath(a, b string) bool { return strings.EqualFold(filepath.Clean(a), filepath.Clean(b)) }
 
 func shortcutPaths() []string {
 	var out []string
@@ -37,22 +38,28 @@ func shortcutPaths() []string {
 	return out
 }
 
+// installedAt is the folder of the current installation, from Settings > Apps, or "".
+func installedAt() string {
+	k, err := registry.OpenKey(registry.CURRENT_USER, uninstallKey, registry.QUERY_VALUE)
+	if err != nil {
+		return ""
+	}
+	defer k.Close()
+	dir, _, _ := k.GetStringValue("InstallLocation")
+	return dir
+}
+
 func install() error {
-	self, err := os.Executable()
+	target, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	dir := installDir()
-	target := filepath.Join(dir, "ConsolidadorCBA.exe")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	if !strings.EqualFold(filepath.Clean(self), filepath.Clean(target)) {
-		if err := copyFile(self, target); err != nil {
-			if sharingViolation(err) || errors.Is(err, fs.ErrPermission) {
-				return errors.New("O Consolidador CBA está aberto. Feche a janela dele e rode o comando de novo.")
-			}
-			return err
+	dir := filepath.Dir(target)
+	// Installing in another folder leaves no second copy behind in the old one.
+	if old := installedAt(); old != "" && !samePath(old, dir) {
+		os.Remove(filepath.Join(old, "ConsolidadorCBA.exe"))
+		if samePath(old, defaultInstallDir()) {
+			os.Remove(old) // only if empty
 		}
 	}
 	var problems []string
@@ -65,28 +72,11 @@ func install() error {
 		problems = append(problems, "registro em Aplicativos instalados: "+err.Error())
 	}
 	if len(problems) > 0 {
-		alert("O Consolidador CBA foi instalado em " + dir + ", mas faltou:\n\n" + strings.Join(problems, "\n"))
+		alert("O Consolidador CBA está em " + dir + ", mas faltou:\n\n" + strings.Join(problems, "\n"))
 	}
 	run := exec.Command(target)
 	run.Dir = dir
 	return run.Start()
-}
-
-// copyFile writes next to the target and then swaps, so a failed copy never leaves half a program.
-func copyFile(from, to string) error {
-	data, err := os.ReadFile(from)
-	if err != nil {
-		return err
-	}
-	tmp := to + ".novo"
-	if err := os.WriteFile(tmp, data, 0o755); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, to); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return nil
 }
 
 func makeShortcut(lnk, target, dir string) error {
@@ -146,8 +136,11 @@ func register(target, dir string) error {
 	return nil
 }
 
+// uninstall removes the shortcuts, the Settings > Apps entry, the saved settings and ConsolidadorCBA.exe.
+// It never removes the folder the program is in, other than the default one when it is left empty:
+// that folder may hold other programs (mqtt-panel, FatorImportacao).
 func uninstall() {
-	if !ask("Desinstalar o Consolidador CBA?\n\nO programa, os atalhos e os ajustes salvos são apagados. As planilhas não são tocadas.") {
+	if !ask("Desinstalar o Consolidador CBA?\n\nO programa, os atalhos e os ajustes salvos são apagados. As planilhas e os outros arquivos da pasta não são tocados.") {
 		return
 	}
 	for _, lnk := range shortcutPaths() {
@@ -159,13 +152,17 @@ func uninstall() {
 		os.RemoveAll(filepath.Join(cache, "ConsolidadorCBA"))
 	}
 	alert("O Consolidador CBA foi desinstalado.")
-	// This program is inside the folder: a hidden cmd deletes it a moment after this process ends.
-	cmd := exec.Command("cmd.exe")
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CmdLine:       `cmd.exe /c ping -n 3 127.0.0.1 >nul & rmdir /s /q "` + installDir() + `"`,
-		HideWindow:    true,
-		CreationFlags: windows.CREATE_NO_WINDOW,
+	// The running program cannot delete itself: a hidden cmd deletes it a moment after this process ends.
+	exe, err := os.Executable()
+	if err != nil {
+		return
 	}
+	line := `cmd.exe /c ping -n 3 127.0.0.1 >nul & del /f /q "` + exe + `"`
+	if dir := filepath.Dir(exe); samePath(dir, defaultInstallDir()) {
+		line += ` & rmdir "` + dir + `"` // no /s: only when empty
+	}
+	cmd := exec.Command("cmd.exe")
+	cmd.SysProcAttr = &syscall.SysProcAttr{CmdLine: line, HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
 	cmd.Start()
 }
 

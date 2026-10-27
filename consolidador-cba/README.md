@@ -13,19 +13,20 @@ sem instalador e sem privilégio de administrador.
 No **Prompt de Comando** (cmd, não PowerShell), cole e dê Enter:
 
 ```bat
-mkdir "%LOCALAPPDATA%\Programs\ConsolidadorCBA" 2>nul & (curl -fL -o "%LOCALAPPDATA%\Programs\ConsolidadorCBA\ConsolidadorCBA.exe" https://github.com/GabrielHG77/service-desk-fullstack/raw/refs/heads/claude/understand-query-code-yv85xs/consolidador-cba/dist/ConsolidadorCBA.exe || powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri https://github.com/GabrielHG77/service-desk-fullstack/raw/refs/heads/claude/understand-query-code-yv85xs/consolidador-cba/dist/ConsolidadorCBA.exe -OutFile $env:LOCALAPPDATA\Programs\ConsolidadorCBA\ConsolidadorCBA.exe") && "%LOCALAPPDATA%\Programs\ConsolidadorCBA\ConsolidadorCBA.exe" --instalar
+taskkill /im ConsolidadorCBA.exe /f >nul 2>&1 & ping -n 3 127.0.0.1 >nul & mkdir "%LOCALAPPDATA%\Programs\ConsolidadorCBA" 2>nul & (curl -fL -o "%LOCALAPPDATA%\Programs\ConsolidadorCBA\ConsolidadorCBA.exe" https://github.com/GabrielHG77/service-desk-fullstack/raw/refs/heads/claude/understand-query-code-yv85xs/consolidador-cba/dist/ConsolidadorCBA.exe || powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri https://github.com/GabrielHG77/service-desk-fullstack/raw/refs/heads/claude/understand-query-code-yv85xs/consolidador-cba/dist/ConsolidadorCBA.exe -OutFile $env:LOCALAPPDATA\Programs\ConsolidadorCBA\ConsolidadorCBA.exe") && "%LOCALAPPDATA%\Programs\ConsolidadorCBA\ConsolidadorCBA.exe" --instalar
 ```
 
 Baixa o programa para `%LOCALAPPDATA%\Programs\ConsolidadorCBA` (com o `curl` do Windows; se ele falhar,
 com o PowerShell, que usa o proxy da empresa), e o `--instalar` cria os atalhos no menu Iniciar e na Área de
 Trabalho, registra o app em **Configurações > Aplicativos instalados** e abre o app. Só para o seu usuário,
-sem administrador. Para atualizar, feche o app e rode o mesmo comando.
+sem administrador. Para atualizar, rode o mesmo comando: o `taskkill` do começo fecha o app se ele estiver aberto
+(com ele aberto, o Windows não deixa trocar o arquivo).
 
 O `--instalar` instala o app na pasta onde o `.exe` está. Para outra pasta, por exemplo junto do `mqtt-panel`,
 troque o caminho no começo:
 
 ```bat
-cd /d "C:\Users\<você>\OneDrive - Interroll Management SA\Desktop\MQTT" && (curl -fL -o ConsolidadorCBA.exe https://github.com/GabrielHG77/service-desk-fullstack/raw/refs/heads/claude/understand-query-code-yv85xs/consolidador-cba/dist/ConsolidadorCBA.exe || powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri https://github.com/GabrielHG77/service-desk-fullstack/raw/refs/heads/claude/understand-query-code-yv85xs/consolidador-cba/dist/ConsolidadorCBA.exe -OutFile ConsolidadorCBA.exe") && ConsolidadorCBA.exe --instalar
+taskkill /im ConsolidadorCBA.exe /f >nul 2>&1 & ping -n 3 127.0.0.1 >nul & cd /d "C:\Users\<você>\OneDrive - Interroll Management SA\Desktop\MQTT" && (curl -fL -o ConsolidadorCBA.exe https://github.com/GabrielHG77/service-desk-fullstack/raw/refs/heads/claude/understand-query-code-yv85xs/consolidador-cba/dist/ConsolidadorCBA.exe || powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri https://github.com/GabrielHG77/service-desk-fullstack/raw/refs/heads/claude/understand-query-code-yv85xs/consolidador-cba/dist/ConsolidadorCBA.exe -OutFile ConsolidadorCBA.exe") && ConsolidadorCBA.exe --instalar
 ```
 
 O app não grava nada ao lado do `.exe` (os ajustes ficam em `%APPDATA%\ConsolidadorCBA`), então pode morar

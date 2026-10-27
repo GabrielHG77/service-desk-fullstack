@@ -3,17 +3,19 @@
 package main
 
 import (
-	"errors"
+	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
+	"strings"
 	"syscall"
 	"time"
 
-	"github.com/harry1453/go-common-file-dialog/cfd"
 	webview2 "github.com/jchv/go-webview2"
 	"golang.org/x/sys/windows"
 )
@@ -27,6 +29,7 @@ var (
 )
 
 func main() {
+	logToFile()
 	switch command(os.Args[1:]) {
 	case "instalar":
 		if err := install(); err != nil {
@@ -98,15 +101,26 @@ type winDesktop struct {
 }
 
 // onUI runs f where a dialog belongs: on the window's thread, or, with no window, alone on a thread of its own.
-func (d *winDesktop) onUI(f func()) {
+// A panic in f comes back as an error instead of closing the app.
+func (d *winDesktop) onUI(f func() error) (err error) {
 	done := make(chan struct{})
-	run := func() { defer close(done); f() }
+	run := func() {
+		defer close(done)
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("pânico numa janela do Windows: %v\n%s", r, debug.Stack())
+				err = fmt.Errorf("erro interno: %v", r)
+			}
+		}()
+		err = f()
+	}
 	if d.view != nil {
 		d.view.Dispatch(run)
 	} else {
 		go func() { runtime.LockOSThread(); run() }() // the thread ends with the goroutine, COM state and all
 	}
 	<-done
+	return err
 }
 
 func existingDir(p string) string {
@@ -117,47 +131,28 @@ func existingDir(p string) string {
 }
 
 func (d *winDesktop) pickFolder(start string) (path string, err error) {
-	conf := cfd.DialogConfig{Title: "Escolha a pasta com os arquivos Excel", Role: "ConsolidadorCBA.Pasta", ParentWindowHandle: d.hwnd}
+	from := ""
 	if existingDir(start) != "" {
-		conf.Folder, conf.FileName = filepath.Dir(start), filepath.Base(start)
+		from = filepath.Dir(start) // opens one level up, with the current folder in view
 	}
-	d.onUI(func() {
-		dlg, e := cfd.NewSelectFolderDialog(conf)
-		if e != nil {
-			err = e
-			return
-		}
-		defer dlg.Release()
-		path, err = dlg.ShowAndGetResult()
+	err = d.onUI(func() (e error) {
+		path, e = folderDialog(d.hwnd, "Escolha a pasta com os arquivos Excel", from)
+		return e
 	})
-	if errors.Is(err, cfd.ErrorCancelled) {
-		return "", errCancelled
-	}
 	return path, err
 }
 
-var filters = map[string][]cfd.FileFilter{
-	"xlsx": {{DisplayName: "Pasta de Trabalho do Excel (*.xlsx)", Pattern: "*.xlsx"}},
-	"csv":  {{DisplayName: "CSV separado por ponto e vírgula (*.csv)", Pattern: "*.csv"}},
+var filters = map[string][2]string{
+	"xlsx": {"Pasta de Trabalho do Excel (*.xlsx)", "*.xlsx"},
+	"csv":  {"CSV separado por ponto e vírgula (*.csv)", "*.csv"},
 }
 
 func (d *winDesktop) saveFile(name, dir, kind string) (path string, err error) {
-	conf := cfd.DialogConfig{
-		Title: "Salvar consolidado", Role: "ConsolidadorCBA.Exportar", Folder: existingDir(dir), FileName: name,
-		FileFilters: filters[kind], DefaultExtension: kind, ParentWindowHandle: d.hwnd,
-	}
-	d.onUI(func() {
-		dlg, e := cfd.NewSaveFileDialog(conf)
-		if e != nil {
-			err = e
-			return
-		}
-		defer dlg.Release()
-		path, err = dlg.ShowAndGetResult()
+	f := filters[kind]
+	err = d.onUI(func() (e error) {
+		path, e = saveDialog(d.hwnd, "Salvar consolidado", existingDir(dir), name, f[0], f[1], kind)
+		return e
 	})
-	if errors.Is(err, cfd.ErrorCancelled) {
-		return "", errCancelled
-	}
 	return path, err
 }
 
@@ -196,4 +191,22 @@ func alert(text string) {
 	t, _ := windows.UTF16PtrFromString(text)
 	c, _ := windows.UTF16PtrFromString("Consolidador CBA")
 	windows.MessageBox(0, t, c, windows.MB_OK|windows.MB_ICONWARNING)
+}
+
+// logToFile sends this program's log and, if it ever crashes, the crash report to
+// %LOCALAPPDATA%\ConsolidadorCBA\erro.log: a window app has no console to show them.
+func logToFile() {
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		return
+	}
+	dir := filepath.Join(cache, "ConsolidadorCBA")
+	os.MkdirAll(dir, 0o755)
+	f, err := os.OpenFile(filepath.Join(dir, "erro.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return
+	}
+	log.SetOutput(f)
+	debug.SetCrashOutput(f, debug.CrashOptions{})
+	log.Printf("início, versão %s, %s", version, strings.Join(os.Args, " "))
 }

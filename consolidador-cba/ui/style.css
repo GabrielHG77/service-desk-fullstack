@@ -251,6 +251,16 @@ h1 { margin: 0; font: 700 24px/1.15 var(--font-display); letter-spacing: -.02em;
 .unavailable p { margin: 0; max-width: 46ch; color: var(--label-2); }
 .unavailable .actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
 
+.path-form { margin-top: 22px; display: grid; gap: 6px; width: min(540px, 100%); text-align: left; }
+.path-form label { font-size: 12.5px; color: var(--label-2); padding-left: 2px; }
+.path-row { display: flex; gap: 8px; }
+.path-row input {
+  flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; outline: none;
+  background: var(--fill); color: var(--label); font: 13.5px var(--font); user-select: text;
+}
+.path-row input:focus { box-shadow: 0 0 0 3px var(--focus); }
+.path-row input::placeholder { color: var(--label-3); }
+
 /* ProgressView */
 .spinner { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--fill-strong); border-top-color: var(--label-2); animation: spin .8s linear infinite; flex: none; }
 li[aria-selected="true"] .spinner { border-color: rgba(255, 255, 255, .4); border-top-color: #fff; }

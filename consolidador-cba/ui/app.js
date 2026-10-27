@@ -728,6 +728,11 @@ function mount(model) {
     else if (ev.key === "Escape" && model.settingsOpen) model.settingsOpen = false;
     else if (ev.ctrlKey && (k === "p" || k === "s" || k === "u")) ev.preventDefault();
   });
+  $("path-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const path = $("path-input").value.trim().replace(/^"(.*)"$/, "$1"); // o "Copiar como caminho" do Explorer vem com aspas
+    if (path) model.openFolder(path);
+  });
   // Arquivos soltos na janela não podem trocar a tela.
   window.addEventListener("dragover", (ev) => ev.preventDefault());
   window.addEventListener("drop", (ev) => ev.preventDefault());

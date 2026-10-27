@@ -49,6 +49,11 @@ Atalhos: F5 atualiza, Ctrl+F busca, Ctrl+E exporta, Ctrl+, abre os Ajustes.
 Na primeira vez, o Windows pode mostrar "O Windows protegeu o computador", porque o programa
 não é assinado. Clique em **Mais informações** e depois em **Executar assim mesmo**.
 
+## Se der problema
+
+Se o app fechar sozinho, o motivo fica em `%LOCALAPPDATA%\ConsolidadorCBA\erro.log`. Se a janela de escolher
+pasta não abrir, cole o caminho da pasta no campo **Ou cole o caminho da pasta** da primeira tela.
+
 ## O que o app faz a mais que a consulta
 
 - Um arquivo com problema (sem aba Data, corrompido, com senha, aberto por outra pessoa) não derruba os outros:
@@ -65,8 +70,11 @@ não é assinado. Clique em **Mais informações** e depois em **Executar assim 
 - `server.go`: o programa. Serve a tela só para a própria janela (127.0.0.1, com verificação do Host e um token),
   lê a pasta, entrega os arquivos à tela e grava o resultado. Lembra a pasta e os ajustes em
   `%APPDATA%\ConsolidadorCBA\config.json`.
-- `main_windows.go`: a janela (WebView2, o mesmo componente do Teams e do Outlook novos) e as janelas de
-  "Escolher pasta" e "Salvar como" do Windows. Sem o WebView2, abre a tela numa janela do Edge.
+- `main_windows.go`: a janela (WebView2, o mesmo componente do Teams e do Outlook novos). Sem o WebView2,
+  abre a tela numa janela do Edge.
+- `dialogs_windows.go`: as janelas "Escolher pasta" e "Salvar como" do Windows (IFileOpenDialog e
+  IFileSaveDialog), chamadas direto.
+- `install_windows.go`: `--instalar` e `--desinstalar`.
 - `ui/`: a tela. `core.js` tem a transformação (a mesma lógica da consulta) e `app.js` a interface, organizada
   como um app SwiftUI: view model observável, views pequenas, barra lateral + detalhe, sheet de ajustes e tabela
   que só desenha as linhas visíveis. `xlsx.full.min.js` é a SheetJS 0.18.5 (Apache-2.0, ver `LICENSE-sheetjs.txt`).

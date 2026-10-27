@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "swiftui-patterns": {
+      "source": "affaan-m/ECC",
+      "sourceType": "github",
+      "skillPath": "skills/swiftui-patterns/SKILL.md",
+      "computedHash": "9d2196debaca96e2a7e6b040081274cca22c02a41ec1ea35f0eabb3c5ae9730e"
+    }
+  }
+}

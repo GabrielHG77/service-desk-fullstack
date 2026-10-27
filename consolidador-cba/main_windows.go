@@ -30,6 +30,7 @@ var (
 
 func main() {
 	logToFile()
+	removeLeftovers()
 	switch command(os.Args[1:]) {
 	case "instalar":
 		if err := install(); err != nil {
@@ -209,4 +210,16 @@ func logToFile() {
 	log.SetOutput(f)
 	debug.SetCrashOutput(f, debug.CrashOptions{})
 	log.Printf("início, versão %s, %s", version, strings.Join(os.Args, " "))
+}
+
+// removeLeftovers deletes what the update command may leave next to the program: the download not yet
+// moved into place, and the old program renamed out of the way while Windows still held it.
+func removeLeftovers() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	for _, name := range []string{"ConsolidadorCBA.antigo.exe", "ConsolidadorCBA.novo.exe"} {
+		os.Remove(filepath.Join(filepath.Dir(exe), name))
+	}
 }

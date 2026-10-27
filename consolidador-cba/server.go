@@ -67,7 +67,7 @@ type desktop interface {
 
 var errCancelled = errors.New("cancelled")
 
-const version = "1.0.0"
+const version = "1.1.0"
 
 // command is what the arguments ask for instead of opening the window: "instalar", "desinstalar" or "".
 func command(args []string) string {
@@ -206,6 +206,7 @@ func (a *app) handler() http.Handler {
 	mux := http.NewServeMux()
 	index, _ := uiFS.ReadFile("ui/index.html")
 	page := bytes.Replace(index, []byte("{{TOKEN}}"), []byte(a.token), 1)
+	page = bytes.ReplaceAll(page, []byte("{{VERSION}}"), []byte(strings.TrimSuffix(version, ".0")))
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Content-Security-Policy", csp)

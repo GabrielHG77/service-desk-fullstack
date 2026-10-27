@@ -281,15 +281,20 @@ class AppModel {
 
     const res = CBA.combine(parts, s);
     res.fileCount = parts.length;
-    if (res.extras.length) {
+    // Os arquivos do SAP trazem centenas de características; a lista de colunas escolhe as que vão para o Excel,
+    // como a consulta fazia. Isso é uma nota, não um aviso, e o botão de incluir só aparece quando são poucas.
+    const n = res.extras.length;
+    if (n) {
+      const few = n <= 10;
+      const names = few ? res.extras.join(", ") : res.extras.slice(0, 5).join(", ") + "…";
       msgs.push({
-        level: s.extras ? "info" : "warn",
+        level: "info",
         text: s.extras
-          ? `${plural(res.extras.length, "característica fora da lista entrou", "características fora da lista entraram")} no fim da tabela: ${res.extras.join(", ")}.`
-          : res.extras.length === 1
-            ? `1 característica não está na lista de colunas e ficou de fora: ${res.extras[0]}.`
-            : `${fmtInt(res.extras.length)} características não estão na lista de colunas e ficaram de fora: ${res.extras.join(", ")}.`,
-        addExtras: !s.extras
+          ? `${plural(n, "característica fora da lista entrou", "características fora da lista entraram")} no fim da tabela: ${names}.`
+          : n === 1
+            ? `1 característica dos arquivos não está na lista de colunas e ficou de fora: ${names}.`
+            : `${fmtInt(n)} características dos arquivos não estão na lista de colunas e ficaram de fora, como na consulta do Power Query: ${names}.${few ? "" : " Para levar todas, ligue Ajustes > Incluir características fora da lista."}`,
+        addExtras: !s.extras && few
       });
     }
     for (const f of files) if (f.temp) msgs.push({ level: "info", file: f.rel, text: "Ignorado: é o arquivo temporário que o Excel cria enquanto alguém está com o original aberto." });

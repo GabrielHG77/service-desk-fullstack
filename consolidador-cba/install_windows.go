@@ -157,8 +157,9 @@ func uninstall() {
 	if err != nil {
 		return
 	}
-	line := `cmd.exe /c ping -n 3 127.0.0.1 >nul & del /f /q "` + exe + `"`
-	if dir := filepath.Dir(exe); samePath(dir, defaultInstallDir()) {
+	dir := filepath.Dir(exe)
+	line := `cmd.exe /c ping -n 3 127.0.0.1 >nul & del /f /q "` + exe + `" "` + filepath.Join(dir, "ConsolidadorCBA.antigo.exe") + `" "` + filepath.Join(dir, "ConsolidadorCBA.novo.exe") + `"`
+	if samePath(dir, defaultInstallDir()) {
 		line += ` & rmdir "` + dir + `"` // no /s: only when empty
 	}
 	cmd := exec.Command("cmd.exe")

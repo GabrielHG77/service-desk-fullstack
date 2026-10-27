@@ -40,6 +40,17 @@ func write(t *testing.T, path, body string) {
 	}
 }
 
+func TestCommand(t *testing.T) {
+	for args, want := range map[string]string{
+		"": "", "--instalar": "instalar", "/instalar": "instalar", "-INSTALAR": "instalar", "--install": "instalar",
+		"--desinstalar": "desinstalar", "/uninstall": "desinstalar", "Y:\\DadosCBA": "",
+	} {
+		if got := command(strings.Fields(args)); got != want {
+			t.Errorf("command(%q) = %q, want %q", args, got, want)
+		}
+	}
+}
+
 func TestScanFolder(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "b.xlsx"), "b")

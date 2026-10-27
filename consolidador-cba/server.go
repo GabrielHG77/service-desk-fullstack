@@ -66,6 +66,21 @@ type desktop interface {
 
 var errCancelled = errors.New("cancelled")
 
+const version = "1.0.0"
+
+// command is what the arguments ask for instead of opening the window: "instalar", "desinstalar" or "".
+func command(args []string) string {
+	for _, a := range args {
+		switch strings.ToLower(strings.TrimLeft(a, "-/")) {
+		case "instalar", "install":
+			return "instalar"
+		case "desinstalar", "uninstall":
+			return "desinstalar"
+		}
+	}
+	return ""
+}
+
 // maxEntries stops a scan of a whole drive picked by mistake.
 const maxEntries = 50000
 

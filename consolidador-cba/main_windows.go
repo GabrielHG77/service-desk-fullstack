@@ -27,6 +27,16 @@ var (
 )
 
 func main() {
+	switch command(os.Args[1:]) {
+	case "instalar":
+		if err := install(); err != nil {
+			alert("Não foi possível instalar o Consolidador CBA:\n\n" + err.Error())
+		}
+		return
+	case "desinstalar":
+		uninstall()
+		return
+	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		alert("Não foi possível iniciar o Consolidador CBA:\n\n" + err.Error())

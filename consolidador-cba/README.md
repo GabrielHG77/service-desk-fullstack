@@ -8,6 +8,25 @@ uma linha por item de ordem de venda.
 Mesmo formato do `mqtt-panel` e do `FatorImportacao`: um executável só, baixado de `dist/`,
 sem instalador e sem privilégio de administrador.
 
+## Instalar pelo cmd
+
+No **Prompt de Comando** (cmd, não PowerShell), cole e dê Enter:
+
+```bat
+mkdir "%LOCALAPPDATA%\Programs\ConsolidadorCBA" 2>nul & (curl -fL -o "%LOCALAPPDATA%\Programs\ConsolidadorCBA\ConsolidadorCBA.exe" https://github.com/GabrielHG77/service-desk-fullstack/raw/refs/heads/claude/understand-query-code-yv85xs/consolidador-cba/dist/ConsolidadorCBA.exe || powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri https://github.com/GabrielHG77/service-desk-fullstack/raw/refs/heads/claude/understand-query-code-yv85xs/consolidador-cba/dist/ConsolidadorCBA.exe -OutFile $env:LOCALAPPDATA\Programs\ConsolidadorCBA\ConsolidadorCBA.exe") && "%LOCALAPPDATA%\Programs\ConsolidadorCBA\ConsolidadorCBA.exe" --instalar
+```
+
+Baixa o programa para `%LOCALAPPDATA%\Programs\ConsolidadorCBA` (com o `curl` do Windows; se ele falhar,
+com o PowerShell, que usa o proxy da empresa), e o `--instalar` cria os atalhos no menu Iniciar e na Área de
+Trabalho, registra o app em **Configurações > Aplicativos instalados** e abre o app. Só para o seu usuário,
+sem administrador. Para atualizar, feche o app e rode o mesmo comando.
+
+Para desinstalar: **Configurações > Aplicativos instalados > Consolidador CBA > Desinstalar**, ou no cmd:
+
+```bat
+"%LOCALAPPDATA%\Programs\ConsolidadorCBA\ConsolidadorCBA.exe" --desinstalar
+```
+
 ## Como usar
 
 1. Baixe `dist/ConsolidadorCBA.exe` (no GitHub, abra o arquivo e clique em **Download raw file**),

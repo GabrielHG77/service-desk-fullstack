@@ -86,7 +86,7 @@ type desktop interface {
 
 var errCancelled = errors.New("cancelled")
 
-const version = "1.3.2"
+const version = "1.4.0"
 
 // command is what the arguments ask for instead of opening the window: "instalar", "desinstalar" or "".
 func command(args []string) string {
@@ -345,7 +345,7 @@ func (a *app) handler() http.Handler {
 		a.saveConfig(c)
 		writeJSON(w, http.StatusOK, res)
 	})
-	mux.HandleFunc("GET /api/file", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/sheet", func(w http.ResponseWriter, r *http.Request) {
 		a.mu.Lock()
 		p, ok := a.files[r.URL.Query().Get("id")]
 		a.mu.Unlock()
@@ -353,15 +353,24 @@ func (a *app) handler() http.Handler {
 			writeError(w, http.StatusNotFound, "Arquivo fora da última leitura da pasta.")
 			return
 		}
-		f, err := os.Open(p)
+		sheet := r.URL.Query().Get("sheet")
+		if sheet == "" {
+			sheet = "Data"
+		}
+		t, err := readDataSheet(p, sheet)
+		var problem fileProblem
+		if errors.As(err, &problem) {
+			// The file was read and has a problem: an answer for the window, not a failed request.
+			writeJSON(w, http.StatusOK, map[string]string{"problem": string(problem)})
+			return
+		}
 		if err != nil {
 			writeError(w, http.StatusConflict, readFailure(err))
 			return
 		}
-		defer f.Close()
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Cache-Control", "no-store")
-		io.Copy(w, f)
+		t.encode(w)
 	})
 	mux.HandleFunc("POST /api/export", func(w http.ResponseWriter, r *http.Request) {
 		kind := r.URL.Query().Get("kind")
@@ -374,6 +383,14 @@ func (a *app) handler() http.Handler {
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "O arquivo não chegou inteiro.")
 			return
+		}
+		// The Excel copy comes as the table (export.go builds the file); the CSV comes ready.
+		var table exportTable
+		if kind == "xlsx" {
+			if err := json.Unmarshal(body, &table); err != nil {
+				writeError(w, http.StatusBadRequest, "A tabela não chegou inteira.")
+				return
+			}
 		}
 		c := a.config()
 		dir := c.ExportDir
@@ -389,7 +406,12 @@ func (a *app) handler() http.Handler {
 			writeError(w, http.StatusInternalServerError, "Não foi possível abrir a janela de salvar: "+err.Error())
 			return
 		}
-		if err := os.WriteFile(p, body, 0o644); err != nil {
+		if kind == "xlsx" {
+			err = writeTableXlsx(p, table)
+		} else {
+			err = os.WriteFile(p, body, 0o644)
+		}
+		if err != nil {
 			writeError(w, http.StatusConflict, writeFailure(err))
 			return
 		}

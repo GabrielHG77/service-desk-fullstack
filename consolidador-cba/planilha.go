@@ -216,34 +216,105 @@ func tablesOn(f *excelize.File, sheet string) []excelize.Table {
 	return t
 }
 
+// readPlanilha says what the spreadsheet already has. It runs at every start and refresh, so it reads the file
+// with the fast reader (sheet.go), the same way findData finds the data for writing; excelize, which loads the
+// whole sheet, is only used for the names of Excel tables, when the workbook has any.
 func readPlanilha(path string) (planilhaInfo, error) {
 	info := planilhaInfo{Path: path, Keys: map[string]string{}, Header: []string{}, Sheets: []string{}, Tables: []string{}}
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return info, nil
 	}
-	f, err := excelize.OpenFile(path)
-	if err != nil {
+	fail := func(err error) (planilhaInfo, error) {
 		return info, fmt.Errorf("não foi possível abrir %s: %w", filepath.Base(path), err)
 	}
-	defer f.Close()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fail(err)
+	}
+	pk, err := packageOf(data)
+	if err != nil {
+		return fail(err)
+	}
+	sheets, _, sst, err := pk.book()
+	if err != nil {
+		return fail(err)
+	}
 	info.Exists = true
-	info.Sheets = f.GetSheetList()
-	lay, err := findData(f)
-	if err != nil || lay == nil {
-		return info, err
+	for _, s := range sheets {
+		info.Sheets = append(info.Sheets, s.name)
 	}
-	info.Sheet, info.HeaderRow, info.Header = lay.sheet, lay.headerRow, lay.header
-	for _, t := range tablesOn(f, lay.sheet) {
-		info.Tables = append(info.Tables, t.Name)
-	}
-	iDoc, iItem, iFile := indexCanon(lay.header, "Sales Doc."), indexCanon(lay.header, "Item"), indexCanon(lay.header, "Arquivo Origem")
-	for _, r := range lay.rows[lay.headerRow:] {
-		if k := itemKey(cell(r, iDoc), cell(r, iItem)); k != "" {
-			info.Keys[k] = strings.TrimSpace(cell(r, iFile))
-			info.Rows++
+	// Consolidado first, then the others, in the order findData looks at them.
+	for i, s := range sheets {
+		if strings.EqualFold(s.name, dataSheet) {
+			sheets[0], sheets[i] = sheets[i], sheets[0]
+			break
 		}
 	}
+	for _, s := range sheets {
+		part := pk.file(s.part)
+		if part == nil {
+			continue
+		}
+		err := eachRow(part, sst, headerScan, func(n int, row []rowCell) bool {
+			if cols := trimmed(rowTexts(row)); hasKeyColumns(cols) {
+				info.HeaderRow, info.Header = n, cols
+				return false
+			}
+			return true
+		})
+		if err != nil {
+			return fail(err)
+		}
+		if info.HeaderRow == 0 {
+			continue
+		}
+		info.Sheet = s.name
+		iDoc, iItem, iFile := indexCanon(info.Header, "Sales Doc."), indexCanon(info.Header, "Item"), indexCanon(info.Header, "Arquivo Origem")
+		err = eachRow(part, sst, 0, func(n int, row []rowCell) bool {
+			if n <= info.HeaderRow {
+				return true
+			}
+			r := rowTexts(row)
+			if k := itemKey(cell(r, iDoc), cell(r, iItem)); k != "" {
+				info.Keys[k] = strings.TrimSpace(cell(r, iFile))
+				info.Rows++
+			}
+			return true
+		})
+		if err != nil {
+			return fail(err)
+		}
+		if pk.hasTables() {
+			if f, err := excelize.OpenFile(path); err == nil {
+				for _, t := range tablesOn(f, s.name) {
+					info.Tables = append(info.Tables, t.Name)
+				}
+				f.Close()
+			}
+		}
+		return info, nil
+	}
 	return info, nil
+}
+
+// rowTexts lays a row out by column, as excelize's GetRows does: "" in the gaps, nothing after the last value.
+func rowTexts(row []rowCell) []string {
+	var out []string
+	for _, c := range row {
+		t := c.text()
+		if t == "" {
+			continue
+		}
+		for len(out) < c.col {
+			out = append(out, "")
+		}
+		if c.col < len(out) {
+			out[c.col] = t
+		} else {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // ---------- writing ----------

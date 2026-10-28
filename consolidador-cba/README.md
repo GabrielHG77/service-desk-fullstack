@@ -100,6 +100,13 @@ um; clicar no nome marca só ele; **Todos os arquivos** marca todos. A tabela, o
 Se o app fechar sozinho, o motivo fica em `%LOCALAPPDATA%\ConsolidadorCBA\erro.log`. Se a janela de escolher
 pasta não abrir, cole o caminho da pasta no campo **Ou cole o caminho da pasta** da primeira tela.
 
+## Velocidade
+
+Um mês do SAP (8 MB, 170 mil linhas na aba Data) é lido em menos de 1 s, e até 4 arquivos ao mesmo tempo. A janela
+não trava enquanto lê: cada arquivo entra na tabela assim que fica pronto. Com 12 meses desse tamanho: uns 5 s para
+abrir a pasta (antes, 1 min 40 s, com a janela parada a maior parte do tempo) e meio segundo para um ajuste. Os
+arquivos ficam na memória enquanto o app está aberto; o F5 só lê de novo os que mudaram.
+
 ## O que o app faz a mais que a consulta
 
 - Um arquivo com problema (sem aba Data, corrompido, com senha, aberto por outra pessoa) não derruba os outros:
@@ -114,17 +121,22 @@ pasta não abrir, cole o caminho da pasta no campo **Ou cole o caminho da pasta*
 ## Como é feito
 
 - `server.go`: o programa. Serve a tela só para a própria janela (127.0.0.1, com verificação do Host e um token),
-  lê a pasta, entrega os arquivos à tela e grava o resultado. Lembra a pasta e os ajustes em
+  lê a pasta, entrega cada arquivo à tela e grava o resultado. Lembra a pasta e os ajustes em
   `%APPDATA%\ConsolidadorCBA\config.json`.
+- `sheet.go`: a leitura rápida da aba Data. O `.xlsx` é um zip com XML; o XML da aba é lido uma vez, em sequência, e
+  só as colunas que a consolidação usa vão para a tela, numa tabela compacta (cada texto diferente uma vez). Lê também
+  o que a planilha consolidada já tem.
+- `export.go`: a cópia em Excel, escrita em fluxo (o tamanho não pesa, nem com 1.700 colunas).
 - `main_windows.go`: a janela (WebView2, o mesmo componente do Teams e do Outlook novos). Sem o WebView2,
   abre a tela numa janela do Edge.
 - `dialogs_windows.go`: as janelas "Escolher pasta" e "Salvar como" do Windows (IFileOpenDialog e
   IFileSaveDialog), chamadas direto.
 - `install_windows.go`: `--instalar` e `--desinstalar`.
-- `planilha.go`: a planilha consolidada (ler o que já está gravado, acrescentar os novos, regravar), com `excelize`.
+- `planilha.go`: a planilha consolidada (acrescentar os novos, regravar, organizar), com `excelize`.
 - `ui/`: a tela. `core.js` tem a transformação (a mesma lógica da consulta) e `app.js` a interface, organizada
   como um app SwiftUI: view model observável, views pequenas, barra lateral + detalhe, sheet de ajustes e tabela
-  que só desenha as linhas visíveis. `xlsx.full.min.js` é a SheetJS 0.18.5 (Apache-2.0, ver `LICENSE-sheetjs.txt`).
+  que só desenha as linhas visíveis. `xlsx.full.min.js` é a SheetJS 0.18.5 (Apache-2.0, ver `LICENSE-sheetjs.txt`),
+  usada só pelo exemplo.
 - `main_other.go`: em Linux/Mac serve a mesma tela no navegador, para desenvolvimento e testes
   (`go run . -folder <pasta> -out <pasta de saída>`).
 

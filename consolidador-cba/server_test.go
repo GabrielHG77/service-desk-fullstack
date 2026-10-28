@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/xuri/excelize/v2"
 )
 
 type fakeDesk struct {
@@ -127,7 +129,10 @@ func TestGuard(t *testing.T) {
 func TestScanReadExport(t *testing.T) {
 	root := t.TempDir()
 	out := t.TempDir()
-	write(t, filepath.Join(root, "dados.xlsx"), "PK conteudo")
+	book := dataBook(t, map[string][][]any{"Data": {{"Sales Doc.", "Item", "Internal char no.", "Val from"}, {1, 10, "AT_A", 2}}}, "Data")
+	data, _ := os.ReadFile(book)
+	write(t, filepath.Join(root, "dados.xlsx"), string(data))
+	write(t, filepath.Join(root, "ruim.xlsx"), "PK conteudo")
 	desk := &fakeDesk{folder: root, saveTo: out}
 	a, h := newTestApp(t, desk)
 
@@ -140,26 +145,42 @@ func TestScanReadExport(t *testing.T) {
 
 	w = do(h, a, "GET", "/api/scan?path="+root, nil, true)
 	var scan scanResult
-	if err := json.Unmarshal(w.Body.Bytes(), &scan); err != nil || len(scan.Files) != 1 {
+	if err := json.Unmarshal(w.Body.Bytes(), &scan); err != nil || len(scan.Files) != 2 {
 		t.Fatalf("scan = %d %s", w.Code, w.Body.String())
 	}
 	if a.config().Folder != root {
 		t.Errorf("folder not remembered")
 	}
 
-	w = do(h, a, "GET", "/api/file?id="+scan.Files[0].ID, nil, true)
-	if w.Body.String() != "PK conteudo" {
-		t.Errorf("file = %q", w.Body.String())
+	w = do(h, a, "GET", "/api/sheet?id="+scan.Files[0].ID+"&sheet=Data", nil, true)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"head":["Sales Doc.","Item","Internal char no.","Val from"]`) {
+		t.Errorf("sheet = %d %q", w.Code, w.Body.String())
 	}
-	if w := do(h, a, "GET", "/api/file?id=f99", nil, true); w.Code != 404 {
+	if w := do(h, a, "GET", "/api/sheet?id="+scan.Files[1].ID, nil, true); w.Code != 200 || !strings.Contains(w.Body.String(), `"problem":"Não foi possível abrir o arquivo. Ele pode estar corrompido`) {
+		t.Errorf("bad file: %d %s", w.Code, w.Body.String())
+	}
+	if w := do(h, a, "GET", "/api/sheet?id=f99", nil, true); w.Code != 404 {
 		t.Errorf("unknown id: %d", w.Code)
 	}
 
-	w = do(h, a, "POST", "/api/export?kind=xlsx&name=Consolidado.xlsx", strings.NewReader("planilha"), true)
+	table := `{"cols":["Sales Doc.","Item"],"dateCol":-1,"rows":[[0,100,1,10]]}`
+	w = do(h, a, "POST", "/api/export?kind=xlsx&name=Consolidado.xlsx", strings.NewReader(table), true)
 	var saved struct{ Path string }
 	json.Unmarshal(w.Body.Bytes(), &saved)
-	if data, _ := os.ReadFile(filepath.Join(out, "Consolidado.xlsx")); string(data) != "planilha" || saved.Path == "" {
+	if saved.Path != filepath.Join(out, "Consolidado.xlsx") {
 		t.Fatalf("export = %d %s", w.Code, w.Body.String())
+	}
+	if xf, err := excelize.OpenFile(saved.Path); err != nil {
+		t.Errorf("exported file: %v", err)
+	} else if v, _ := xf.GetCellValue(dataSheet, "A2"); v != "100" {
+		t.Errorf("exported A2 = %q", v)
+	}
+	if w := do(h, a, "POST", "/api/export?kind=xlsx&name=Outro.xlsx", strings.NewReader("planilha"), true); w.Code != 400 {
+		t.Errorf("xlsx export without a table: %d", w.Code)
+	}
+	w = do(h, a, "POST", "/api/export?kind=csv&name=Consolidado.csv", strings.NewReader("a;b"), true)
+	if data, _ := os.ReadFile(filepath.Join(out, "Consolidado.csv")); string(data) != "a;b" {
+		t.Errorf("csv export = %d %s", w.Code, w.Body.String())
 	}
 	if a.config().ExportDir != out {
 		t.Errorf("export folder not remembered")

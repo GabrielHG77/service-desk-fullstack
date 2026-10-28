@@ -12,6 +12,7 @@ const DEFAULT_COLUMNS = [
 ];
 const BASE_COLS = ["Sales Doc.", "Item", "Created On", "Arquivo Origem", "SOrg.", "Material", "Order Quantity"];
 const NUM_COLS = new Set(["Sales Doc.", "Item", "Order Quantity"]);
+// As colunas da aba Data que a consolidação lê. sheet.go tem a mesma lista (sourceColumns) e só manda essas.
 const SRC = {
   salesDoc: "Sales Doc.", item: "Item", createdOn: "Created On", sorg: "SOrg.", material: "Material",
   qty: "Order Quantity", charNo: "Internal char no.", charVal: "Characteristic Value", valFrom: "Val from"
@@ -51,6 +52,9 @@ function fmtNum(n, dec) {
   return dec === "," ? s.replace(".", ",") : s;
 }
 
+// "1.000" e "1.234,5" com vírgula decimal; "1,000" e "1,234.5" com ponto.
+const THOUSANDS = { ",": /^-?\d{1,3}(\.\d{3})+(,\d+)?$/, ".": /^-?\d{1,3}(,\d{3})+(\.\d+)?$/ };
+
 // Lê número escrito como texto ("7,5", "1.000", "12.5"), usando o separador escolhido.
 function parseNum(v, dec) {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -61,7 +65,7 @@ function parseNum(v, dec) {
   const sci = s.match(/^(-?\d+)(?:[.,](\d+))?[eE]([+-]?\d+)$/);
   if (sci) return Number(`${sci[1]}.${sci[2] || "0"}e${sci[3]}`);
   const th = dec === "," ? "." : ",";
-  if (new RegExp("^-?\\d{1,3}(\\" + th + "\\d{3})+(\\" + dec + "\\d+)?$").test(s)) s = s.split(th).join("");
+  if (THOUSANDS[dec].test(s)) s = s.split(th).join("");
   s = s.replace(dec, ".");
   if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s);
   s = s.replace(",", ".");
@@ -152,18 +156,56 @@ function readWorkbook(XLSX, bytes, sheet) {
   catch (err) { throw userErr(readError(err)); }
   const ws = wb.Sheets[actual];
   const aoa = ws ? XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: false }) : [];
-  return { aoa, date1904: !!(wb.Workbook && wb.Workbook.WBProps && wb.Workbook.WBProps.date1904), note };
+  return { table: tableFromAoa(aoa), date1904: !!(wb.Workbook && wb.Workbook.WBProps && wb.Workbook.WBProps.date1904), note };
+}
+
+// ---------- a tabela compacta ----------
+// Uma aba pronta para a consolidação: head é o cabeçalho (a primeira linha com algo), e codes tem, linha por linha,
+// um código por coluna: -1 vazio, i >= 0 o texto strs[i], i <= -2 o número nums[-2 - i]. Cada texto e cada número
+// diferente aparece uma vez, então uma aba de 170 mil linhas cabe em poucos MB e as conversões são feitas uma vez por valor.
+// O programa (sheet.go) já manda a aba assim, só com as colunas de SRC; tableFromAoa faz o mesmo com o que a SheetJS lê.
+
+function tableFromAoa(aoa) {
+  const rows = aoa.filter((r) => Array.isArray(r) && r.some((c) => !blank(c)));
+  if (!rows.length) return { head: null, rows: 0, codes: new Int32Array(0), strs: [], nums: [] };
+  const head = rows[0].slice();
+  const w = head.length;
+  const strs = [], nums = [], si = new Map(), ni = new Map();
+  const code = (v) => {
+    if (v == null) return -1;
+    if (typeof v === "number") {
+      let k = ni.get(v);
+      if (k === undefined) { k = nums.length; nums.push(v); ni.set(v, k); }
+      return -2 - k;
+    }
+    const s = String(v); // true/false viram "true"/"false", como a consolidação já os tratava
+    let k = si.get(s);
+    if (k === undefined) { k = strs.length; strs.push(s); si.set(s, k); }
+    return k;
+  };
+  const codes = new Int32Array((rows.length - 1) * w);
+  for (let i = 1; i < rows.length; i++) for (let j = 0; j < w; j++) codes[(i - 1) * w + j] = code(rows[i][j]);
+  return { head, rows: rows.length - 1, codes, strs, nums };
+}
+
+// O que /api/sheet manda: o tamanho de uma parte em JSON, o JSON, e os códigos como Int32Array.
+function decodeTable(buf) {
+  const n = new DataView(buf).getUint32(0, true);
+  const meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, n)));
+  const at = 4 + n + ((4 - (n % 4)) % 4);
+  const width = meta.head ? meta.head.length : 0;
+  const table = { head: meta.head, rows: meta.rows, codes: new Int32Array(buf, at, meta.rows * width), strs: meta.strs || [], nums: meta.nums || [] };
+  return { table, date1904: !!meta.date1904, note: meta.note || null };
 }
 
 // ---------- a transformação (equivale à função ProcessarArquivo) ----------
 
-function processSheet(aoa, fileName, date1904, opt) {
+function processSheet(t, fileName, date1904, opt) {
   const dec = opt.decimal;
   const msgs = [];
-  const rows = aoa.filter((r) => Array.isArray(r) && r.some((c) => !blank(c)));
-  if (!rows.length) throw userErr(`A aba "${opt.sheet}" está vazia.`);
+  if (!t.head) throw userErr(`A aba "${opt.sheet}" está vazia.`);
 
-  const head = rows[0].map(norm);
+  const head = t.head.map(norm);
   const ix = {};
   for (const k in SRC) ix[k] = head.indexOf(norm(SRC[k]));
   const missing = ["salesDoc", "item", "charNo"].filter((k) => ix[k] < 0).map((k) => SRC[k]);
@@ -172,7 +214,32 @@ function processSheet(aoa, fileName, date1904, opt) {
   const optional = ["createdOn", "sorg", "material", "qty", "charVal", "valFrom"].filter((k) => ix[k] < 0).map((k) => SRC[k]);
   if (optional.length) msgs.push({ level: "warn", text: "Colunas não encontradas (ficam em branco): " + optional.join(", ") + "." });
 
-  const get = (r, k) => (ix[k] < 0 ? null : r[ix[k]] ?? null);
+  const { codes, strs, nums } = t;
+  const w = head.length;
+  // Cada código é um valor, então cada conversão é feita uma vez por valor diferente, não uma vez por linha.
+  const once = (fn) => {
+    const memo = new Map();
+    return (c) => {
+      let v = memo.get(c);
+      if (v === undefined && !memo.has(c)) { v = fn(c >= 0 ? strs[c] : c === -1 ? null : nums[-2 - c]); memo.set(c, v); }
+      return v;
+    };
+  };
+  const text = once((v) => textOf(v, dec));
+  const valFrom = once((vf) => {
+    if (blank(vf)) return "";
+    const n = parseNum(vf, dec);
+    return n == null ? String(vf).trim() : fmtNum(n, dec);
+  });
+  const serial = once((v) => toSerial(v, date1904));
+  const keyOf = once((v) => keyNum(v, dec));
+  const qty = once((v) => qtyOf(v, dec));
+  // Posição de cada coluna na linha, ou -1 sem a coluna (e então o código lido é -1, vazio).
+  const cNo = ix.charNo, cVal = ix.charVal, cFrom = ix.valFrom;
+  const keyCols = Int32Array.from(["salesDoc", "item", "createdOn", "sorg", "material", "qty"], (k) => ix[k]);
+  const at = (base, c) => (c < 0 ? -1 : codes[base + c]);
+  const last = new Int32Array(keyCols.length);
+
   const groups = new Map();
   const chars = [];
   const seen = new Set();
@@ -181,46 +248,43 @@ function processSheet(aoa, fileName, date1904, opt) {
   const wanted = opt.extras || !opt.columns ? null : new Set(opt.columns);
   const examples = [];
   let badDates = 0, repeats = 0;
+  let g = null, badDate = false;
 
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    const code = textOf(get(r, "charNo"), dec);
+  for (let i = 0, base = 0; i < t.rows; i++, base += w) {
+    const code = text(at(base, cNo));
     if (!code) continue; // Filtered Rows: sem "Internal char no."
 
     // Final value: Characteristic Value; se vazio, Val from em texto; se os dois vazios, "".
-    let fin = textOf(get(r, "charVal"), dec);
-    if (!fin) {
-      const vf = get(r, "valFrom");
-      if (blank(vf)) fin = "";
-      else {
-        const n = parseNum(vf, dec);
-        fin = n == null ? String(vf).trim() : fmtNum(n, dec);
+    let fin = text(at(base, cVal));
+    if (!fin) fin = valFrom(at(base, cFrom));
+
+    // As linhas de um item vêm juntas: com as mesmas células de Sales Doc., Item... da linha anterior, é o mesmo item.
+    let same = g !== null;
+    for (let j = 0; same && j < keyCols.length; j++) same = at(base, keyCols[j]) === last[j];
+    if (!same) {
+      for (let j = 0; j < keyCols.length; j++) last[j] = at(base, keyCols[j]);
+      let co = serial(last[2]);
+      badDate = co === undefined;
+      if (badDate) co = null;
+      const sd = keyOf(last[0]), it = keyOf(last[1]), so = text(last[3]), ma = text(last[4]), qt = qty(last[5]);
+      // Pivot: uma linha por item da ordem, agrupando só pelas colunas que vão para o resultado.
+      const key = JSON.stringify([sd, it, co, so, ma, qt]);
+      g = groups.get(key);
+      if (!g) {
+        g = { "Sales Doc.": sd, "Item": it, "Created On": co, "Arquivo Origem": fileName, "SOrg.": so, "Material": ma, "Order Quantity": qt, c: new Map() };
+        groups.set(key, g);
       }
     }
-
-    let co = toSerial(get(r, "createdOn"), date1904);
-    if (co === undefined) { badDates++; co = null; }
-    const sd = keyNum(get(r, "salesDoc"), dec);
-    const it = keyNum(get(r, "item"), dec);
-    const so = textOf(get(r, "sorg"), dec);
-    const ma = textOf(get(r, "material"), dec);
-    const qt = qtyOf(get(r, "qty"), dec);
-
-    // Pivot: uma linha por item da ordem, agrupando só pelas colunas que vão para o resultado.
-    const key = JSON.stringify([sd, it, co, so, ma, qt]);
-    let g = groups.get(key);
-    if (!g) {
-      g = { "Sales Doc.": sd, "Item": it, "Created On": co, "Arquivo Origem": fileName, "SOrg.": so, "Material": ma, "Order Quantity": qt, c: new Map() };
-      groups.set(key, g);
-    }
+    if (badDate) badDates++;
     if (!seen.has(code)) { seen.add(code); chars.push(code); }
     // A mesma característica de novo no mesmo item: a consulta ficava com o primeiro valor (List.First).
     // Com "Todos", os valores diferentes ficam juntos na célula.
     const prev = g.c.get(code);
     if (prev === undefined || prev === "") g.c.set(code, fin);
     else if (fin !== "" && !prev.split(" | ").includes(fin)) {
-      if (!wanted || wanted.has(code)) repeats++;
-      if ((!wanted || wanted.has(code)) && examples.length < 2) examples.push(`Sales Doc. ${sd}, item ${it}, ${code}: "${prev.split(" | ")[0]}" e "${fin}"`);
+      const counted = !wanted || wanted.has(code);
+      if (counted) repeats++;
+      if (counted && examples.length < 2) examples.push(`Sales Doc. ${g["Sales Doc."]}, item ${g["Item"]}, ${code}: "${prev.split(" | ")[0]}" e "${fin}"`);
       if (all) g.c.set(code, prev + " | " + fin);
     }
   }
@@ -265,35 +329,36 @@ function displayValue(row, col, dec) {
 
 // ---------- saída ----------
 
-function buildXlsx(XLSX, res) {
-  const aoa = [res.cols.slice()];
-  for (const r of res.rows) aoa.push(res.cols.map((c) => cellValue(r, c)));
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  const ci = res.cols.indexOf("Created On");
-  if (ci >= 0) {
-    for (let r = 1; r < aoa.length; r++) {
-      const cell = ws[XLSX.utils.encode_cell({ r, c: ci })];
-      if (cell && cell.t === "n") cell.z = "dd/mm/yyyy";
+// A cópia em Excel é montada pelo programa (export.go). A tela manda as colunas e, de cada linha, só as células com
+// algo, em pares coluna, valor: com as características fora da lista são 1.700 colunas, quase todas vazias.
+function exportTable(res) {
+  const at = new Map(res.cols.map((c, i) => [c, i]));
+  const base = BASE_COLS.filter((c) => at.has(c));
+  const rows = res.rows.map((r) => {
+    const out = [];
+    for (const c of base) if (r[c] != null && r[c] !== "") out.push(at.get(c), r[c]);
+    for (const [c, v] of r.c) {
+      const i = at.get(c);
+      if (i !== undefined && v != null && v !== "") out.push(i, v);
     }
-  }
-  ws["!cols"] = res.cols.map((c, i) => {
-    let w = c.length;
-    for (let r = 1; r < Math.min(aoa.length, 500); r++) {
-      const v = aoa[r][i];
-      if (v != null) w = Math.max(w, i === ci ? 10 : String(v).length);
-    }
-    return { wch: Math.min(48, w + 2) };
+    return out;
   });
-  if (ws["!ref"]) ws["!autofilter"] = { ref: ws["!ref"] };
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Consolidado");
-  return new Uint8Array(XLSX.write(wb, { bookType: "xlsx", type: "array", compression: true }));
+  return { cols: res.cols, dateCol: res.cols.indexOf("Created On"), rows };
 }
 
 function delimited(res, dec, sep) {
-  const q = (v) => (/[";\t\r\n]/.test(v) || v.includes(sep) ? '"' + v.replace(/"/g, '""') + '"' : v);
+  const q = (v) => (v === "" ? v : /[";\t\r\n]/.test(v) || v.includes(sep) ? '"' + v.replace(/"/g, '""') + '"' : v);
+  // Com as características fora da lista são milhões de células, quase todas vazias: o que é de base é visto uma vez.
+  const base = res.cols.map((c) => BASE_COLS.includes(c));
   const lines = [res.cols.map(q).join(sep)];
-  for (const r of res.rows) lines.push(res.cols.map((c) => q(displayValue(r, c, dec))).join(sep));
+  for (const r of res.rows) {
+    const out = new Array(res.cols.length);
+    for (let i = 0; i < out.length; i++) {
+      const c = res.cols[i];
+      out[i] = base[i] || r.c.has(c) ? q(displayValue(r, c, dec)) : "";
+    }
+    lines.push(out.join(sep));
+  }
   return lines.join("\r\n");
 }
 
@@ -333,8 +398,8 @@ function sampleBytes(XLSX, aoa) {
 
 const api = {
   DEFAULT_COLUMNS, BASE_COLS, NUM_COLS, SAMPLE_FILES, defaultSettings, canon,
-  fmtNum, parseNum, toSerial, serialToText, readWorkbook, readError, processSheet, combine,
-  cellValue, displayValue, buildXlsx, delimited, sampleBytes
+  fmtNum, parseNum, toSerial, serialToText, readWorkbook, readError, tableFromAoa, decodeTable, processSheet, combine,
+  cellValue, displayValue, exportTable, delimited, sampleBytes
 };
 root.CBA = api;
 if (typeof module === "object" && module.exports) module.exports = api;

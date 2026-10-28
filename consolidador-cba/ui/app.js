@@ -10,6 +10,8 @@ const { CBA, XLSX } = window;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const tick = () => new Promise((r) => setTimeout(r, 0));
+// Quantos arquivos o programa lê ao mesmo tempo: um por núcleo, deixando um para a janela.
+const READERS = Math.max(2, Math.min(4, (navigator.hardwareConcurrency || 4) - 1));
 const fmtInt = (n) => n.toLocaleString("pt-BR");
 const plural = (n, one, many) => `${fmtInt(n)} ${n === 1 ? one : many}`;
 const fold = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -110,7 +112,7 @@ class NativeBridge {
     if (!res.ok) {
       let msg = `Erro ${res.status}.`;
       try { msg = (await res.json()).error || msg; } catch (e) { /* sem corpo */ }
-      throw Object.assign(new Error(msg), { user: true, transient: res.status === 409 });
+      throw Object.assign(new Error(msg), { user: true, status: res.status, transient: res.status === 409 });
     }
     return res;
   }
@@ -122,9 +124,15 @@ class NativeBridge {
   saveConfig(c) { return this.json("PUT", "/api/config", c); }
   async pickFolder() { const r = await this.json("POST", "/api/pick-folder"); return r.cancelled ? null : r.path; }
   scan(path) { return this.json("GET", "/api/scan?path=" + encodeURIComponent(path)); }
-  async read(id) { const res = await this.call("GET", "/api/file?id=" + encodeURIComponent(id)); return new Uint8Array(await res.arrayBuffer()); }
-  async exportFile(name, kind, bytes) {
-    const res = await this.call("POST", `/api/export?kind=${kind}&name=${encodeURIComponent(name)}`, bytes, true);
+  // A aba já lida pelo programa, só com as colunas que a consolidação usa (ver sheet.go); ou o problema do arquivo.
+  async sheet(id, sheet) {
+    const res = await this.call("GET", `/api/sheet?id=${encodeURIComponent(id)}&sheet=${encodeURIComponent(sheet)}`);
+    if ((res.headers.get("Content-Type") || "").startsWith("application/json")) return { error: (await res.json()).problem };
+    return CBA.decodeTable(await res.arrayBuffer());
+  }
+  // bytes prontos (CSV) ou a tabela, que o programa transforma em Excel (exportTable em core.js).
+  async exportFile(name, kind, body) {
+    const res = await this.call("POST", `/api/export?kind=${kind}&name=${encodeURIComponent(name)}`, body, body instanceof Uint8Array);
     const r = await res.json();
     return r.cancelled ? null : r.path;
   }
@@ -141,7 +149,7 @@ class NativeBridge {
 class FolderSource {
   constructor(native, path) { this.kind = "folder"; this.native = native; this.path = path; }
   list() { return this.native.scan(this.path); }
-  read(file) { return this.native.read(file.id); }
+  load(file, sheet) { return this.native.sheet(file.id, sheet); }
 }
 
 class SampleSource {
@@ -150,7 +158,7 @@ class SampleSource {
     const files = CBA.SAMPLE_FILES.map((s, i) => ({ id: "s" + (i + 1), rel: s.rel, name: baseName(s.rel), size: 0, modified: 0, temp: !!s.temp }));
     return { folder: "", files, other: 0, truncated: false };
   }
-  async read(file) { return CBA.sampleBytes(XLSX, CBA.SAMPLE_FILES.find((s) => s.rel === file.rel).aoa); }
+  async load(file, sheet) { return CBA.readWorkbook(XLSX, CBA.sampleBytes(XLSX, CBA.SAMPLE_FILES.find((s) => s.rel === file.rel).aoa), sheet); }
 }
 
 // ---------- view model ----------
@@ -267,48 +275,77 @@ class AppModel {
     const s = this.settings;
     const files = this.files.map((f) => ({ ...f }));
     const todo = files.filter((f) => !f.temp);
-    const parts = [];
-    const msgs = [];
+    const keyOf = (f) => [this.mode, f.rel, f.size, f.modified, s.sheet].join("\u0000");
+    const done = new Array(todo.length); // por arquivo, na ordem da pasta: { part, msgs }
     this.busy = true;
-    for (let i = 0; i < todo.length; i++) {
+    const settle = (i, data) => {
       const f = todo[i];
-      const key = [this.mode, f.rel, f.size, f.modified, s.sheet].join("\u0000");
-      let data = this.cache.get(key);
-      if (!data) {
-        this.progress = `Lendo ${i + 1} de ${todo.length}: ${f.name}`;
-        f.status = "reading";
-        this.files = files.map((x) => ({ ...x }));
-        await tick();
-        if (run !== this.run) return;
-        let bytes = null;
-        try { bytes = await this.source.read(f); }
-        catch (err) { data = { error: err.message, transient: true }; }
-        if (run !== this.run) return;
-        if (bytes) {
-          try { data = CBA.readWorkbook(XLSX, bytes, s.sheet); }
-          catch (err) { data = { error: err.user ? err.message : CBA.readError(err) }; }
-        }
-        if (!data.transient) this.cache.set(key, data); // um arquivo bloqueado agora pode abrir no próximo Atualizar
-      }
-      if (data.error) {
-        f.status = "error"; f.note = data.error; f.rows = 0;
-        msgs.push({ level: "error", file: f.rel, text: data.error });
-        continue;
-      }
+      const fail = (text) => {
+        f.status = "error"; f.note = text; f.rows = 0;
+        done[i] = { msgs: [{ level: "error", file: f.rel, text }] };
+      };
+      if (data.error) return fail(data.error);
       try {
-        const p = CBA.processSheet(data.aoa, f.name, data.date1904, s);
+        const p = CBA.processSheet(data.table, f.name, data.date1904, s);
         for (const r of p.rows) r.file = f.rel;
-        parts.push(p);
         if (data.note) p.msgs.unshift({ level: "info", text: data.note });
         f.status = p.msgs.some((m) => m.level === "warn") ? "warn" : "ok";
         f.rows = p.rows.length;
-        for (const m of p.msgs) msgs.push({ ...m, file: f.rel });
+        done[i] = { part: p, msgs: p.msgs.map((m) => ({ ...m, file: f.rel })) };
       } catch (err) {
-        const text = err.user ? err.message : "Erro inesperado: " + err.message;
-        f.status = "error"; f.note = text; f.rows = 0;
-        msgs.push({ level: "error", file: f.rel, text });
+        fail(err.user ? err.message : "Erro inesperado: " + err.message);
+      }
+    };
+    // Os que já estão na memória (um ajuste, um Atualizar): um por vez, deixando a tela se desenhar entre eles.
+    const waiting = [];
+    for (let i = 0; i < todo.length; i++) {
+      const data = this.cache.get(keyOf(todo[i]));
+      if (!data) { waiting.push(i); continue; }
+      settle(i, data);
+      if (i + 1 < todo.length) {
+        await tick();
+        if (run !== this.run) return;
       }
     }
+
+    // Os que não estão na memória: alguns ao mesmo tempo, cada um lido pelo programa num núcleo do processador.
+    // Cada arquivo entra na tabela assim que chega; a tela continua respondendo enquanto os outros são lidos.
+    let next = 0, read = 0;
+    const report = () => {
+      this.progress = waiting.length === 1
+        ? `Lendo ${todo[waiting[0]].name}…`
+        : `Lendo ${fmtInt(waiting.length)} arquivos: ${fmtInt(read)} ${read === 1 ? "pronto" : "prontos"}`;
+      this.files = files.map((x) => ({ ...x }));
+    };
+    const reader = async () => {
+      while (next < waiting.length && run === this.run) {
+        const i = waiting[next++], f = todo[i];
+        f.status = "reading";
+        report();
+        let data;
+        try { data = await this.source.load(f, s.sheet); }
+        catch (err) {
+          // Um erro do pedido (arquivo bloqueado, conexão), e não do arquivo, não fica guardado: um arquivo bloqueado
+          // agora pode abrir no próximo Atualizar.
+          const transient = !!err.transient || err.status !== undefined;
+          data = { error: err.user || err.transient ? err.message : CBA.readError(err), transient };
+        }
+        if (run !== this.run) return;
+        if (!data.transient) this.cache.set(keyOf(f), data);
+        settle(i, data);
+        read++;
+        report();
+        await tick();
+      }
+    };
+    if (waiting.length) {
+      report();
+      await tick();
+      await Promise.all(Array.from({ length: Math.min(READERS, waiting.length) }, reader));
+      if (run !== this.run) return;
+    }
+    const parts = done.filter((d) => d.part).map((d) => d.part);
+    const msgs = done.flatMap((d) => d.msgs);
 
     const res = CBA.combine(parts, s);
     res.fileCount = parts.length;
@@ -630,10 +667,10 @@ class AppModel {
     if (!this.result || !this.result.rows.length) return;
     const name = `Consolidado_CBA_${today()}.${kind}`;
     try {
-      const bytes = kind === "xlsx"
-        ? CBA.buildXlsx(XLSX, this.result)
+      const body = kind === "xlsx"
+        ? CBA.exportTable(this.result)
         : new TextEncoder().encode("﻿" + CBA.delimited(this.result, this.settings.decimal, ";"));
-      const path = await this.native.exportFile(name, kind, bytes);
+      const path = await this.native.exportFile(name, kind, body);
       if (path) this.notify(`${baseName(path)} foi salvo.`, "saved", path);
     } catch (err) {
       this.notify(err.message, "error");

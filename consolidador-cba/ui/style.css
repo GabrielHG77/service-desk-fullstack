@@ -321,6 +321,7 @@ h1 { margin: 0; font: 700 24px/1.15 var(--font-display); letter-spacing: -.02em;
 /* ProgressView */
 .spinner { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--fill-strong); border-top-color: var(--label-2); animation: spin .8s linear infinite; flex: none; }
 li[aria-selected="true"] .spinner { border-color: rgba(255, 255, 255, .4); border-top-color: #fff; }
+.source-list .spinner { margin: 0 2.5px; } /* no lugar de um ícone de 18 px, sem empurrar o nome */
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .toast {

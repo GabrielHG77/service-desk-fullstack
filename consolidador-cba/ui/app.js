@@ -340,7 +340,13 @@ class AppModel {
     this.settings = { ...this.settings, ...patch };
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => this.native.saveConfig(this.settings).catch((err) => this.notify(err.message, "error")), 300);
-    if (this.phase === "ready") this.consolidate();
+    if (this.phase !== "ready") return;
+    // A chave ou o campo mudam na hora; a tabela é refeita logo depois, para a tela poder mostrar a mudança antes
+    // (com os arquivos do SAP, refazer leva um ou dois segundos, e com as características fora da lista, mais).
+    this.busy = true;
+    this.progress = "Aplicando os ajustes…";
+    clearTimeout(this.applyTimer);
+    this.applyTimer = setTimeout(() => this.consolidate(), 40);
   }
   resetSettings() { this.updateSettings(CBA.defaultSettings()); }
   includeExtras() { if (this.result) this.updateSettings({ columns: [...this.settings.columns, ...this.result.extras] }); }
@@ -893,7 +899,7 @@ class LazyTable {
     if (res !== this.res) { this.res = res; this.widths = this.measure(res); }
     this.rows = m.visibleRows();
     this.scroll.scrollTop = 0;
-    this.renderHead();
+    this.layout();
     const empty = $("table-empty");
     empty.hidden = this.rows.length > 0;
     if (!this.rows.length) {
@@ -909,6 +915,7 @@ class LazyTable {
           : `<strong>Nenhuma linha</strong><span>Nenhum arquivo trouxe linhas com "Internal char no." preenchido. Veja os erros e avisos acima.</span>`;
     }
     this.range = [-1, -1];
+    this.cols = [-1, -1];
     this.paint();
   }
 
@@ -923,21 +930,40 @@ class LazyTable {
     });
   }
 
-  renderHead() {
+  // Larguras fixas por coluna: com elas dá para desenhar só as colunas visíveis (como as linhas) e o resto da
+  // largura vira uma célula vazia de cada lado. Com as características fora da lista são mais de mil colunas.
+  layout() {
+    this.left = [0];
+    for (const w of this.widths) this.left.push(this.left[this.left.length - 1] + w);
+    this.table.style.width = this.left[this.left.length - 1] + "px";
+    this.table.querySelector("colgroup").innerHTML = this.widths.map((w) => `<col style="width:${w}px">`).join("");
+  }
+
+  visibleCols() {
+    const n = this.res.cols.length;
+    if (n <= 40) return [0, n];
+    const x0 = this.scroll.scrollLeft, x1 = x0 + this.scroll.clientWidth;
+    let c0 = 0;
+    while (c0 < n && this.left[c0 + 1] <= x0) c0++;
+    let c1 = c0;
+    while (c1 < n && this.left[c1] < x1) c1++;
+    return [Math.max(0, c0 - 3), Math.min(n, c1 + 3)];
+  }
+
+  renderHead(c0, c1) {
     const { cols } = this.res;
     const sort = this.model.sort;
-    this.table.style.width = this.widths.reduce((a, b) => a + b, 0) + "px";
-    this.table.querySelector("colgroup").innerHTML = this.widths.map((w) => `<col style="width:${w}px">`).join("");
-    this.table.tHead.innerHTML = "<tr>" + cols.map((c) => {
+    const pad = (k) => (k > 0 ? `<th class="hsp" colspan="${k}" aria-hidden="true"></th>` : "");
+    this.table.tHead.innerHTML = "<tr>" + pad(c0) + cols.slice(c0, c1).map((c) => {
       const cls = [CBA.BASE_COLS.includes(c) ? "" : "code", CBA.NUM_COLS.has(c) ? "n" : ""].join(" ").trim();
       const s = sort && sort.col === c ? icon(sort.dir === "asc" ? "up" : "down") : "";
       const aria = sort && sort.col === c ? (sort.dir === "asc" ? "ascending" : "descending") : "none";
       return `<th scope="col" aria-sort="${aria}"${cls ? ` class="${cls}"` : ""}><button type="button" data-col="${esc(c)}" title="Ordenar por ${esc(c)}">${esc(c)}${s}</button></th>`;
-    }).join("") + "</tr>";
+    }).join("") + pad(cols.length - c1) + "</tr>";
   }
 
   schedule(force) {
-    if (force) this.range = [-1, -1];
+    if (force) { this.range = [-1, -1]; this.cols = [-1, -1]; }
     if (this.raf) return;
     this.raf = requestAnimationFrame(() => { this.raf = 0; this.paint(); });
   }
@@ -949,8 +975,14 @@ class LazyTable {
     const top = Math.max(0, this.scroll.scrollTop - this.headH);
     const start = Math.max(0, Math.floor(top / this.rowH) - 10);
     const end = Math.min(n, start + Math.ceil(this.scroll.clientHeight / this.rowH) + 20);
-    if (start === this.range[0] && end === this.range[1]) return;
+    const [c0, c1] = this.visibleCols();
+    if (start === this.range[0] && end === this.range[1] && c0 === this.cols[0] && c1 === this.cols[1]) return;
+    if (c0 !== this.cols[0] || c1 !== this.cols[1]) this.renderHead(c0, c1);
     this.range = [start, end];
+    this.cols = [c0, c1];
+    const shown = cols.slice(c0, c1);
+    const lead = c0 > 0 ? `<td class="hsp" colspan="${c0}"></td>` : "";
+    const tail = c1 < cols.length ? `<td class="hsp" colspan="${cols.length - c1}"></td>` : "";
     const dec = this.model.settings.decimal;
     const pend = this.model.pending().set;
     const spacer = (rows) => `<tr class="spacer" aria-hidden="true"><td colspan="${cols.length}" style="height:${rows * this.rowH}px"></td></tr>`;
@@ -958,11 +990,11 @@ class LazyTable {
     for (let i = start; i < end; i++) {
       const r = this.rows[i];
       const cls = [i % 2 ? "alt" : "", pend.has(r) ? "new" : ""].join(" ").trim();
-      h += `<tr${cls ? ` class="${cls}"` : ""}${pend.has(r) ? ' title="Novo: ainda não está na planilha"' : ""}>` + cols.map((c) => {
+      h += `<tr${cls ? ` class="${cls}"` : ""}${pend.has(r) ? ' title="Novo: ainda não está na planilha"' : ""}>` + lead + shown.map((c) => {
         const t = CBA.displayValue(r, c, dec);
         const n = CBA.NUM_COLS.has(c);
         return `<td${n ? ' class="n"' : ""}${t.length > 36 ? ` title="${esc(t)}"` : ""}>${esc(t)}</td>`;
-      }).join("") + "</tr>";
+      }).join("") + tail + "</tr>";
     }
     if (end < n) h += spacer(n - end);
     this.table.tBodies[0].innerHTML = h;

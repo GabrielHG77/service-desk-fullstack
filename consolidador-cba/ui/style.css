@@ -238,6 +238,7 @@ h1 { margin: 0; font: 700 24px/1.15 var(--font-display); letter-spacing: -.02em;
 .grid td.n { text-align: right; font-variant-numeric: tabular-nums; }
 .grid td.empty { color: var(--label-3); }
 .grid tr.spacer td { padding: 0; height: auto; }
+.grid th.hsp, .grid td.hsp { padding: 0; }
 .table-empty {
   position: absolute; inset: var(--head-h) 0 0; display: grid; place-content: center; justify-items: center; gap: 6px;
   color: var(--label-2); text-align: center; padding: 24px;

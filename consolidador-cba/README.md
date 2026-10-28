@@ -68,8 +68,13 @@ Mesma lógica do `ConsolidadoPath.xlsx` do Fator de Importação:
   **Ajustes > Gravação na planilha > Guardar uma cópia .bak antes de gravar**.
 - O app escreve só na aba **Consolidado**. Outras abas (dashboard, tabelas dinâmicas) e colunas escritas à mão
   ficam como estão. Coluna nova da lista entra no fim.
-- **Regravar este arquivo na planilha…** (com um arquivo selecionado) troca os valores dos itens dele que já
-  estão na planilha pelos de agora, depois de confirmar.
+- **Regravar este arquivo na planilha…** (com um arquivo selecionado; com vários, ou com todos, **Regravar todos os
+  arquivos na planilha…**) troca os valores dos itens que já estão na planilha pelos de agora, depois de confirmar.
+  Serve também para preencher, nos itens já gravados, uma coluna que você acabou de pôr na lista.
+- Uma característica só existe nos itens daquele tipo de produto: as AT_MCP2_ da lista padrão são dos
+  transportadores (materiais AT-RM…); rolos (RD-…) e motores (MC-…) têm outras, como RD_RL_LEN_M ou RD_TU_MAT. Num
+  item que não é transportador, essas colunas ficam em branco porque o SAP não tem o valor. Para ver as de outro
+  tipo, ponha os códigos na lista (Ajustes > Colunas) e regrave.
 - Com a planilha aberta no Excel, o Windows não deixa gravar: o app avisa para fechar.
 - A planilha e a cópia `.bak` são ignoradas se estiverem dentro da pasta DadosCBA.
 

@@ -556,12 +556,14 @@ class AppModel {
     if (out) this.notify(`${plural(out.added, "item novo gravado", "itens novos gravados")} em ${baseName(out.path)}.${out.backup ? ` A versão anterior ficou em ${baseName(out.backup)}.` : ""}`, "saved", out.path);
   }
 
+  // Os arquivos marcados, ou todos (por exemplo depois de pôr colunas novas na lista, para preencher os itens já gravados).
   askRegravar() {
-    const rels = this.selection;
-    if (!rels || !rels.length || !this.planilha) return;
+    const rels = this.isAll() ? this.selectable() : this.selection;
+    if (!rels.length || !this.planilha) return;
     const saved = this.savedIn(rels);
     const fresh = this.pendingIn(rels);
-    const what = rels.length === 1 ? this.fileName(rels[0]) : plural(rels.length, "arquivo marcado", "arquivos marcados");
+    const what = this.isAll() && rels.length > 1 ? "todos os arquivos"
+      : rels.length === 1 ? this.fileName(rels[0]) : plural(rels.length, "arquivo marcado", "arquivos marcados");
     this.confirm = {
       title: `Regravar ${what}?`,
       text: `${plural(saved, "item que já está na planilha recebe", "itens que já estão na planilha recebem")} os valores de agora` +
@@ -1114,9 +1116,10 @@ function TableBar(model) {
     const pl = model.planilha;
     $("table-bar").hidden = !pl || !!pl.error || model.mode !== "folder";
     for (const b of document.querySelectorAll("#show-filter [data-show]")) b.setAttribute("aria-checked", String(b.dataset.show === model.show));
-    const rels = model.selection;
-    $("regravar").hidden = !rels || !rels.length || !pl || model.savedIn(rels) === 0;
-    $("regravar").textContent = rels && rels.length > 1 ? `Regravar os ${fmtInt(rels.length)} arquivos marcados na planilha…` : "Regravar este arquivo na planilha…";
+    const rels = model.isAll() ? model.selectable() : model.selection;
+    $("regravar").hidden = !rels.length || !pl || model.savedIn(rels) === 0;
+    $("regravar").textContent = model.isAll() && rels.length > 1 ? "Regravar todos os arquivos na planilha…"
+      : rels.length > 1 ? `Regravar os ${fmtInt(rels.length)} arquivos marcados na planilha…` : "Regravar este arquivo na planilha…";
   });
   $("show-filter").addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-show]");

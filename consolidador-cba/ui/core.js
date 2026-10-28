@@ -37,7 +37,7 @@ function canon(name) {
 }
 
 function defaultSettings() {
-  return { sheet: "Data", decimal: ",", columns: DEFAULT_COLUMNS.slice(), extras: false, repeated: "first" };
+  return { sheet: "Data", decimal: ",", columns: DEFAULT_COLUMNS.slice(), extras: false, repeated: "first", backup: true, theme: "auto" };
 }
 
 // ---------- conversões ----------

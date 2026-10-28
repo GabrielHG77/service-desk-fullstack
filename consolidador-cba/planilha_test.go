@@ -17,7 +17,7 @@ func TestPlanilhaGravaSoNovosEPreservaOResto(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "Consolidado_CBA.xlsx")
 
 	// 1. planilha nova
-	res, err := writePlanilha(path, gravarReq{Columns: cols, Rows: [][]any{row(5940235.0, 10.0, "jun.xlsx", "120"), row(5940235.0, 20.0, "jun.xlsx", "35")}})
+	res, err := writePlanilha(path, gravarReq{Columns: cols, Rows: [][]any{row(5940235.0, 10.0, "jun.xlsx", "120"), row(5940235.0, 20.0, "jun.xlsx", "35")}}, true)
 	if err != nil || res.Added != 2 || res.Backup != "" {
 		t.Fatalf("primeira gravação: %+v %v", res, err)
 	}
@@ -41,7 +41,7 @@ func TestPlanilhaGravaSoNovosEPreservaOResto(t *testing.T) {
 		append(row("0005940235", "000010", "jul.xlsx", "999"), "x"),
 		append(row(5940235.0, 20.0, "jul.xlsx", "999"), "x"),
 		append(row(5975910.0, 470.0, "jul.xlsx", "120"), "y"),
-	}})
+	}}, true)
 	if err != nil || res.Added != 1 || res.Skipped != 2 || res.Backup == "" {
 		t.Fatalf("segunda gravação: %+v %v", res, err)
 	}
@@ -69,7 +69,7 @@ func TestPlanilhaGravaSoNovosEPreservaOResto(t *testing.T) {
 	f.Close()
 
 	// 4. regravar: sobrescreve os valores do app, mantém a Obs
-	res, err = writePlanilha(path, gravarReq{Columns: cols, Replace: true, Rows: [][]any{row(5940235.0, 10.0, "jun.xlsx", "125")}})
+	res, err = writePlanilha(path, gravarReq{Columns: cols, Replace: true, Rows: [][]any{row(5940235.0, 10.0, "jun.xlsx", "125")}}, true)
 	if err != nil || res.Updated != 1 || res.Added != 0 {
 		t.Fatalf("regravar: %+v %v", res, err)
 	}
@@ -84,7 +84,7 @@ func TestPlanilhaGravaSoNovosEPreservaOResto(t *testing.T) {
 }
 
 func TestPlanilhaSemColunasChave(t *testing.T) {
-	if _, err := writePlanilha(filepath.Join(t.TempDir(), "x.xlsx"), gravarReq{Columns: []string{"Material"}, Rows: [][]any{{"A"}}}); err == nil {
+	if _, err := writePlanilha(filepath.Join(t.TempDir(), "x.xlsx"), gravarReq{Columns: []string{"Material"}, Rows: [][]any{{"A"}}}, true); err == nil {
 		t.Error("gravou sem Sales Doc. e Item")
 	}
 }
@@ -140,7 +140,7 @@ func TestPlanilhaDeForaEncontraOsDados(t *testing.T) {
 	res, err := writePlanilha(path, gravarReq{Columns: cols, Rows: [][]any{
 		{5940235.0, 10.0, 46202.0, "jul.xlsx", "BR10", "M1", "999"}, // já está (como texto com zeros)
 		{5975910.0, 470.0, 46223.0, "jul.xlsx", "BR10", "M9", "18"},
-	}})
+	}}, true)
 	if err != nil || res.Sheet != "Pedidos" || res.Added != 1 || res.Skipped != 1 {
 		t.Fatalf("gravar = %+v %v", res, err)
 	}
@@ -163,7 +163,7 @@ func TestPlanilhaDeForaEncontraOsDados(t *testing.T) {
 func TestOrganizarNoPadraoDoApp(t *testing.T) {
 	path := planilhaDeFora(t)
 	cols := []string{"Sales Doc.", "Item", "Created On", "Arquivo Origem", "SOrg.", "Material", "AT_MCP2_PIT_M"}
-	res, err := organizePlanilha(path, organizarReq{Columns: cols})
+	res, err := organizePlanilha(path, organizarReq{Columns: cols}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,5 +216,22 @@ func TestCanon(t *testing.T) {
 	}
 	if canon("Item category") == canon("Item") {
 		t.Error("Item category virou Item")
+	}
+}
+
+func TestGravarDiretoSemCopia(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "Consolidado_CBA.xlsx")
+	if _, err := writePlanilha(path, gravarReq{Columns: cols, Rows: [][]any{row(1.0, 10.0, "jun.xlsx", "1")}}, false); err != nil {
+		t.Fatal(err)
+	}
+	res, err := writePlanilha(path, gravarReq{Columns: cols, Rows: [][]any{row(2.0, 10.0, "jun.xlsx", "2")}}, false)
+	if err != nil || res.Added != 1 || res.Backup != "" {
+		t.Fatalf("gravar sem cópia: %+v %v", res, err)
+	}
+	if _, err := os.Stat(backupPath(path)); !os.IsNotExist(err) {
+		t.Errorf("criou a cópia .bak com a opção desligada")
+	}
+	if info, _ := readPlanilha(path); info.Rows != 2 {
+		t.Errorf("planilha tem %d itens, esperava 2", info.Rows)
 	}
 }

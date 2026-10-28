@@ -48,6 +48,8 @@ Para desinstalar: **Configurações > Aplicativos instalados > Consolidador CBA 
 
 Atalhos: F5 atualiza, Ctrl+S grava na planilha, Ctrl+F busca, Ctrl+E exporta uma cópia, Ctrl+, abre os Ajustes.
 
+Claro ou escuro: **Ajustes > Aparência > Tema**. Automático segue o tema do Windows; Claro e Escuro valem sempre.
+
 Na primeira vez, o Windows pode mostrar "O Windows protegeu o computador", porque o programa
 não é assinado. Clique em **Mais informações** e depois em **Executar assim mesmo**.
 
@@ -61,7 +63,9 @@ Mesma lógica do `ConsolidadoPath.xlsx` do Fator de Importação:
   planilha. Item já gravado não duplica e não muda. Com tudo gravado, o botão diz **Planilha em dia**.
 - Antes de gravar, para conferir: o filtro **Todas / Novas / Já gravadas** em cima da tabela, o card
   **Novos para gravar** e o **+N** ao lado de cada arquivo.
-- Antes de cada gravação a planilha é copiada para `<nome>.bak.xlsx`.
+- O app grava na própria planilha que você escolheu. Antes de cada gravação ela é copiada para `<nome>.bak.xlsx`,
+  para voltar atrás se algo der errado. Para gravar direto, sem criar nenhum outro arquivo, desligue
+  **Ajustes > Gravação na planilha > Guardar uma cópia .bak antes de gravar**.
 - O app escreve só na aba **Consolidado**. Outras abas (dashboard, tabelas dinâmicas) e colunas escritas à mão
   ficam como estão. Coluna nova da lista entra no fim.
 - **Regravar este arquivo na planilha…** (com um arquivo selecionado) troca os valores dos itens dele que já
@@ -81,7 +85,8 @@ Mesma lógica do `ConsolidadoPath.xlsx` do Fator de Importação:
   **Ver diferenças e organizar…** lista o que muda: cabeçalho na linha 1 (as linhas de título acima saem), as
   colunas do app com os nomes do app e na ordem do app, as que faltam entram vazias, e as que o app não conhece
   (como uma coluna Obs) ficam depois das do app, com os dados. Pedido, item e quantidade viram números, e
-  Created On vira data. Uma Tabela do Excel na aba é refeita com o mesmo nome. Antes, a cópia `.bak.xlsx`.
+  Created On vira data. Uma Tabela do Excel na aba é refeita com o mesmo nome. Antes, a cópia `.bak.xlsx`
+  (se estiver ligada nos Ajustes).
 - Uma Tabela do Excel que começa no cabeçalho cresce junto quando o app grava linhas novas.
 
 ### Escolher quais arquivos entram

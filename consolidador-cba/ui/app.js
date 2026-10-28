@@ -15,6 +15,7 @@ const plural = (n, one, many) => `${fmtInt(n)} ${n === 1 ? one : many}`;
 const fold = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const collator = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 const baseName = (p) => p.split(/[\\/]/).filter(Boolean).pop() || p;
+const themeOf = (t) => (t === "light" || t === "dark" ? t : "auto");
 function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -133,7 +134,7 @@ class NativeBridge {
   planilha() { return this.json("GET", "/api/planilha"); }
   async choosePlanilha() { const r = await this.json("POST", "/api/planilha/escolher"); return r.cancelled ? null : r; }
   gravar(body) { return this.json("POST", "/api/planilha/gravar", body); }
-  organizar(columns) { return this.json("POST", "/api/planilha/organizar", { columns }); }
+  organizar(columns, backup) { return this.json("POST", "/api/planilha/organizar", { columns, backup }); }
 }
 
 // Duas fontes com o mesmo formato, como um repositório com uma implementação real e uma de exemplo (a "preview").
@@ -175,7 +176,8 @@ class AppModel {
     this.anchor = null;        // último arquivo clicado, para o Shift+clique
     this.search = "";
     this.sort = null;          // { col, dir: "asc" | "desc" }
-    this.settings = CBA.defaultSettings();
+    // o tema já vem na página (data-theme), para não piscar claro antes de ler os ajustes
+    this.settings = { ...CBA.defaultSettings(), theme: themeOf(document.documentElement.dataset.theme) };
     this.settingsOpen = false;
     this.toast = null;
     this.planilha = null;      // { path, exists, rows, keys: Map "doc|item" -> arquivo, error }
@@ -195,7 +197,9 @@ class AppModel {
         decimal: c.decimal === "." ? "." : ",",
         columns: Array.isArray(c.columns) && c.columns.length ? c.columns : d.columns,
         extras: !!c.extras,
-        repeated: c.repeated === "all" ? "all" : "first"
+        repeated: c.repeated === "all" ? "all" : "first",
+        backup: c.backup !== false,
+        theme: themeOf(c.theme)
       };
       await this.loadPlanilha();
       if (c.folder) return this.openFolder(c.folder);
@@ -340,7 +344,7 @@ class AppModel {
     this.settings = { ...this.settings, ...patch };
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => this.native.saveConfig(this.settings).catch((err) => this.notify(err.message, "error")), 300);
-    if (this.phase !== "ready") return;
+    if (this.phase !== "ready" || Object.keys(patch).every((k) => k === "backup" || k === "theme")) return;
     // A chave ou o campo mudam na hora; a tabela é refeita logo depois, para a tela poder mostrar a mudança antes
     // (com os arquivos do SAP, refazer leva um ou dois segundos, e com as características fora da lista, mais).
     this.busy = true;
@@ -453,6 +457,12 @@ class AppModel {
     return { items, std, kept: unknown.map((i) => head[i]) };
   }
 
+  backupNote(which) {
+    return this.settings.backup
+      ? `A versão ${which} fica numa cópia .bak.xlsx.`
+      : "Sem cópia de segurança: a mudança vai direto para a planilha (a cópia .bak está desligada em Ajustes).";
+  }
+
   askOrganizar() {
     const d = this.layoutDiff();
     if (!d || !d.items.length) return;
@@ -462,7 +472,7 @@ class AppModel {
     this.confirm = {
       title: `Organizar a aba ${pl.sheet} no padrão do app?`,
       text: d.items.map((i) => "• " + i).join("\n") + keep +
-        `\n\nOs dados não mudam, só de lugar.${tables} As outras abas não são tocadas, e a versão de agora fica numa cópia .bak.xlsx.`,
+        `\n\nOs dados não mudam, só de lugar.${tables} As outras abas não são tocadas. ${this.backupNote("de agora")}`,
       yes: "Organizar",
       run: () => this.organizar()
     };
@@ -473,7 +483,7 @@ class AppModel {
     this.busy = true;
     this.progress = "Organizando a planilha…";
     try {
-      const out = await this.native.organizar(this.layoutDiff().std);
+      const out = await this.native.organizar(this.layoutDiff().std, this.settings.backup);
       await this.loadPlanilha();
       const bits = [plural(out.rows, "item", "itens")];
       if (out.renamed) bits.push(plural(out.renamed, "coluna renomeada", "colunas renomeadas"));
@@ -506,7 +516,7 @@ class AppModel {
       title: `Regravar ${what}?`,
       text: `${plural(saved, "item que já está na planilha recebe", "itens que já estão na planilha recebem")} os valores de agora` +
         (fresh ? ` e ${plural(fresh, "item novo entra", "itens novos entram")} no fim` : "") +
-        `. As outras abas e as colunas escritas à mão não mudam, e a versão anterior fica numa cópia .bak.xlsx.`,
+        `. As outras abas e as colunas escritas à mão não mudam. ${this.backupNote("anterior")}`,
       yes: "Regravar",
       run: () => this.regravar(rels)
     };
@@ -568,7 +578,7 @@ class AppModel {
     this.busy = true;
     this.progress = "Gravando na planilha…";
     try {
-      const out = await this.native.gravar({ columns: res.cols, rows: rows.map((r) => res.cols.map((c) => CBA.cellValue(r, c))), replace });
+      const out = await this.native.gravar({ columns: res.cols, rows: rows.map((r) => res.cols.map((c) => CBA.cellValue(r, c))), replace, backup: this.settings.backup });
       await this.loadPlanilha();
       return out;
     } catch (err) {
@@ -1012,6 +1022,9 @@ function SettingsSheet(model) {
     if (document.activeElement !== sheetInput) sheetInput.value = s.sheet;
     if (document.activeElement !== columns) columns.value = s.columns.join("\n");
     extras.checked = s.extras;
+    $("opt-backup").checked = s.backup;
+    document.documentElement.dataset.theme = s.theme;
+    for (const b of document.querySelectorAll("#opt-theme [data-theme-choice]")) b.setAttribute("aria-checked", String(b.dataset.themeChoice === s.theme));
     for (const b of document.querySelectorAll("#opt-decimal [data-decimal]")) b.setAttribute("aria-checked", String(b.dataset.decimal === s.decimal));
     for (const b of document.querySelectorAll("#opt-repeated [data-repeated]")) b.setAttribute("aria-checked", String(b.dataset.repeated === s.repeated));
     const open = model.settingsOpen;
@@ -1029,6 +1042,11 @@ function SettingsSheet(model) {
     }, 500);
   });
   extras.addEventListener("change", () => model.updateSettings({ extras: extras.checked }));
+  $("opt-backup").addEventListener("change", (ev) => model.updateSettings({ backup: ev.target.checked }));
+  $("opt-theme").addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-theme-choice]");
+    if (b) model.updateSettings({ theme: b.dataset.themeChoice });
+  });
   $("opt-decimal").addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-decimal]");
     if (b) model.updateSettings({ decimal: b.dataset.decimal });

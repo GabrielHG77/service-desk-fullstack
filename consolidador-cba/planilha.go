@@ -45,6 +45,7 @@ type gravarReq struct {
 	Columns []string `json:"columns"`
 	Rows    [][]any  `json:"rows"`
 	Replace bool     `json:"replace"` // Regravar: overwrite the items already there instead of skipping them
+	Backup  *bool    `json:"backup"`  // the screen's choice, so a switch flipped just before is not lost; nil = the saved one
 }
 
 type gravarResult struct {
@@ -58,6 +59,7 @@ type gravarResult struct {
 
 type organizarReq struct {
 	Columns []string `json:"columns"` // the app's columns, in the app's order
+	Backup  *bool    `json:"backup"`
 }
 
 type organizarResult struct {
@@ -267,22 +269,25 @@ func copyFile(from, to string) error {
 	return out.Close()
 }
 
-// openForWriting checks Excel is not holding the file, copies it to .bak.xlsx and opens it.
-func openForWriting(path string) (*excelize.File, string, error) {
+// openForWriting checks Excel is not holding the file, copies it to .bak.xlsx when backup is on, and opens it.
+func openForWriting(path string, backup bool) (*excelize.File, string, error) {
 	if w, err := os.OpenFile(path, os.O_RDWR, 0); err != nil {
 		return nil, "", err
 	} else {
 		w.Close()
 	}
-	backup := backupPath(path)
-	if err := copyFile(path, backup); err != nil {
-		return nil, "", fmt.Errorf("não foi possível fazer a cópia de segurança: %w", err)
+	copyPath := ""
+	if backup {
+		copyPath = backupPath(path)
+		if err := copyFile(path, copyPath); err != nil {
+			return nil, "", fmt.Errorf("não foi possível fazer a cópia de segurança: %w", err)
+		}
 	}
 	f, err := excelize.OpenFile(path)
 	if err != nil {
 		return nil, "", fmt.Errorf("não foi possível abrir %s: %w", filepath.Base(path), err)
 	}
-	return f, backup, nil
+	return f, copyPath, nil
 }
 
 // saveSwapped saves beside the original and then swaps, so a failure never leaves half a spreadsheet.
@@ -349,7 +354,8 @@ func tableBounds(ref string) (c1, r1, c2, r2 int, err error) {
 	return
 }
 
-func writePlanilha(path string, req gravarReq) (gravarResult, error) {
+// writePlanilha adds (or, with Replace, rewrites) the rows in the spreadsheet itself; backup first copies it to .bak.xlsx.
+func writePlanilha(path string, req gravarReq, backup bool) (gravarResult, error) {
 	res := gravarResult{Path: path}
 	iDocReq, iItemReq := indexCanon(req.Columns, "Sales Doc."), indexCanon(req.Columns, "Item")
 	if iDocReq < 0 || iItemReq < 0 {
@@ -358,7 +364,7 @@ func writePlanilha(path string, req gravarReq) (gravarResult, error) {
 	var f *excelize.File
 	var err error
 	if _, statErr := os.Stat(path); statErr == nil {
-		if f, res.Backup, err = openForWriting(path); err != nil {
+		if f, res.Backup, err = openForWriting(path, backup); err != nil {
 			return res, err
 		}
 	} else {
@@ -513,17 +519,17 @@ func typed(f *excelize.File, sheet, name, raw, column string) (v any, formula bo
 	return raw, formula
 }
 
-func organizePlanilha(path string, req organizarReq) (organizarResult, error) {
+func organizePlanilha(path string, req organizarReq, backup bool) (organizarResult, error) {
 	res := organizarResult{Path: path, Added: []string{}, Kept: []string{}}
 	if len(req.Columns) == 0 || indexCanon(req.Columns, "Sales Doc.") < 0 || indexCanon(req.Columns, "Item") < 0 {
 		return res, errors.New("a lista de colunas precisa ter Sales Doc. e Item")
 	}
-	f, backup, err := openForWriting(path)
+	f, copyPath, err := openForWriting(path, backup)
 	if err != nil {
 		return res, err
 	}
 	defer f.Close()
-	res.Backup = backup
+	res.Backup = copyPath
 	lay, err := findData(f)
 	if err != nil {
 		return res, err

@@ -1,5 +1,5 @@
 /* Consolidador CBA: visual no estilo SwiftUI (cores de sistema da Apple, materiais, cantos de 12 pt),
-   desenhado para a janela do Windows. Claro e escuro seguem o tema do Windows. */
+   desenhado para a janela do Windows. Claro e escuro seguem o tema do Windows, ou o escolhido nos Ajustes. */
 :root {
   color-scheme: light dark;
   --sidebar: #ececf1;
@@ -32,8 +32,10 @@
   --row-h: 30px;
   --head-h: 34px;
 }
+/* Escuro: com Automático segue o Windows; Claro e Escuro, escolhidos nos Ajustes, valem sempre. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --sidebar: #1f1f22;
     --detail: #141416;
     --card: #1e1e21;
@@ -58,6 +60,32 @@
     --focus: rgba(10, 132, 255, .6);
   }
 }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --sidebar: #1f1f22;
+  --detail: #141416;
+  --card: #1e1e21;
+  --sheet: #1c1c1e;
+  --label: #f5f5f7;
+  --label-2: rgba(235, 235, 245, .62);
+  --label-3: rgba(235, 235, 245, .3);
+  --separator: rgba(84, 84, 88, .55);
+  --fill: rgba(118, 118, 128, .26);
+  --fill-2: rgba(118, 118, 128, .14);
+  --fill-strong: rgba(120, 120, 128, .4);
+  --accent: #0a84ff;
+  --accent-soft: rgba(10, 132, 255, .18);
+  --green: #30d158;
+  --orange: #ff9f0a;
+  --red: #ff453a;
+  --row-alt: rgba(255, 255, 255, .025);
+  --material: rgba(20, 20, 22, .78);
+  --head: rgba(30, 30, 33, .92);
+  --shadow: 0 0 0 .5px rgba(255, 255, 255, .06);
+  --shadow-lg: 0 0 0 .5px rgba(255, 255, 255, .08), 0 16px 48px rgba(0, 0, 0, .5);
+  --focus: rgba(10, 132, 255, .6);
+}
+:root[data-theme="light"] { color-scheme: light; }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }

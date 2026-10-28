@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="{{THEME}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -145,6 +145,19 @@
     </header>
     <div class="form">
       <section class="form-section">
+        <h4>Aparência</h4>
+        <div class="group">
+          <div class="row"><span id="theme-label">Tema</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="theme-label" id="opt-theme">
+              <button type="button" role="radio" data-theme-choice="auto">Automático</button>
+              <button type="button" role="radio" data-theme-choice="light">Claro</button>
+              <button type="button" role="radio" data-theme-choice="dark">Escuro</button>
+            </div>
+          </div>
+        </div>
+        <p class="footer">Automático segue o tema do Windows (Configurações &gt; Personalização &gt; Cores).</p>
+      </section>
+      <section class="form-section">
         <h4>Planilha</h4>
         <div class="group">
           <label class="row" for="opt-sheet"><span>Nome da aba</span><input class="inline-field" id="opt-sheet" type="text" autocomplete="off" spellcheck="false"></label>
@@ -162,6 +175,13 @@
           </div>
         </div>
         <p class="footer">Primeiro valor é o que a consulta do Power Query fazia. Todos junta na célula os valores diferentes, separados por " | ".</p>
+      </section>
+      <section class="form-section">
+        <h4>Gravação na planilha</h4>
+        <div class="group">
+          <label class="row" for="opt-backup"><span>Guardar uma cópia .bak antes de gravar</span><input class="switch" id="opt-backup" type="checkbox" role="switch"></label>
+        </div>
+        <p class="footer">Desligado, o app grava direto na sua planilha e não cria nenhum outro arquivo. Ligado, antes de cada gravação a versão anterior fica em &lt;nome&gt;.bak.xlsx, para voltar atrás se algo der errado.</p>
       </section>
       <section class="form-section">
         <h4>Colunas</h4>

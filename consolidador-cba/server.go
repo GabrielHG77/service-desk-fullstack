@@ -40,6 +40,24 @@ type Config struct {
 	Extras    bool     `json:"extras"`
 	Repeated  string   `json:"repeated"`
 	Planilha  string   `json:"planilha"` // the consolidated spreadsheet the app keeps up to date
+	Backup    *bool    `json:"backup"`   // copy the spreadsheet to .bak.xlsx before writing; nil = yes
+	Theme     string   `json:"theme"`    // "auto" (follows Windows), "light" or "dark"
+}
+
+// theme is the page's data-theme, set when the page is served so a chosen theme shows from the first paint.
+func (c Config) theme() string {
+	if c.Theme == "light" || c.Theme == "dark" {
+		return c.Theme
+	}
+	return "auto"
+}
+
+// keepsBackup says whether to copy the spreadsheet to .bak.xlsx before writing: the request's choice, else the saved one.
+func (c Config) keepsBackup(asked *bool) bool {
+	if asked != nil {
+		return *asked
+	}
+	return c.Backup == nil || *c.Backup
 }
 
 type fileInfo struct {
@@ -68,7 +86,7 @@ type desktop interface {
 
 var errCancelled = errors.New("cancelled")
 
-const version = "1.3.1"
+const version = "1.3.2"
 
 // command is what the arguments ask for instead of opening the window: "instalar", "desinstalar" or "".
 func command(args []string) string {
@@ -254,7 +272,7 @@ func (a *app) handler() http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Content-Security-Policy", csp)
 		w.Header().Set("Cache-Control", "no-store")
-		w.Write(page)
+		w.Write(bytes.Replace(page, []byte("{{THEME}}"), []byte(a.config().theme()), 1))
 	})
 	mux.HandleFunc("GET /ui/{name}", func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
@@ -440,7 +458,7 @@ func (a *app) handler() http.Handler {
 			return
 		}
 		a.writing.Lock()
-		res, err := writePlanilha(p, req)
+		res, err := writePlanilha(p, req, a.config().keepsBackup(req.Backup))
 		a.writing.Unlock()
 		if err != nil {
 			writeError(w, http.StatusConflict, planilhaFailure(err))
@@ -461,7 +479,7 @@ func (a *app) handler() http.Handler {
 			return
 		}
 		a.writing.Lock()
-		res, err := organizePlanilha(p, req)
+		res, err := organizePlanilha(p, req, a.config().keepsBackup(req.Backup))
 		a.writing.Unlock()
 		if err != nil {
 			writeError(w, http.StatusConflict, planilhaFailure(err))

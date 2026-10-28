@@ -70,7 +70,11 @@ func writeTableXlsx(path string, t exportTable) error {
 		}
 		rows[r] = row
 	}
-	for _, r := range widthRuns(width) {
+	widths := make([]float64, len(width))
+	for i, c := range width {
+		widths[i] = float64(min(48, c+2))
+	}
+	for _, r := range widthRuns(widths) {
 		if err := sw.SetColWidth(r.from, r.to, r.width); err != nil {
 			return err
 		}
@@ -97,7 +101,8 @@ func writeTableXlsx(path string, t exportTable) error {
 
 // exactWidths is how many columns get their own width. excelize goes over every column already set each time a width
 // is set and for each cell it writes, so with the 1,700 characteristics outside the list, those after these share one
-// width (the most common among them): the columns of the list, which are the ones read, keep theirs.
+// width (the most common among them): the columns of the list, which are the ones read, keep theirs. Used by the
+// Excel copy and by organizePlanilha.
 const exactWidths = 40
 
 type widthRun struct {
@@ -105,12 +110,9 @@ type widthRun struct {
 	width    float64
 }
 
-// widthRuns turns the characters each column needs into column widths, neighbours with the same width together.
-func widthRuns(chars []int) []widthRun {
-	w := make([]float64, len(chars))
-	for i, c := range chars {
-		w[i] = float64(min(48, c+2))
-	}
+// widthRuns groups the columns' widths into runs, neighbours with the same width together.
+func widthRuns(widths []float64) []widthRun {
+	w := append([]float64(nil), widths...)
 	if len(w) > exactWidths {
 		count := map[float64]int{}
 		common := 0.0

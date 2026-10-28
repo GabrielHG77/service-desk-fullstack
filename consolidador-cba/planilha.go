@@ -59,6 +59,7 @@ type gravarResult struct {
 
 type organizarReq struct {
 	Columns []string `json:"columns"` // the app's columns, in the app's order
+	Drop    []string `json:"drop"`    // characteristics outside the list (Incluir características off): they go
 	Backup  *bool    `json:"backup"`
 }
 
@@ -70,6 +71,7 @@ type organizarResult struct {
 	Renamed  int      `json:"renamed"`
 	Added    []string `json:"added"`    // app columns the sheet did not have
 	Kept     []string `json:"kept"`     // columns the app does not know, now after the app's
+	Dropped  []string `json:"dropped"`  // the characteristics outside the list that were taken out, with their data
 	TopRows  int      `json:"topRows"`  // rows above the names that were removed
 	Formulas int      `json:"formulas"` // formulas turned into their values (their references would point elsewhere)
 }
@@ -144,6 +146,23 @@ func indexCanon(list []string, name string) int {
 	}
 	return -1
 }
+
+// canonIndex maps each name's canon() to its first position: indexCanon for long lists, where calling it for each
+// of 1,700 characteristics would compare millions of names.
+func canonIndex(list []string) map[string]int {
+	m := make(map[string]int, len(list))
+	for i, s := range list {
+		if s == "" {
+			continue
+		}
+		if k := canon(s); !has(m, k) {
+			m[k] = i
+		}
+	}
+	return m
+}
+
+func has(m map[string]int, k string) bool { _, ok := m[k]; return ok }
 
 func cell(row []string, i int) string {
 	if i < 0 || i >= len(row) {
@@ -479,10 +498,13 @@ func writePlanilha(path string, req gravarReq, backup bool) (gravarResult, error
 	}
 	if fresh {
 		f.SetPanes(lay.sheet, &excelize.Panes{Freeze: true, YSplit: 1, TopLeftCell: "A2", ActivePane: "bottomLeft"})
-		for i, c := range header {
-			name, _ := excelize.ColumnNumberToName(i + 1)
-			f.SetColWidth(lay.sheet, name, name, math.Min(48, math.Max(10, float64(len(c))+4)))
-		}
+		setHeaderWidths(f, lay.sheet, header)
+	}
+	// Where each column of the request goes, worked out once: with 1,700 characteristics there are millions of cells.
+	target := make([]int, len(req.Columns))
+	isDate := make([]bool, len(req.Columns))
+	for j, c := range req.Columns {
+		target[j], isDate[j] = col[canon(c)], canon(c) == "createdon"
 	}
 
 	existing := map[string]int{}
@@ -519,8 +541,8 @@ func writePlanilha(path string, req gravarReq, backup bool) (gravarResult, error
 			existing[key] = row
 			res.Added++
 		}
-		for j, c := range req.Columns {
-			name := cellName(col[canon(c)], row)
+		for j := range req.Columns {
+			name := cellName(target[j], row)
 			switch v := values[j].(type) {
 			case nil:
 				if found {
@@ -528,7 +550,7 @@ func writePlanilha(path string, req gravarReq, backup bool) (gravarResult, error
 				}
 			case float64:
 				f.SetCellFloat(lay.sheet, name, v, -1, 64)
-				if canon(c) == "createdon" {
+				if isDate[j] {
 					f.SetCellStyle(lay.sheet, name, name, dateStyle)
 				}
 			case string:
@@ -549,6 +571,19 @@ func writePlanilha(path string, req gravarReq, backup bool) (gravarResult, error
 		return res, err
 	}
 	return res, saveSwapped(f, path)
+}
+
+// setHeaderWidths makes each column as wide as its name needs, in runs (see widthRuns in export.go).
+func setHeaderWidths(f *excelize.File, sheet string, header []string) {
+	widths := make([]float64, len(header))
+	for i, c := range header {
+		widths[i] = math.Min(48, math.Max(10, float64(len(c))+4))
+	}
+	for _, r := range widthRuns(widths) {
+		a, _ := excelize.ColumnNumberToName(r.from)
+		b, _ := excelize.ColumnNumberToName(r.to)
+		f.SetColWidth(sheet, a, b, r.width)
+	}
 }
 
 // ---------- the app's layout ----------
@@ -591,7 +626,7 @@ func typed(f *excelize.File, sheet, name, raw, column string) (v any, formula bo
 }
 
 func organizePlanilha(path string, req organizarReq, backup bool) (organizarResult, error) {
-	res := organizarResult{Path: path, Added: []string{}, Kept: []string{}}
+	res := organizarResult{Path: path, Added: []string{}, Kept: []string{}, Dropped: []string{}}
 	if len(req.Columns) == 0 || indexCanon(req.Columns, "Sales Doc.") < 0 || indexCanon(req.Columns, "Item") < 0 {
 		return res, errors.New("a lista de colunas precisa ter Sales Doc. e Item")
 	}
@@ -610,11 +645,16 @@ func organizePlanilha(path string, req organizarReq, backup bool) (organizarResu
 	}
 	res.Sheet, res.TopRows = lay.sheet, lay.headerRow-1
 
-	// New order: the app's columns, then the ones the app does not know, in the order they were in.
+	// New order: the app's columns, then the ones the app does not know, in the order they were in. The
+	// characteristics the window asks to drop are left out, and their cells are emptied with the rest below.
 	newHeader := append([]string{}, req.Columns...)
 	from := make([]int, 0, len(req.Columns)) // old index (0-based) for each new column, -1 = new column
+	inHeader, inApp, drop := canonIndex(lay.header), canonIndex(req.Columns), canonIndex(req.Drop)
 	for _, c := range req.Columns {
-		i := indexCanon(lay.header, c)
+		i, ok := inHeader[canon(c)]
+		if !ok {
+			i = -1
+		}
 		from = append(from, i)
 		if i < 0 {
 			res.Added = append(res.Added, c)
@@ -623,11 +663,18 @@ func organizePlanilha(path string, req organizarReq, backup bool) (organizarResu
 		}
 	}
 	for i, h := range lay.header {
-		if h != "" && indexCanon(req.Columns, h) < 0 {
-			newHeader = append(newHeader, h)
-			from = append(from, i)
-			res.Kept = append(res.Kept, h)
+		if h == "" {
+			continue
 		}
+		if k := canon(h); has(inApp, k) {
+			continue
+		} else if has(drop, k) {
+			res.Dropped = append(res.Dropped, h)
+			continue
+		}
+		newHeader = append(newHeader, h)
+		from = append(from, i)
+		res.Kept = append(res.Kept, h)
 	}
 
 	// Read every value with its type before moving anything.
@@ -704,10 +751,7 @@ func organizePlanilha(path string, req organizarReq, backup bool) (organizarResu
 		f.SetCellStyle(lay.sheet, cellName(i+1, 2), cellName(i+1, len(data)+1), dateStyle)
 	}
 	f.SetPanes(lay.sheet, &excelize.Panes{Freeze: true, YSplit: 1, TopLeftCell: "A2", ActivePane: "bottomLeft"})
-	for i, c := range newHeader {
-		name, _ := excelize.ColumnNumberToName(i + 1)
-		f.SetColWidth(lay.sheet, name, name, math.Min(48, math.Max(10, float64(len(c))+4)))
-	}
+	setHeaderWidths(f, lay.sheet, newHeader)
 	if err := setUsedRange(f, lay.sheet, len(newHeader), len(data)+1); err != nil {
 		return res, err
 	}

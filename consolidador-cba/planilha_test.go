@@ -235,3 +235,42 @@ func TestGravarDiretoSemCopia(t *testing.T) {
 		t.Errorf("planilha tem %d itens, esperava 2", info.Rows)
 	}
 }
+
+func TestOrganizarTiraAsCaracteristicasForaDaLista(t *testing.T) {
+	// Gravada com "Incluir características fora da lista" ligada; depois a opção foi desligada.
+	path := filepath.Join(t.TempDir(), "Consolidado_CBA.xlsx")
+	all := append(append([]string{}, cols...), "CC_SDCOM_VKOND", "RD_MOD_LCK_REA")
+	if _, err := writePlanilha(path, gravarReq{Columns: all, Rows: [][]any{
+		append(row(5940235.0, 10.0, "jun.xlsx", "120"), "A1", "x"),
+		append(row(5940235.0, 20.0, "jun.xlsx", "35"), "B2", "y"),
+	}}, false); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := excelize.OpenFile(path)
+	f.SetCellValue(dataSheet, "H1", "Obs") // uma coluna escrita à mão
+	f.SetCellValue(dataSheet, "H2", "conferido")
+	f.Save()
+	f.Close()
+
+	res, err := organizePlanilha(path, organizarReq{Columns: cols, Drop: []string{"CC_SDCOM_VKOND", "rd_mod_lck_rea", "AT_OUTRA"}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(res.Dropped, "|") != "CC_SDCOM_VKOND|RD_MOD_LCK_REA" || strings.Join(res.Kept, "|") != "Obs" || res.Rows != 2 {
+		t.Fatalf("resultado = %+v", res)
+	}
+	f, _ = excelize.OpenFile(path)
+	defer f.Close()
+	rows, _ := f.GetRows(dataSheet)
+	if strings.Join(rows[0], "|") != "Sales Doc.|Item|Created On|Arquivo Origem|AT_MCP2_PIT_M|Obs" || strings.Join(rows[1], "|") != "5940235|10|29/06/2026|jun.xlsx|120|conferido" {
+		t.Errorf("planilha = %q", rows)
+	}
+	for _, r := range rows {
+		if len(r) > 6 {
+			t.Errorf("sobrou dado de característica tirada: %q", r)
+		}
+	}
+	if info, _ := readPlanilha(path); info.Rows != 2 || len(info.Header) != 6 {
+		t.Errorf("readPlanilha = %d itens, cabeçalho %q", info.Rows, info.Header)
+	}
+}

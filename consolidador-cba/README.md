@@ -87,6 +87,11 @@ Mesma lógica do `ConsolidadoPath.xlsx` do Fator de Importação:
   (como uma coluna Obs) ficam depois das do app, com os dados. Pedido, item e quantidade viram números, e
   Created On vira data. Uma Tabela do Excel na aba é refeita com o mesmo nome. Antes, a cópia `.bak.xlsx`
   (se estiver ligada nos Ajustes).
+- **Incluir características fora da lista** também vale para organizar. Ligado, as características dos arquivos que
+  não estão na lista entram na planilha como colunas. Desligado, as que já estiverem lá (gravadas quando estava
+  ligado) contam como diferença, e organizar tira essas colunas, com os dados delas, deixando só as da lista de
+  Ajustes. A confirmação diz quantas saem. Colunas escritas à mão, como uma Obs, não são características dos arquivos
+  e ficam.
 - Uma Tabela do Excel que começa no cabeçalho cresce junto quando o app grava linhas novas.
 
 ### Escolher quais arquivos entram

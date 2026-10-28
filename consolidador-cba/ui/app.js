@@ -142,7 +142,7 @@ class NativeBridge {
   planilha() { return this.json("GET", "/api/planilha"); }
   async choosePlanilha() { const r = await this.json("POST", "/api/planilha/escolher"); return r.cancelled ? null : r; }
   gravar(body) { return this.json("POST", "/api/planilha/gravar", body); }
-  organizar(columns, backup) { return this.json("POST", "/api/planilha/organizar", { columns, backup }); }
+  organizar(columns, drop, backup) { return this.json("POST", "/api/planilha/organizar", { columns, drop, backup }); }
 }
 
 // Duas fontes com o mesmo formato, como um repositório com uma implementação real e uma de exemplo (a "preview").
@@ -466,7 +466,9 @@ class AppModel {
   }
 
   // Em que a planilha escolhida difere do padrão do app: nomes na linha 1, as colunas do app com os nomes do app
-  // e na ordem do app, e as que o app não conhece depois delas.
+  // e na ordem do app, e as que o app não conhece depois delas. Com Incluir características desligado, as
+  // características dos arquivos que não estão na lista (gravadas quando estava ligado) saem; colunas escritas à
+  // mão, como uma Obs, não são características dos arquivos e ficam.
   layoutDiff() {
     const pl = this.planilha;
     if (!pl || pl.error || !pl.exists || !pl.sheet || !this.result) return null;
@@ -487,11 +489,15 @@ class AppModel {
     const missing = std.filter((c, k) => !found.some((f) => f.k === k));
     if (missing.length) items.push(`${plural(missing.length, "coluna do app falta", "colunas do app faltam")}: ${list(missing)}`);
     if (!found.every((f, j) => j === 0 || f.k > found[j - 1].k)) items.push("As colunas do app estão em outra ordem.");
+    const outside = new Set(this.settings.extras ? [] : this.result.extras.map(CBA.canon));
     const unknown = head.map((h, i) => (h && stdC.indexOf(CBA.canon(h)) < 0 ? i : -1)).filter((i) => i >= 0);
+    const drop = unknown.filter((i) => outside.has(CBA.canon(head[i])));
+    const kept = unknown.filter((i) => !outside.has(CBA.canon(head[i])));
+    if (drop.length) items.push(`${plural(drop.length, "característica que não está na lista de colunas está", "características que não estão na lista de colunas estão")} na planilha: ${list(drop.map((i) => head[i]))}`);
     const lastKnown = found.length ? found[found.length - 1].i : -1;
-    const middle = unknown.filter((i) => i < lastKnown).map((i) => head[i]);
+    const middle = kept.filter((i) => i < lastKnown).map((i) => head[i]);
     if (middle.length) items.push(`${plural(middle.length, "coluna que o app não conhece está", "colunas que o app não conhece estão")} no meio das do app: ${list(middle)}`);
-    return { items, std, kept: unknown.map((i) => head[i]) };
+    return { items, std, kept: kept.map((i) => head[i]), drop: drop.map((i) => head[i]) };
   }
 
   backupNote(which) {
@@ -504,13 +510,18 @@ class AppModel {
     const d = this.layoutDiff();
     if (!d || !d.items.length) return;
     const pl = this.planilha;
-    const keep = d.kept.length ? `\n\nAs colunas que o app não conhece (${d.kept.slice(0, 4).join(", ")}${d.kept.length > 4 ? "…" : ""}) ficam, depois das do app.` : "";
+    const some = (names) => names.slice(0, 4).join(", ") + (names.length > 4 ? "…" : "");
+    const keep = d.kept.length ? `\n\nAs colunas que o app não conhece (${some(d.kept)}) ficam, depois das do app.` : "";
+    const one = d.drop.length === 1;
+    const drop = d.drop.length
+      ? `\n\n${one ? "Sai da planilha, com os dados dela" : "Saem da planilha, com os dados delas"}, ${plural(d.drop.length, "característica", "características")} fora da lista de colunas (${some(d.drop)}). Para ${one ? "mantê-la" : "mantê-las"}, ligue antes Ajustes > Incluir características fora da lista.`
+      : "";
     const tables = pl.tables.length ? ` A tabela ${pl.tables.join(", ")} é refeita com o mesmo nome.` : "";
     this.confirm = {
       title: `Organizar a aba ${pl.sheet} no padrão do app?`,
-      text: d.items.map((i) => "• " + i).join("\n") + keep +
-        `\n\nOs dados não mudam, só de lugar.${tables} As outras abas não são tocadas. ${this.backupNote("de agora")}`,
-      yes: "Organizar",
+      text: d.items.map((i) => "• " + i).join("\n") + drop + keep +
+        `\n\n${d.drop.length ? "Os outros dados" : "Os dados"} não mudam, só de lugar.${tables} As outras abas não são tocadas. ${this.backupNote("de agora")}`,
+      yes: d.drop.length ? `Organizar e tirar ${plural(d.drop.length, "coluna", "colunas")}` : "Organizar",
       run: () => this.organizar()
     };
   }
@@ -520,11 +531,13 @@ class AppModel {
     this.busy = true;
     this.progress = "Organizando a planilha…";
     try {
-      const out = await this.native.organizar(this.layoutDiff().std, this.settings.backup);
+      const d = this.layoutDiff();
+      const out = await this.native.organizar(d.std, d.drop, this.settings.backup);
       await this.loadPlanilha();
       const bits = [plural(out.rows, "item", "itens")];
       if (out.renamed) bits.push(plural(out.renamed, "coluna renomeada", "colunas renomeadas"));
       if (out.added.length) bits.push(plural(out.added.length, "coluna nova", "colunas novas"));
+      if (out.dropped.length) bits.push(plural(out.dropped.length, "característica fora da lista saiu", "características fora da lista saíram"));
       if (out.kept.length) bits.push(`${out.kept.slice(0, 3).join(", ")}${out.kept.length > 3 ? "…" : ""} no fim`);
       if (out.formulas) bits.push(plural(out.formulas, "fórmula virou valor", "fórmulas viraram valores"));
       this.notify(`Aba ${out.sheet} organizada no padrão do app: ${bits.join(", ")}.`, "saved", out.path);

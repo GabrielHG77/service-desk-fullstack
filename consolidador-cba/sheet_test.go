@@ -225,15 +225,15 @@ func TestCopiaEmExcel(t *testing.T) {
 }
 
 func TestLargurasDasColunas(t *testing.T) {
-	chars := []int{10, 10, 60, 3}
+	widths := []float64{12, 12, 48, 5}
 	for i := 0; i < 300; i++ {
-		chars = append(chars, 12+i%3) // the characteristics outside the list
+		widths = append(widths, float64(14+i%3)) // the characteristics outside the list
 	}
-	runs := widthRuns(chars)
+	runs := widthRuns(widths)
 	if runs[0] != (widthRun{1, 2, 12}) || runs[1] != (widthRun{3, 3, 48}) || runs[2] != (widthRun{4, 4, 5}) {
 		t.Errorf("first runs = %v", runs[:3])
 	}
-	if last := runs[len(runs)-1]; last.from != exactWidths+1 || last.to != len(chars) || last.width != 14 {
+	if last := runs[len(runs)-1]; last.from != exactWidths+1 || last.to != len(widths) || last.width != 14 {
 		t.Errorf("shared width after %d columns = %+v", exactWidths, last)
 	}
 	if len(runs) > exactWidths+1 {

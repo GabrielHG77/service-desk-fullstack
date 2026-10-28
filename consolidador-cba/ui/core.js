@@ -18,6 +18,24 @@ const SRC = {
 };
 const EPOCH = Date.UTC(1899, 11, 30);
 
+// Outros nomes das colunas de base (campos do SAP, português, a saída do Power Query). planilha.go tem a mesma tabela.
+const ALIASES = {
+  salesdocument: "salesdoc", documentodevendas: "salesdoc", docvendas: "salesdoc", ordemdevenda: "salesdoc",
+  ordemdevendas: "salesdoc", vbeln: "salesdoc",
+  itm: "item", posnr: "item", itemsd: "item", itemdaordem: "item",
+  criadoem: "createdon", datadecriacao: "createdon", erdat: "createdon",
+  origem: "arquivoorigem", arquivo: "arquivoorigem", arquivodeorigem: "arquivoorigem",
+  salesorg: "sorg", salesorganization: "sorg", orgvendas: "sorg", vkorg: "sorg",
+  quantidade: "orderquantity", qtd: "orderquantity", qtde: "orderquantity", kwmeng: "orderquantity",
+  matnr: "material"
+};
+
+// Forma em que dois nomes de coluna são comparados: "Sales Doc.", "SALES_DOC" e "Sales Document" são a mesma coluna.
+function canon(name) {
+  const s = String(name ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  return ALIASES[s] || s;
+}
+
 function defaultSettings() {
   return { sheet: "Data", decimal: ",", columns: DEFAULT_COLUMNS.slice(), extras: false, repeated: "first" };
 }
@@ -314,7 +332,7 @@ function sampleBytes(XLSX, aoa) {
 }
 
 const api = {
-  DEFAULT_COLUMNS, BASE_COLS, NUM_COLS, SAMPLE_FILES, defaultSettings,
+  DEFAULT_COLUMNS, BASE_COLS, NUM_COLS, SAMPLE_FILES, defaultSettings, canon,
   fmtNum, parseNum, toSerial, serialToText, readWorkbook, readError, processSheet, combine,
   cellValue, displayValue, buildXlsx, delimited, sampleBytes
 };

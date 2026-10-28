@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // On other systems the program serves the same screen for development and tests:
@@ -38,7 +39,14 @@ func (d devDesktop) pickFolder(start string) (string, error) {
 	return d.folder, nil
 }
 
+// saveFile saves in -out. When choosing the spreadsheet, a path written to <out>/.planilha is used once
+// instead, so a test can pick a workbook it made.
 func (d devDesktop) saveFile(title, name, dir, kind string, overwrite bool) (string, error) {
+	next := filepath.Join(d.out, ".planilha")
+	if p, err := os.ReadFile(next); err == nil && strings.HasPrefix(title, "Escolha a planilha") {
+		os.Remove(next)
+		return strings.TrimSpace(string(p)), nil
+	}
 	return filepath.Join(d.out, name), nil
 }
 

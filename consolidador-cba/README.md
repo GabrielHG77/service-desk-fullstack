@@ -69,6 +69,27 @@ Mesma lógica do `ConsolidadoPath.xlsx` do Fator de Importação:
 - Com a planilha aberta no Excel, o Windows não deixa gravar: o app avisa para fechar.
 - A planilha e a cópia `.bak` são ignoradas se estiverem dentro da pasta DadosCBA.
 
+### Uma planilha que já existe (feita à mão ou pela consulta antiga)
+
+- O app procura os dados em qualquer aba (a `Consolidado` primeiro) e nas primeiras 20 linhas: a linha com
+  Sales Doc. e Item é o cabeçalho. O card da planilha diz quantos itens já estão nela e em que aba, e o card
+  **Novos para gravar** diz quantos dos arquivos marcados já estão gravados.
+- Os nomes das colunas são comparados sem diferenciar maiúsculas, espaços e pontuação (`Sales Doc` =
+  `Sales Doc.` = `SALES_DOC`), e alguns nomes alternativos valem para as colunas de base (`Sales Document`,
+  `Documento de vendas`, `Criado em`, `Arquivo`…). O pedido `0005940235` é o mesmo que `5940235`.
+- Se a planilha estiver organizada diferente do app, o card mostra **Organizada diferente do app** e
+  **Ver diferenças e organizar…** lista o que muda: cabeçalho na linha 1 (as linhas de título acima saem), as
+  colunas do app com os nomes do app e na ordem do app, as que faltam entram vazias, e as que o app não conhece
+  (como uma coluna Obs) ficam depois das do app, com os dados. Pedido, item e quantidade viram números, e
+  Created On vira data. Uma Tabela do Excel na aba é refeita com o mesmo nome. Antes, a cópia `.bak.xlsx`.
+- Uma Tabela do Excel que começa no cabeçalho cresce junto quando o app grava linhas novas.
+
+### Escolher quais arquivos entram
+
+Na barra lateral, a caixinha de cada arquivo (ou Ctrl+clique, ou Shift+clique para um intervalo) marca mais de
+um; clicar no nome marca só ele; **Todos os arquivos** marca todos. A tabela, os cards, os avisos, o
+**Gravar N novos** e o **Regravar** valem para os arquivos marcados.
+
 ## Se der problema
 
 Se o app fechar sozinho, o motivo fica em `%LOCALAPPDATA%\ConsolidadorCBA\erro.log`. Se a janela de escolher

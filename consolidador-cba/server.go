@@ -68,7 +68,7 @@ type desktop interface {
 
 var errCancelled = errors.New("cancelled")
 
-const version = "1.2.0"
+const version = "1.3.0"
 
 // command is what the arguments ask for instead of opening the window: "instalar", "desinstalar" or "".
 func command(args []string) string {
@@ -441,6 +441,27 @@ func (a *app) handler() http.Handler {
 		}
 		a.writing.Lock()
 		res, err := writePlanilha(p, req)
+		a.writing.Unlock()
+		if err != nil {
+			writeError(w, http.StatusConflict, planilhaFailure(err))
+			return
+		}
+		a.allow(p)
+		writeJSON(w, http.StatusOK, res)
+	})
+	mux.HandleFunc("POST /api/planilha/organizar", func(w http.ResponseWriter, r *http.Request) {
+		p := a.config().Planilha
+		if p == "" {
+			writeError(w, http.StatusBadRequest, "Escolha a planilha primeiro.")
+			return
+		}
+		var req organizarReq
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Pedido inválido.")
+			return
+		}
+		a.writing.Lock()
+		res, err := organizePlanilha(p, req)
 		a.writing.Unlock()
 		if err != nil {
 			writeError(w, http.StatusConflict, planilhaFailure(err))

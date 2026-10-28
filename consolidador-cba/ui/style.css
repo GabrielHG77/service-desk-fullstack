@@ -262,10 +262,24 @@ h1 { margin: 0; font: 700 24px/1.15 var(--font-display); letter-spacing: -.02em;
 .path-row input:focus { box-shadow: 0 0 0 3px var(--focus); }
 .path-row input::placeholder { color: var(--label-3); }
 
+.h3-count { font-weight: 400; color: var(--label-3); margin-left: 4px; }
+.pick {
+  appearance: none; flex: none; width: 15px; height: 15px; margin: 0 -2px 0 0; border-radius: 4px; cursor: default;
+  border: 1.5px solid var(--fill-strong); background: var(--card); display: grid; place-content: center;
+}
+.pick:checked { background: var(--accent); border-color: var(--accent); }
+.pick:checked::after { content: ""; width: 7px; height: 4px; margin-top: -2px; border: solid #fff; border-width: 0 0 2px 2px; transform: rotate(-45deg); }
+.source-list li[aria-selected="true"] .pick { border-color: rgba(255, 255, 255, .7); }
+.source-list li[aria-selected="true"] .pick:checked { background: #fff; border-color: #fff; }
+.source-list li[aria-selected="true"] .pick:checked::after { border-color: var(--accent); }
+.stat small { font-size: 12px; color: var(--label-2); }
 .new-badge { font-size: 11.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 9px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
 .source-list li[aria-selected="true"] .new-badge { color: var(--accent); background: #fff; }
 .folder-card .status { grid-column: 2; font-size: 12px; color: var(--label-2); }
 .folder-card .status.err { color: var(--red); }
+.folder-card .status.warn { color: var(--orange); display: flex; gap: 4px; align-items: center; font-weight: 500; }
+.folder-card .status.warn .sym { width: 13px; height: 13px; grid-row: auto; margin: 0; color: var(--orange); }
+#confirm-text { white-space: pre-line; }
 .folder-card .sym.sheet { color: var(--green); }
 .table-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; flex: none; }
 .grid tbody tr.new td:first-child { box-shadow: inset 3px 0 0 var(--accent); }

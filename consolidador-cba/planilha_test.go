@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/xuri/excelize/v2"
@@ -98,5 +99,122 @@ func TestScanIgnoraAPlanilha(t *testing.T) {
 	res, _, err := scanFolder(root, pl, backupPath(pl))
 	if err != nil || len(res.Files) != 1 || res.Files[0].Name != "BR10 jun.xlsx" {
 		t.Errorf("arquivos = %+v %v", res.Files, err)
+	}
+}
+
+// Uma planilha que o app não fez: título em cima, cabeçalho na linha 3 com outros nomes e outra ordem,
+// coluna escrita à mão, número de pedido como texto com zeros, data como texto, tabela do Excel e outra aba.
+func planilhaDeFora(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "Pedidos BR10.xlsx")
+	f := excelize.NewFile()
+	f.SetSheetName("Sheet1", "Resumo")
+	f.SetCellStr("Resumo", "A1", "gráficos e notas")
+	f.NewSheet("Pedidos")
+	f.SetCellStr("Pedidos", "A1", "Relatório de pedidos")
+	f.SetSheetRow("Pedidos", "A3", &[]any{"Obs", "Material", "Sales Doc", "Item", "Created On", "AT_MCP2_PIT_M", "Arquivo"})
+	f.SetSheetRow("Pedidos", "A4", &[]any{"conferido", "M1", "0005940235", "10", "29/06/2026", "120", "jun.xlsx"})
+	f.SetSheetRow("Pedidos", "A5", &[]any{nil, "M2", 5940235, 20, 46202, "35", "jun.xlsx"})
+	if err := f.AddTable("Pedidos", &excelize.Table{Range: "A3:G5", Name: "TabelaPedidos", StyleName: "TableStyleMedium2"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.SaveAs(path); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	return path
+}
+
+func TestPlanilhaDeForaEncontraOsDados(t *testing.T) {
+	path := planilhaDeFora(t)
+	info, err := readPlanilha(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Sheet != "Pedidos" || info.HeaderRow != 3 || info.Rows != 2 || info.Keys["5940235|10"] != "jun.xlsx" || len(info.Tables) != 1 {
+		t.Fatalf("info = %+v", info)
+	}
+
+	// gravar um item novo: vai para a aba Pedidos, nas colunas certas, e a tabela cresce até ele
+	cols := []string{"Sales Doc.", "Item", "Created On", "Arquivo Origem", "SOrg.", "Material", "AT_MCP2_PIT_M"}
+	res, err := writePlanilha(path, gravarReq{Columns: cols, Rows: [][]any{
+		{5940235.0, 10.0, 46202.0, "jul.xlsx", "BR10", "M1", "999"}, // já está (como texto com zeros)
+		{5975910.0, 470.0, 46223.0, "jul.xlsx", "BR10", "M9", "18"},
+	}})
+	if err != nil || res.Sheet != "Pedidos" || res.Added != 1 || res.Skipped != 1 {
+		t.Fatalf("gravar = %+v %v", res, err)
+	}
+	f, _ := excelize.OpenFile(path)
+	if v, _ := f.GetCellValue("Pedidos", "C6"); v != "5975910" {
+		t.Errorf("Sales Doc. do item novo em C6 = %q", v)
+	}
+	if v, _ := f.GetCellValue("Pedidos", "H3"); v != "SOrg." {
+		t.Errorf("coluna que faltava não entrou no fim do cabeçalho: H3 = %q", v)
+	}
+	if tb, _ := f.GetTables("Pedidos"); len(tb) != 1 || tb[0].Range != "A3:H6" {
+		t.Errorf("tabela = %+v", tb)
+	}
+	if dim, _ := f.GetSheetDimension("Pedidos"); dim != "A1:H6" {
+		t.Errorf("dimensão da aba = %q, quem lê a planilha não veria tudo", dim)
+	}
+	f.Close()
+}
+
+func TestOrganizarNoPadraoDoApp(t *testing.T) {
+	path := planilhaDeFora(t)
+	cols := []string{"Sales Doc.", "Item", "Created On", "Arquivo Origem", "SOrg.", "Material", "AT_MCP2_PIT_M"}
+	res, err := organizePlanilha(path, organizarReq{Columns: cols})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Sheet != "Pedidos" || res.Rows != 2 || res.TopRows != 2 || res.Renamed != 2 || len(res.Added) != 1 || res.Added[0] != "SOrg." || len(res.Kept) != 1 || res.Kept[0] != "Obs" {
+		t.Fatalf("resultado = %+v", res)
+	}
+	f, _ := excelize.OpenFile(path)
+	defer f.Close()
+	rows, _ := f.GetRows("Pedidos")
+	want := []string{"Sales Doc.", "Item", "Created On", "Arquivo Origem", "SOrg.", "Material", "AT_MCP2_PIT_M", "Obs"}
+	if strings.Join(rows[0], "|") != strings.Join(want, "|") {
+		t.Errorf("cabeçalho = %q", rows[0])
+	}
+	if strings.Join(rows[1], "|") != "5940235|10|29/06/2026|jun.xlsx||M1|120|conferido" {
+		t.Errorf("linha 2 = %q", rows[1])
+	}
+	if strings.Join(rows[2], "|") != "5940235|20|29/06/2026|jun.xlsx||M2|35" {
+		t.Errorf("linha 3 = %q", rows[2])
+	}
+	if len(rows) != 3 {
+		t.Errorf("sobrou conteúdo antigo: %d linhas: %q", len(rows), rows)
+	}
+	if typ, _ := f.GetCellType("Pedidos", "A2"); typ == excelize.CellTypeSharedString || typ == excelize.CellTypeInlineString {
+		t.Errorf("Sales Doc. continuou texto")
+	}
+	if tb, _ := f.GetTables("Pedidos"); len(tb) != 1 || tb[0].Name != "TabelaPedidos" || tb[0].Range != "A1:H3" {
+		t.Errorf("tabela = %+v", tb)
+	}
+	if dim, _ := f.GetSheetDimension("Pedidos"); dim != "A1:H3" {
+		t.Errorf("dimensão da aba = %q", dim)
+	}
+	if v, _ := f.GetCellValue("Resumo", "A1"); v != "gráficos e notas" {
+		t.Errorf("outra aba mudou: %q", v)
+	}
+	if _, err := os.Stat(res.Backup); err != nil {
+		t.Errorf("sem cópia .bak: %v", err)
+	}
+	info, _ := readPlanilha(path)
+	if info.HeaderRow != 1 || info.Rows != 2 {
+		t.Errorf("depois de organizar: %+v", info)
+	}
+}
+
+func TestCanon(t *testing.T) {
+	for a, b := range map[string]string{"Sales Doc.": "SALES_DOC", "Sales Document": "Sales Doc.", "Documento de vendas": "Sales Doc.",
+		"Item": " item ", "Criado em": "Created On", "Arquivo": "Arquivo Origem", "AT_MCP2_PIT_M": "at mcp2 pit m"} {
+		if canon(a) != canon(b) {
+			t.Errorf("canon(%q)=%q, canon(%q)=%q", a, canon(a), b, canon(b))
+		}
+	}
+	if canon("Item category") == canon("Item") {
+		t.Error("Item category virou Item")
 	}
 }

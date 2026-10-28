@@ -133,6 +133,7 @@ class NativeBridge {
   planilha() { return this.json("GET", "/api/planilha"); }
   async choosePlanilha() { const r = await this.json("POST", "/api/planilha/escolher"); return r.cancelled ? null : r; }
   gravar(body) { return this.json("POST", "/api/planilha/gravar", body); }
+  organizar(columns) { return this.json("POST", "/api/planilha/organizar", { columns }); }
 }
 
 // Duas fontes com o mesmo formato, como um repositório com uma implementação real e uma de exemplo (a "preview").
@@ -170,7 +171,8 @@ class AppModel {
     this.progress = "";
     this.result = null;
     this.updatedAt = null;
-    this.selection = "all";    // "all" ou o caminho relativo do arquivo (identificador estável entre leituras)
+    this.selection = null;     // null = todos os arquivos; senão, os caminhos relativos marcados (estáveis entre leituras)
+    this.anchor = null;        // último arquivo clicado, para o Shift+clique
     this.search = "";
     this.sort = null;          // { col, dir: "asc" | "desc" }
     this.settings = CBA.defaultSettings();
@@ -216,7 +218,7 @@ class AppModel {
     this.source = new FolderSource(this.native, path);
     this.mode = "folder";
     this.folder = path;
-    this.selection = "all";
+    this.selection = null;
     await this.refresh();
   }
 
@@ -224,7 +226,7 @@ class AppModel {
     this.source = new SampleSource();
     this.mode = "sample";
     this.folder = "";
-    this.selection = "all";
+    this.selection = null;
     await this.refresh();
   }
 
@@ -249,7 +251,10 @@ class AppModel {
     this.other = list.other;
     this.truncated = !!list.truncated;
     this.files = list.files.map((f) => ({ ...f, status: f.temp ? "temp" : "pending", note: "", rows: 0 }));
-    if (this.selection !== "all" && !this.files.some((f) => f.rel === this.selection)) this.selection = "all";
+    if (this.selection) {
+      const left = this.selection.filter((rel) => this.files.some((f) => f.rel === rel));
+      this.selection = left.length || !this.selection.length ? left : null;
+    }
     this.phase = "ready";
     await this.consolidate(run);
   }
@@ -354,7 +359,10 @@ class AppModel {
 
   setPlanilha(p) {
     this.planilha = p && p.path
-      ? { path: p.path, exists: !!p.exists, rows: p.rows || 0, keys: new Map(Object.entries(p.keys || {})), error: p.error || "" }
+      ? {
+          path: p.path, exists: !!p.exists, rows: p.rows || 0, keys: new Map(Object.entries(p.keys || {})), error: p.error || "",
+          sheet: p.sheet || "", headerRow: p.headerRow || 0, header: p.header || [], tables: p.tables || [], sheets: p.sheets || []
+        }
       : null;
     if (!this.planilha) this.show = "all";
   }
@@ -391,8 +399,6 @@ class AppModel {
 
   isSaved(r) { return !!(this.planilha && this.planilha.keys.has(rowKey(r))); }
 
-  savedInFile(rel) { return this.result ? this.result.rows.filter((r) => r.file === rel && this.isSaved(r)).length : 0; }
-
   canWrite() {
     const cols = this.result ? this.result.cols : [];
     if (!cols.includes("Sales Doc.") || !cols.includes("Item")) {
@@ -402,40 +408,154 @@ class AppModel {
     return this.mode === "folder" && !!this.planilha && !this.planilha.error && !this.busy;
   }
 
+  // O padrão do app: as colunas da lista (as que a planilha ou os arquivos têm), na ordem da lista.
+  standardColumns() {
+    const s = this.settings, res = this.result, pl = this.planilha;
+    const inFile = new Set((pl ? pl.header : []).map(CBA.canon));
+    const inData = new Set(res ? res.cols : []);
+    let cols = s.columns.filter((c) => inFile.has(CBA.canon(c)) || inData.has(c));
+    if (s.extras && res) cols = cols.concat(res.extras.filter((c) => !cols.includes(c)));
+    return cols;
+  }
+
+  // Em que a planilha escolhida difere do padrão do app: nomes na linha 1, as colunas do app com os nomes do app
+  // e na ordem do app, e as que o app não conhece depois delas.
+  layoutDiff() {
+    const pl = this.planilha;
+    if (!pl || pl.error || !pl.exists || !pl.sheet || !this.result) return null;
+    const std = this.standardColumns();
+    const stdC = std.map(CBA.canon);
+    const head = pl.header.map((h) => String(h).trim());
+    const list = (names) => names.slice(0, 3).join(", ") + (names.length > 3 ? "…" : ".");
+    const items = [];
+    if (pl.headerRow > 1) items.push(`Os nomes das colunas estão na linha ${pl.headerRow}, não na 1 (${plural(pl.headerRow - 1, "linha", "linhas")} acima ${pl.headerRow - 1 === 1 ? "sai" : "saem"}).`);
+    const found = [], renamed = [];
+    head.forEach((h, i) => {
+      const k = h ? stdC.indexOf(CBA.canon(h)) : -1;
+      if (k < 0) return;
+      found.push({ k, i });
+      if (std[k] !== h) renamed.push(`${h} → ${std[k]}`);
+    });
+    if (renamed.length) items.push(`${plural(renamed.length, "coluna tem", "colunas têm")} outro nome: ${list(renamed)}`);
+    const missing = std.filter((c, k) => !found.some((f) => f.k === k));
+    if (missing.length) items.push(`${plural(missing.length, "coluna do app falta", "colunas do app faltam")}: ${list(missing)}`);
+    if (!found.every((f, j) => j === 0 || f.k > found[j - 1].k)) items.push("As colunas do app estão em outra ordem.");
+    const unknown = head.map((h, i) => (h && stdC.indexOf(CBA.canon(h)) < 0 ? i : -1)).filter((i) => i >= 0);
+    const lastKnown = found.length ? found[found.length - 1].i : -1;
+    const middle = unknown.filter((i) => i < lastKnown).map((i) => head[i]);
+    if (middle.length) items.push(`${plural(middle.length, "coluna que o app não conhece está", "colunas que o app não conhece estão")} no meio das do app: ${list(middle)}`);
+    return { items, std, kept: unknown.map((i) => head[i]) };
+  }
+
+  askOrganizar() {
+    const d = this.layoutDiff();
+    if (!d || !d.items.length) return;
+    const pl = this.planilha;
+    const keep = d.kept.length ? `\n\nAs colunas que o app não conhece (${d.kept.slice(0, 4).join(", ")}${d.kept.length > 4 ? "…" : ""}) ficam, depois das do app.` : "";
+    const tables = pl.tables.length ? ` A tabela ${pl.tables.join(", ")} é refeita com o mesmo nome.` : "";
+    this.confirm = {
+      title: `Organizar a aba ${pl.sheet} no padrão do app?`,
+      text: d.items.map((i) => "• " + i).join("\n") + keep +
+        `\n\nOs dados não mudam, só de lugar.${tables} As outras abas não são tocadas, e a versão de agora fica numa cópia .bak.xlsx.`,
+      yes: "Organizar",
+      run: () => this.organizar()
+    };
+  }
+
+  async organizar() {
+    if (!this.canWrite()) return;
+    this.busy = true;
+    this.progress = "Organizando a planilha…";
+    try {
+      const out = await this.native.organizar(this.layoutDiff().std);
+      await this.loadPlanilha();
+      const bits = [plural(out.rows, "item", "itens")];
+      if (out.renamed) bits.push(plural(out.renamed, "coluna renomeada", "colunas renomeadas"));
+      if (out.added.length) bits.push(plural(out.added.length, "coluna nova", "colunas novas"));
+      if (out.kept.length) bits.push(`${out.kept.slice(0, 3).join(", ")}${out.kept.length > 3 ? "…" : ""} no fim`);
+      if (out.formulas) bits.push(plural(out.formulas, "fórmula virou valor", "fórmulas viraram valores"));
+      this.notify(`Aba ${out.sheet} organizada no padrão do app: ${bits.join(", ")}.`, "saved", out.path);
+    } catch (err) {
+      this.notify(err.message, "error");
+    } finally {
+      this.busy = false;
+      this.progress = "";
+    }
+  }
+
   async gravar() {
-    const rows = this.pending().rows;
+    const rows = this.pending().rows.filter((r) => this.picks(r.file));
     if (!rows.length || !this.canWrite()) return;
     const out = await this.write(rows, false);
     if (out) this.notify(`${plural(out.added, "item novo gravado", "itens novos gravados")} em ${baseName(out.path)}.${out.backup ? ` A versão anterior ficou em ${baseName(out.backup)}.` : ""}`, "saved", out.path);
   }
 
   askRegravar() {
-    const rel = this.selection;
-    if (rel === "all" || !this.planilha) return;
-    const saved = this.savedInFile(rel);
-    const fresh = this.pending().byFile.get(rel) || 0;
+    const rels = this.selection;
+    if (!rels || !rels.length || !this.planilha) return;
+    const saved = this.savedIn(rels);
+    const fresh = this.pendingIn(rels);
+    const what = rels.length === 1 ? this.fileName(rels[0]) : plural(rels.length, "arquivo marcado", "arquivos marcados");
     this.confirm = {
-      title: `Regravar ${this.fileName(rel)}?`,
-      text: `${plural(saved, "item deste arquivo que já está na planilha recebe", "itens deste arquivo que já estão na planilha recebem")} os valores de agora` +
+      title: `Regravar ${what}?`,
+      text: `${plural(saved, "item que já está na planilha recebe", "itens que já estão na planilha recebem")} os valores de agora` +
         (fresh ? ` e ${plural(fresh, "item novo entra", "itens novos entram")} no fim` : "") +
         `. As outras abas e as colunas escritas à mão não mudam, e a versão anterior fica numa cópia .bak.xlsx.`,
       yes: "Regravar",
-      run: () => this.regravar(rel)
+      run: () => this.regravar(rels)
     };
   }
 
-  async regravar(rel) {
+  async regravar(rels) {
     if (!this.canWrite()) return;
     const seen = new Set();
     const rows = this.result.rows.filter((r) => {
       const k = rowKey(r);
-      if (r.file !== rel || !k || seen.has(k)) return false;
+      if (!rels.includes(r.file) || !k || seen.has(k)) return false;
       seen.add(k);
       return true;
     });
     const out = await this.write(rows, true);
-    if (out) this.notify(`${this.fileName(rel)} regravado: ${plural(out.updated, "item atualizado", "itens atualizados")}, ${plural(out.added, "novo", "novos")}.`, "saved", out.path);
+    const what = rels.length === 1 ? this.fileName(rels[0]) + " regravado" : plural(rels.length, "arquivo regravado", "arquivos regravados");
+    if (out) this.notify(`${what}: ${plural(out.updated, "item atualizado", "itens atualizados")}, ${plural(out.added, "novo", "novos")}.`, "saved", out.path);
   }
+
+  // ---------- seleção de arquivos (como a seleção múltipla de uma List) ----------
+
+  selectable() { return this.files.filter((f) => !f.temp).map((f) => f.rel); }
+  isAll() { return this.selection === null; }
+  picks(rel) { return this.selection === null || this.selection.includes(rel); }
+  setSelection(set) {
+    const all = this.selectable();
+    const list = all.filter((rel) => set.has(rel));
+    this.selection = list.length === all.length && list.length > 0 ? null : list;
+  }
+  selectOnly(rel) {
+    this.anchor = rel === "all" ? null : rel;
+    this.selection = rel === "all" ? null : [rel];
+  }
+  toggle(rel) {
+    const set = new Set(this.selection === null ? this.selectable() : this.selection);
+    if (set.has(rel)) set.delete(rel); else set.add(rel);
+    this.anchor = rel;
+    this.setSelection(set);
+  }
+  selectRange(rel) {
+    const all = this.selectable();
+    const a = all.indexOf(this.anchor), b = all.indexOf(rel);
+    if (a < 0 || b < 0) return this.toggle(rel);
+    const set = new Set(this.selection === null ? [] : this.selection);
+    for (let i = Math.min(a, b); i <= Math.max(a, b); i++) set.add(all[i]);
+    this.setSelection(set);
+  }
+  selectionLabel() {
+    if (this.selection === null) return "Todos os arquivos";
+    if (this.selection.length === 1) return this.fileName(this.selection[0]);
+    if (!this.selection.length) return "Nenhum arquivo marcado";
+    return plural(this.selection.length, "arquivo marcado", "arquivos marcados");
+  }
+  pendingIn(rels) { const b = this.pending().byFile; return (rels || this.selectable()).reduce((n, rel) => n + (b.get(rel) || 0), 0); }
+  savedIn(rels) { return this.result ? this.result.rows.filter((r) => (rels ? rels.includes(r.file) : true) && this.isSaved(r)).length : 0; }
 
   async write(rows, replace) {
     const res = this.result;
@@ -461,7 +581,7 @@ class AppModel {
     const key = [res, this.selection, this.search, this.sort, this.show, this.planilha];
     if (this.visKey && key.every((v, i) => v === this.visKey[i])) return this.vis;
     let rows = res.rows;
-    if (this.selection !== "all") rows = rows.filter((r) => r.file === this.selection);
+    if (this.selection !== null) { const set = new Set(this.selection); rows = rows.filter((r) => set.has(r.file)); }
     if (this.show === "new") { const set = this.pending().set; rows = rows.filter((r) => set.has(r)); }
     if (this.show === "saved") rows = rows.filter((r) => this.isSaved(r));
     const q = fold(this.search.trim());
@@ -556,7 +676,7 @@ function FolderCard(model) {
 function PlanilhaCard(model) {
   const el = $("planilha-card");
   const sheetIcon = () => icon("table", "sheet");
-  model.observe(["planilha"], () => {
+  model.observe(["planilha", "result", "settings"], () => {
     const pl = model.planilha;
     if (!pl) {
       el.innerHTML = `${icon("table", "tint-gray")}<strong>Nenhuma planilha</strong><span class="path">Escolha onde gravar o consolidado. Cada atualização acrescenta só os itens novos.</span>
@@ -565,12 +685,20 @@ function PlanilhaCard(model) {
     }
     const name = baseName(pl.path);
     const parent = pl.path.slice(0, pl.path.length - name.length).replace(/[\\/]+$/, "");
+    const where = pl.sheet && pl.sheet.toLowerCase() !== "consolidado" ? ` · aba ${esc(pl.sheet)}` : "";
     const status = pl.error
       ? `<span class="status err">${esc(pl.error)}</span>`
       : !pl.exists
         ? `<span class="status">Ainda não existe: é criada na primeira gravação.</span>`
-        : `<span class="status">${plural(pl.rows, "item gravado", "itens gravados")}</span>`;
-    el.innerHTML = `${sheetIcon()}<strong title="${esc(pl.path)}">${esc(name)}</strong><span class="path" title="${esc(pl.path)}">${esc(parent)}</span>${status}
+        : !pl.sheet
+          ? `<span class="status">Nenhuma aba tem Sales Doc. e Item: os dados vão para uma aba Consolidado nova.</span>`
+          : `<span class="status">${plural(pl.rows, "item gravado", "itens gravados")}${where}</span>`;
+    const diff = model.layoutDiff();
+    const organize = diff && diff.items.length
+      ? `<span class="status warn">${icon("warn", "tint-orange")}Organizada diferente do app</span>
+         <button class="link" type="button" data-action="ask-organizar">Ver diferenças e organizar…</button>`
+      : "";
+    el.innerHTML = `${sheetIcon()}<strong title="${esc(pl.path)}">${esc(name)}</strong><span class="path" title="${esc(pl.path)}">${esc(parent)}</span>${status}${organize}
       <button class="link" type="button" data-action="choose-planilha">Trocar planilha…</button>`;
   });
 }
@@ -582,39 +710,53 @@ function FileList(model) {
     const pend = model.pending();
     const badge = (n) => (n ? `<span class="new-badge" title="${plural(n, "item novo", "itens novos")} para gravar">+${fmtInt(n)}</span>` : "");
     const total = model.result ? model.result.rows.length : 0;
-    let h = row("all", icon("table", "tint-blue"), "Todos os arquivos", "", total ? fmtInt(total) : "", "Todos os arquivos", badge(pend.rows.length));
+    const all = model.isAll();
+    let h = row("all", icon("table", "tint-blue"), "Todos os arquivos", "", total ? fmtInt(total) : "", "Todos os arquivos (marca todos)", badge(pend.rows.length), all, null);
     h += '<li class="divider" role="separator"></li>';
     for (const f of model.files) {
       const dir = f.rel.includes("/") ? f.rel.slice(0, f.rel.lastIndexOf("/") + 1) : "";
       const count = f.status === "ok" || f.status === "warn" ? fmtInt(f.rows) : "";
-      const tip = f.rel + (f.note ? " — " + f.note : f.status === "temp" ? " — arquivo temporário, ignorado" : "");
-      h += row(f.rel, STATUS_ICON[f.status](), f.name, dir, count, tip, badge(pend.byFile.get(f.rel) || 0));
+      const tip = f.rel + (f.note ? " — " + f.note : f.status === "temp" ? " — arquivo temporário, ignorado" : "") + "\nCtrl+clique ou a caixinha marca mais de um.";
+      const check = f.temp ? "" : `<input class="pick" type="checkbox" tabindex="-1" data-pick="${esc(f.rel)}" aria-label="Marcar ${esc(f.name)}"${model.picks(f.rel) ? " checked" : ""}>`;
+      h += row(f.rel, STATUS_ICON[f.status](), f.name, dir, count, tip, badge(pend.byFile.get(f.rel) || 0), !all && model.picks(f.rel), check);
     }
     el.innerHTML = h;
-    function row(key, sym, name, dir, count, tip, extra) {
-      const sel = model.selection === key;
-      return `<li role="option" aria-selected="${sel}" data-select="${esc(key)}" title="${esc(tip)}">${sym}` +
+    $("files-count").textContent = all || !model.selection ? "" : `${fmtInt(model.selection.length)} de ${fmtInt(model.selectable().length)}`;
+    function row(key, sym, name, dir, count, tip, extra, sel, check) {
+      return `<li role="option" aria-selected="${sel}" data-select="${esc(key)}" title="${esc(tip)}">${check || ""}${sym}` +
         `<span class="name">${dir ? `<span class="dim">${esc(dir)}</span>` : ""}${esc(name)}</span>${extra || `<span class="count">${count}</span>`}</li>`;
     }
   });
+  el.setAttribute("aria-multiselectable", "true");
   el.addEventListener("click", (ev) => {
+    const box = ev.target.closest("[data-pick]");
+    if (box) { model.toggle(box.dataset.pick); return; }
     const li = ev.target.closest("[data-select]");
-    if (li) model.selection = li.dataset.select;
+    if (!li) return;
+    const rel = li.dataset.select;
+    if (rel !== "all" && (ev.ctrlKey || ev.metaKey)) model.toggle(rel);
+    else if (rel !== "all" && ev.shiftKey) model.selectRange(rel);
+    else model.selectOnly(rel);
   });
+  el.addEventListener("mousedown", (ev) => { if (ev.shiftKey) ev.preventDefault(); }); // sem selecionar texto no Shift+clique
   el.addEventListener("keydown", (ev) => {
     if (ev.key !== "ArrowDown" && ev.key !== "ArrowUp") return;
     ev.preventDefault();
-    const keys = ["all", ...model.files.map((f) => f.rel)];
-    const i = keys.indexOf(model.selection) + (ev.key === "ArrowDown" ? 1 : -1);
-    if (i >= 0 && i < keys.length) model.selection = keys[i];
-    queueMicrotask(() => { const cur = el.querySelector('[aria-selected="true"]'); if (cur) cur.scrollIntoView({ block: "nearest" }); });
+    const keys = ["all", ...model.selectable()];
+    const cur = model.isAll() ? "all" : model.anchor || (model.selection[0] ?? "all");
+    const i = keys.indexOf(cur) + (ev.key === "ArrowDown" ? 1 : -1);
+    if (i >= 0 && i < keys.length) {
+      if (ev.shiftKey && keys[i] !== "all") { model.toggle(keys[i]); }
+      else model.selectOnly(keys[i]);
+    }
+    queueMicrotask(() => { const c = el.querySelector(`[data-select="${CSS.escape(model.anchor || "all")}"]`); if (c) c.scrollIntoView({ block: "nearest" }); });
   });
 }
 
 function Toolbar(model) {
   model.observe(["selection", "files", "result", "busy", "progress", "updatedAt", "phase", "mode", "planilha"], () => {
     const ready = model.phase === "ready";
-    $("title").textContent = !ready ? "Consolidador CBA" : model.selection === "all" ? "Todos os arquivos" : model.fileName(model.selection);
+    $("title").textContent = !ready ? "Consolidador CBA" : model.selectionLabel();
     const sub = $("subtitle");
     if (model.busy) {
       sub.innerHTML = `<span class="spinner"></span><span>${esc(model.progress)}</span>`;
@@ -629,14 +771,14 @@ function Toolbar(model) {
     const hasRows = !!(ready && model.result && model.result.rows.length);
     // Botão principal: escolher a planilha, gravar os novos, ou nada a fazer.
     const primary = $("primary");
-    const n = model.pending().rows.length;
+    const n = model.pendingIn(model.isAll() ? null : model.selection);
     const pl = model.planilha;
     let label = "Gravar na planilha", action = "gravar", enabled = false, tip = "";
     if (model.mode === "sample") tip = "Os dados de exemplo não são gravados.";
     else if (!pl) { label = "Escolher planilha…"; action = "choose-planilha"; enabled = ready; }
     else if (pl.error) tip = pl.error;
-    else if (n) { label = `Gravar ${plural(n, "novo", "novos")}`; enabled = hasRows; tip = "Acrescenta na planilha só os itens que ainda não estão nela (Ctrl+S)."; }
-    else if (hasRows) { label = "Planilha em dia"; tip = "Todos os itens da pasta já estão na planilha."; }
+    else if (n) { label = `Gravar ${plural(n, "novo", "novos")}`; enabled = hasRows; tip = `Acrescenta na planilha só os itens ${model.isAll() ? "" : "dos arquivos marcados "}que ainda não estão nela (Ctrl+S).`; }
+    else if (hasRows) { label = "Planilha em dia"; tip = model.isAll() ? "Todos os itens da pasta já estão na planilha." : "Os itens dos arquivos marcados já estão na planilha."; }
     primary.dataset.action = action;
     primary.innerHTML = (label === "Planilha em dia" ? icon("ok") : "") + `<span>${esc(label)}</span>`;
     primary.disabled = !enabled || model.busy;
@@ -676,26 +818,27 @@ function Stats(model) {
   model.observe(["result", "selection", "planilha"], () => {
     const r = model.result;
     if (!r) { $("stats").innerHTML = ""; return; }
-    const all = model.selection === "all";
-    const rows = all ? r.rows.length : r.rows.filter((x) => x.file === model.selection).length;
-    const msgs = all ? r.msgs : r.msgs.filter((m) => m.file === model.selection);
+    const all = model.isAll();
+    const rows = all ? r.rows.length : r.rows.filter((x) => model.picks(x.file)).length;
+    const msgs = all ? r.msgs : r.msgs.filter((m) => m.file && model.picks(m.file));
     const errors = msgs.filter((m) => m.level === "error").length;
     const warns = msgs.filter((m) => m.level === "warn").length;
     const attention = errors + warns;
     const tint = errors ? "tint-red" : warns ? "tint-orange" : "";
-    const stat = (label, value, cls = "") => `<div class="card stat"><span>${label}</span><strong class="${cls}">${value}</strong></div>`;
-    const file = all ? null : model.files.find((f) => f.rel === model.selection);
+    const stat = (label, value, cls = "", note = "") => `<div class="card stat"><span>${label}</span><strong class="${cls}">${value}</strong>${note ? `<small>${note}</small>` : ""}</div>`;
+    const one = !all && model.selection.length === 1 ? model.selection[0] : null;
+    const file = one ? model.files.find((f) => f.rel === one) : null;
     const SITUATION = { ok: ["Lido", "tint-green"], warn: ["Lido com aviso", "tint-orange"], error: ["Não lido", "tint-red"], temp: ["Ignorado", ""] };
     const [situation, sitTint] = file ? SITUATION[file.status] || ["—", ""] : ["", ""];
     $("stats").innerHTML =
       stat("Linhas", fmtInt(rows)) +
       (() => {
         if (!model.planilha || model.planilha.error) return stat("Novos", "—");
-        const pend = model.pending();
-        const n = all ? pend.rows.length : pend.byFile.get(model.selection) || 0;
-        return stat("Novos para gravar", n ? fmtInt(n) : "Nenhum", n ? "tint-blue" : "");
+        const n = model.pendingIn(all ? null : model.selection);
+        const saved = model.savedIn(all ? null : model.selection);
+        return stat("Novos para gravar", n ? fmtInt(n) : "Nenhum", n ? "tint-blue" : "", saved ? `${fmtInt(saved)} já na planilha` : "");
       })() +
-      (all ? stat("Arquivos lidos", fmtInt(r.fileCount)) : stat("Situação", situation, sitTint)) +
+      (all ? stat("Arquivos lidos", fmtInt(r.fileCount)) : one ? stat("Situação", situation, sitTint) : stat("Arquivos marcados", `${fmtInt(model.selection.length)} de ${fmtInt(model.selectable().length)}`)) +
       stat(errors ? "Erros e avisos" : "Avisos", attention ? fmtInt(attention) : "Nenhum", tint);
   });
 }
@@ -705,7 +848,7 @@ function Issues(model) {
   let lastResult = null;
   model.observe(["result", "selection"], () => {
     const r = model.result;
-    const msgs = !r ? [] : model.selection === "all" ? r.msgs : r.msgs.filter((m) => m.file === model.selection);
+    const msgs = !r ? [] : model.isAll() ? r.msgs : r.msgs.filter((m) => m.file && model.picks(m.file));
     box.hidden = !msgs.length;
     if (!msgs.length) return;
     const order = { error: 0, warn: 1, info: 2 };
@@ -757,8 +900,12 @@ class LazyTable {
       const q = m.search.trim();
       empty.innerHTML = q
         ? `<strong>Nenhum resultado para “${esc(q)}”</strong><span>Confira a grafia ou busque outro termo.</span>`
-        : m.selection !== "all"
-          ? `<strong>Este arquivo não entrou na tabela</strong><span>O motivo está em Erros e avisos, acima.</span>`
+        : m.selection && !m.selection.length
+          ? `<strong>Nenhum arquivo marcado</strong><span>Marque os arquivos na barra lateral, ou clique em Todos os arquivos.</span>`
+          : m.show !== "all"
+            ? `<strong>Nenhuma linha ${m.show === "new" ? "nova" : "já gravada"}</strong><span>${m.show === "new" ? "Tudo o que está marcado já está na planilha." : "Nada do que está marcado está na planilha ainda."}</span>`
+            : !m.isAll()
+              ? `<strong>${m.selection.length === 1 ? "Este arquivo não entrou" : "Estes arquivos não entraram"} na tabela</strong><span>O motivo está em Erros e avisos, acima.</span>`
           : `<strong>Nenhuma linha</strong><span>Nenhum arquivo trouxe linhas com "Internal char no." preenchido. Veja os erros e avisos acima.</span>`;
     }
     this.range = [-1, -1];
@@ -867,7 +1014,9 @@ function TableBar(model) {
     const pl = model.planilha;
     $("table-bar").hidden = !pl || !!pl.error || model.mode !== "folder";
     for (const b of document.querySelectorAll("#show-filter [data-show]")) b.setAttribute("aria-checked", String(b.dataset.show === model.show));
-    $("regravar").hidden = model.selection === "all" || !pl || model.savedInFile(model.selection) === 0;
+    const rels = model.selection;
+    $("regravar").hidden = !rels || !rels.length || !pl || model.savedIn(rels) === 0;
+    $("regravar").textContent = rels && rels.length > 1 ? `Regravar os ${fmtInt(rels.length)} arquivos marcados na planilha…` : "Regravar este arquivo na planilha…";
   });
   $("show-filter").addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-show]");
@@ -932,6 +1081,7 @@ function mount(model) {
     gravar: () => model.gravar(),
     "choose-planilha": () => model.choosePlanilha(),
     "ask-regravar": () => model.askRegravar(),
+    "ask-organizar": () => model.askOrganizar(),
     "confirm-yes": () => { const c = model.confirm; model.confirm = null; if (c) c.run(); },
     "confirm-no": () => { model.confirm = null; },
     csv: () => model.exportFile("csv"),

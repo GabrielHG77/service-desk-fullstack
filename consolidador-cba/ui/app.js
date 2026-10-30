@@ -19,6 +19,20 @@ const collator = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base"
 const baseName = (p) => p.split(/[\\/]/).filter(Boolean).pop() || p;
 const themeOf = (t) => (t === "light" || t === "dark" ? t : "auto");
 const hasValue = (v) => v != null && String(v).trim() !== "";
+// As linhas da tabela prontas para a planilha, uma por item (Sales Doc. + Item): se um item veio em mais de uma
+// linha, cada coluna fica com o primeiro valor que alguma delas tem. Nenhum valor dos arquivos fica de fora.
+function itemValues(res, rows) {
+  const byKey = new Map();
+  for (const r of rows) {
+    const k = rowKey(r);
+    if (!k) continue;
+    const v = res.cols.map((c) => CBA.cellValue(r, c));
+    const prev = byKey.get(k);
+    if (!prev) byKey.set(k, v);
+    else v.forEach((x, i) => { if (!hasValue(prev[i]) && hasValue(x)) prev[i] = x; });
+  }
+  return [...byKey.values()];
+}
 // A coluna i da linha tem algo na planilha? mask vem de readPlanilha: dígitos hexadecimais, 4 colunas cada.
 const filledAt = (mask, i) => i >= 0 && (i >> 2) < mask.length && ((parseInt(mask[i >> 2], 16) >> (i & 3)) & 1) === 1;
 function today() {
@@ -439,15 +453,19 @@ class AppModel {
       const inSheet = new Map();
       pl.header.forEach((h, i) => { const k = CBA.canon(h); if (h && !inSheet.has(k)) inSheet.set(k, i); });
       const at = res.cols.map((c) => (inSheet.has(CBA.canon(c)) ? inSheet.get(CBA.canon(c)) : -1));
+      const incomplete = new Set();
       for (const r of res.rows) {
         const k = rowKey(r);
-        if (!k || seen.has(k)) continue;
-        seen.add(k);
+        if (!k) continue;
         if (pl.keys.has(k)) {
+          // Todas as linhas do item contam: qualquer valor que a planilha ainda não tem faz o item ser completado.
+          if (incomplete.has(k)) continue;
           const mask = pl.filled.get(k) || "";
-          if (res.cols.some((c, j) => hasValue(CBA.cellValue(r, c)) && !filledAt(mask, at[j]))) out.complete.push(r);
+          if (res.cols.some((c, j) => hasValue(CBA.cellValue(r, c)) && !filledAt(mask, at[j]))) { incomplete.add(k); out.complete.push(r); }
           continue;
         }
+        if (seen.has(k)) continue;
+        seen.add(k);
         out.rows.push(r);
         out.set.add(r);
         out.byFile.set(r.file, (out.byFile.get(r.file) || 0) + 1);
@@ -566,8 +584,8 @@ class AppModel {
 
   async gravar(confirmed = false) {
     const p = this.pending();
-    const rows = p.rows.concat(p.complete).filter((r) => this.picks(r.file));
-    if (!rows.length || !this.canWrite()) return;
+    const keys = new Set(p.rows.concat(p.complete).filter((r) => this.picks(r.file)).map(rowKey));
+    if (!keys.size || !this.canWrite()) return;
     const pl = this.planilha;
     if (pl.query && !confirmed) {
       this.confirm = {
@@ -578,7 +596,7 @@ class AppModel {
       };
       return;
     }
-    const out = await this.write(rows, false);
+    const out = await this.write(this.result.rows.filter((r) => keys.has(rowKey(r))), false);
     if (!out) return;
     const done = [];
     if (out.added) done.push(plural(out.added, "item novo gravado", "itens novos gravados"));
@@ -615,14 +633,8 @@ class AppModel {
 
   async regravar(rels) {
     if (!this.canWrite()) return;
-    const seen = new Set();
-    const rows = this.result.rows.filter((r) => {
-      const k = rowKey(r);
-      if (!rels.includes(r.file) || !k || seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-    const out = await this.write(rows, true);
+    const keys = new Set(this.result.rows.filter((r) => rels.includes(r.file)).map(rowKey).filter(Boolean));
+    const out = await this.write(this.result.rows.filter((r) => keys.has(rowKey(r))), true);
     const what = rels.length === 1 ? this.fileName(rels[0]) + " regravado" : plural(rels.length, "arquivo regravado", "arquivos regravados");
     if (out) this.notify(`${what}: ${plural(out.updated, "item atualizado", "itens atualizados")}, ${plural(out.added, "novo", "novos")}.${this.unlinkedNote(out)}`, "saved", out.path);
   }
@@ -670,7 +682,7 @@ class AppModel {
     this.busy = true;
     this.progress = "Gravando na planilha…";
     try {
-      const out = await this.native.gravar({ columns: res.cols, rows: rows.map((r) => res.cols.map((c) => CBA.cellValue(r, c))), replace, backup: this.settings.backup });
+      const out = await this.native.gravar({ columns: res.cols, rows: itemValues(res, rows), replace, backup: this.settings.backup });
       await this.loadPlanilha();
       return out;
     } catch (err) {

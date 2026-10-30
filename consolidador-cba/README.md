@@ -63,7 +63,9 @@ Mesma lógica do `ConsolidadoPath.xlsx` do Fator de Importação:
   já gravado não duplica, e o que já tem valor nele não muda; mas se ele tem em branco uma coluna da lista que os
   arquivos têm (por exemplo uma coluna que você acabou de pôr na lista, ou as que entraram ao organizar uma planilha
   que não era do app), Gravar preenche essas células. Então o botão diz **Completar N itens** (ou **Gravar N novos e
-  completar M**). Com tudo gravado, **Planilha em dia**.
+  completar M**). Com tudo gravado, **Planilha em dia**. Se o mesmo item está em mais de uma linha da planilha (as
+  consultas do Power Query às vezes fazem isso), todas as linhas dele recebem os valores; e se um item veio em mais
+  de uma linha dos arquivos, cada coluna fica com o valor que alguma delas tem.
 - Antes de gravar, para conferir: o filtro **Todas / Novas / Já gravadas** em cima da tabela, o card
   **Novos para gravar** e o **+N** ao lado de cada arquivo.
 - O app grava na própria planilha que você escolheu. Antes de cada gravação ela é copiada para `<nome>.bak.xlsx`,

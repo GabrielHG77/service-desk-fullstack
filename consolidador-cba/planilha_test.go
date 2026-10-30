@@ -424,3 +424,34 @@ func TestPlanilhaDeConsultaDoPowerQuery(t *testing.T) {
 		}
 	}
 }
+
+// Uma planilha feita por uma consulta do Power Query pode ter o mesmo item em duas linhas: as duas recebem os valores.
+func TestItemEmDuasLinhas(t *testing.T) {
+	path := dataBook(t, map[string][][]any{"SAP": {
+		{"Sales Doc.", "Item", "Material", "RD_TU_MAT"},
+		{100, 10, "M1"},
+		{100, 10, "M1", "AÇO"},
+		{200, 10, "M2", "PVC"},
+	}}, "SAP")
+	info, _ := readPlanilha(path)
+	if info.Filled["100|10"] != "7" { // RD_TU_MAT só está numa das duas linhas: conta como em branco
+		t.Fatalf("colunas preenchidas do item em duas linhas = %q", info.Filled["100|10"])
+	}
+	cols := []string{"Sales Doc.", "Item", "Material", "RD_TU_MAT", "Arquivo Origem"}
+	res, err := writePlanilha(path, gravarReq{Columns: cols, Rows: [][]any{{100.0, 10.0, "M1", "INOX", "jun.xlsx"}, {200.0, 10.0, "M2", "PVC", "jun.xlsx"}}}, false)
+	if err != nil || res.Completed != 2 || res.Added != 0 {
+		t.Fatalf("gravar = %+v %v", res, err)
+	}
+	f, _ := excelize.OpenFile(path)
+	defer f.Close()
+	rows, _ := f.GetRows("SAP")
+	want := []string{"100|10|M1|INOX|jun.xlsx", "100|10|M1|AÇO|jun.xlsx", "200|10|M2|PVC|jun.xlsx"}
+	for i, w := range want {
+		if got := strings.Join(rows[i+1], "|"); got != w {
+			t.Errorf("linha %d = %q, want %q", i+2, got, w)
+		}
+	}
+	if info, _ := readPlanilha(path); info.Filled["100|10"] != "f1" { // as 5 colunas
+		t.Errorf("depois de completar, o item ainda tem coluna em branco: %q", info.Filled["100|10"])
+	}
+}

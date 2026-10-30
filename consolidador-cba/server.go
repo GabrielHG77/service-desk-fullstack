@@ -86,7 +86,7 @@ type desktop interface {
 
 var errCancelled = errors.New("cancelled")
 
-const version = "1.4.3"
+const version = "1.4.4"
 
 // command is what the arguments ask for instead of opening the window: "instalar", "desinstalar" or "".
 func command(args []string) string {

@@ -307,7 +307,11 @@ func readPlanilha(path string) (planilhaInfo, error) {
 			r := rowTexts(row)
 			if k := itemKey(cell(r, iDoc), cell(r, iItem)); k != "" {
 				info.Keys[k] = strings.TrimSpace(cell(r, iFile))
-				info.Filled[k] = filledMask(r, len(info.Header))
+				mask := filledMask(r, len(info.Header))
+				if prev, ok := info.Filled[k]; ok {
+					mask = andMask(prev, mask) // the item is on more than one row: a column is filled only if it is on all
+				}
+				info.Filled[k] = mask
 				info.Rows++
 			}
 			return true
@@ -341,6 +345,16 @@ func filledMask(row []string, n int) string {
 		mask[i] = "0123456789abcdef"[m]
 	}
 	return string(mask)
+}
+
+func andMask(a, b string) string {
+	out := []byte(a)
+	for i := range out {
+		x, _ := strconv.ParseUint(a[i:i+1], 16, 8)
+		y, _ := strconv.ParseUint(b[i:i+1], 16, 8)
+		out[i] = "0123456789abcdef"[x&y]
+	}
+	return string(out)
 }
 
 // rowTexts lays a row out by column, as excelize's GetRows does: "" in the gaps, nothing after the last value.
@@ -600,11 +614,13 @@ func writePlanilha(path string, req gravarReq, backup bool) (gravarResult, error
 		target[j], isDate[j] = col[canon(c)], canon(c) == "createdon"
 	}
 
-	existing := map[string]int{}
+	// Every row of each item: a spreadsheet made by a Power Query query can have the same item on two rows, and
+	// both get the values.
+	existing := map[string][]int{}
 	iDoc, iItem := indexCanon(header, "Sales Doc."), indexCanon(header, "Item")
 	for i := lay.headerRow; i < len(lay.rows); i++ {
 		if k := itemKey(cell(lay.rows[i], iDoc), cell(lay.rows[i], iItem)); k != "" {
-			existing[k] = i + 1
+			existing[k] = append(existing[k], i+1)
 		}
 	}
 
@@ -613,6 +629,7 @@ func writePlanilha(path string, req gravarReq, backup bool) (gravarResult, error
 		return res, err
 	}
 	next := max(len(lay.rows), lay.headerRow) + 1
+	written := map[[2]int]bool{} // cells written now, which the rows read before writing do not show
 	for _, values := range req.Rows {
 		if len(values) != len(req.Columns) {
 			return res, errors.New("linha com número de colunas diferente do cabeçalho")
@@ -621,44 +638,47 @@ func writePlanilha(path string, req gravarReq, backup bool) (gravarResult, error
 		if key == "" {
 			continue
 		}
-		row, found := existing[key]
+		rows, found := existing[key]
 		complete := found && !req.Replace // an item already there: only its empty cells get a value
 		switch {
 		case complete:
 		case found:
 			res.Updated++
 		default:
-			row = next
+			rows = []int{next}
 			next++
-			existing[key] = row
+			existing[key] = rows
 			res.Added++
 		}
 		filled := false
-		for j := range req.Columns {
-			if complete {
-				if v, ok := values[j].(string); values[j] == nil || ok && strings.TrimSpace(v) == "" {
-					continue
+		for _, row := range rows {
+			for j := range req.Columns {
+				if complete {
+					if v, ok := values[j].(string); values[j] == nil || ok && strings.TrimSpace(v) == "" {
+						continue
+					}
+					if written[[2]int{row, target[j]}] || row-1 < len(lay.rows) && strings.TrimSpace(cell(lay.rows[row-1], target[j]-1)) != "" {
+						continue
+					}
+					filled = true
 				}
-				if row-1 < len(lay.rows) && strings.TrimSpace(cell(lay.rows[row-1], target[j]-1)) != "" {
-					continue
+				written[[2]int{row, target[j]}] = true
+				name := cellName(target[j], row)
+				switch v := values[j].(type) {
+				case nil:
+					if found {
+						f.SetCellValue(lay.sheet, name, nil)
+					}
+				case float64:
+					f.SetCellFloat(lay.sheet, name, v, -1, 64)
+					if isDate[j] {
+						f.SetCellStyle(lay.sheet, name, name, dateStyle)
+					}
+				case string:
+					f.SetCellStr(lay.sheet, name, v)
+				default:
+					f.SetCellValue(lay.sheet, name, fmt.Sprint(v))
 				}
-				filled = true
-			}
-			name := cellName(target[j], row)
-			switch v := values[j].(type) {
-			case nil:
-				if found {
-					f.SetCellValue(lay.sheet, name, nil)
-				}
-			case float64:
-				f.SetCellFloat(lay.sheet, name, v, -1, 64)
-				if isDate[j] {
-					f.SetCellStyle(lay.sheet, name, name, dateStyle)
-				}
-			case string:
-				f.SetCellStr(lay.sheet, name, v)
-			default:
-				f.SetCellValue(lay.sheet, name, fmt.Sprint(v))
 			}
 		}
 		if complete {

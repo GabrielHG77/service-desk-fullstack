@@ -904,6 +904,34 @@ func (pk *xlsxPackage) book() ([]sheetRef, bool, []string, error) {
 	return sheets, date1904, sst, nil
 }
 
+// queryTableOn returns the name of an Excel table on the sheet that a Power Query query fills, or "".
+func (pk *xlsxPackage) queryTableOn(sheetPart string) string {
+	rels, _ := pk.rels(sheetPart)
+	for _, r := range rels {
+		if !strings.HasSuffix(r.typ, "/table") {
+			continue
+		}
+		trels, _ := pk.rels(r.target)
+		for _, tr := range trels {
+			if !strings.HasSuffix(tr.typ, "/queryTable") {
+				continue
+			}
+			name := path.Base(r.target)
+			if f := pk.file(r.target); f != nil {
+				eachTag(f, func(x *xmlScanner, tag []byte) {
+					if string(tag) == "table" {
+						if v, ok := attr(x.tag, "name"); ok {
+							name = string(appendText(nil, v))
+						}
+					}
+				})
+			}
+			return name
+		}
+	}
+	return ""
+}
+
 // hasTables says whether the workbook has any Excel table (Inserir > Tabela) at all.
 func (pk *xlsxPackage) hasTables() bool {
 	for name := range pk.files {

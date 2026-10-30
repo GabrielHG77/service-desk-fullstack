@@ -59,8 +59,11 @@ Mesma lógica do `ConsolidadoPath.xlsx` do Fator de Importação:
 
 - **Escolher planilha…** (barra lateral ou botão azul) define onde o consolidado fica: uma planilha que já existe
   ou um nome novo. O app lembra.
-- O botão azul mostra **Gravar N novos**: só entram os itens (Sales Doc. + Item) que ainda não estão na
-  planilha. Item já gravado não duplica e não muda. Com tudo gravado, o botão diz **Planilha em dia**.
+- O botão azul mostra **Gravar N novos**: entram os itens (Sales Doc. + Item) que ainda não estão na planilha. Item
+  já gravado não duplica, e o que já tem valor nele não muda; mas se ele tem em branco uma coluna da lista que os
+  arquivos têm (por exemplo uma coluna que você acabou de pôr na lista, ou as que entraram ao organizar uma planilha
+  que não era do app), Gravar preenche essas células. Então o botão diz **Completar N itens** (ou **Gravar N novos e
+  completar M**). Com tudo gravado, **Planilha em dia**.
 - Antes de gravar, para conferir: o filtro **Todas / Novas / Já gravadas** em cima da tabela, o card
   **Novos para gravar** e o **+N** ao lado de cada arquivo.
 - O app grava na própria planilha que você escolheu. Antes de cada gravação ela é copiada para `<nome>.bak.xlsx`,
@@ -77,6 +80,10 @@ Mesma lógica do `ConsolidadoPath.xlsx` do Fator de Importação:
   tipo, ponha os códigos na lista (Ajustes > Colunas) e regrave.
 - Com a planilha aberta no Excel, o Windows não deixa gravar: o app avisa para fechar.
 - A planilha e a cópia `.bak` são ignoradas se estiverem dentro da pasta DadosCBA.
+- Se a aba é a saída de uma **consulta do Power Query** (Dados > Obter Dados, carregada numa tabela), o card avisa.
+  O app e a consulta escreveriam um por cima do outro, então, ao gravar ou organizar (depois de confirmar), o app
+  desliga a tabela da consulta: a tabela fica com o mesmo nome (o dashboard continua apontando para ela), a consulta
+  continua na pasta de trabalho como conexão, mas não escreve mais na aba.
 
 ### Uma planilha que já existe (feita à mão ou pela consulta antiga)
 

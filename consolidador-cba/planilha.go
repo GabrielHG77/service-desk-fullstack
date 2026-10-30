@@ -10,6 +10,7 @@ package main
 // the app's layout: names in row 1, the app's columns in the app's order, everything else after them.
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -38,7 +41,9 @@ type planilhaInfo struct {
 	Sheets    []string          `json:"sheets"`
 	Tables    []string          `json:"tables"` // Excel tables (Inserir > Tabela) on the data sheet
 	Rows      int               `json:"rows"`
-	Keys      map[string]string `json:"keys"` // "salesdoc|item" -> Arquivo Origem
+	Keys      map[string]string `json:"keys"`   // "salesdoc|item" -> Arquivo Origem
+	Filled    map[string]string `json:"filled"` // "salesdoc|item" -> the columns with something, in hex: bit i = Header[i]
+	Query     string            `json:"query"`  // the Excel table on the data sheet that a Power Query query fills, if any
 }
 
 type gravarReq struct {
@@ -55,6 +60,10 @@ type gravarResult struct {
 	Added   int    `json:"added"`
 	Updated int    `json:"updated"`
 	Skipped int    `json:"skipped"`
+	// Items already in the spreadsheet that had empty cells in the columns written, now filled (nothing filled is
+	// ever changed: that is Regravar).
+	Completed int    `json:"completed"`
+	Unlinked  string `json:"unlinked"` // the Excel table cut loose from its Power Query query, if any
 }
 
 type organizarReq struct {
@@ -74,6 +83,7 @@ type organizarResult struct {
 	Dropped  []string `json:"dropped"`  // the characteristics outside the list that were taken out, with their data
 	TopRows  int      `json:"topRows"`  // rows above the names that were removed
 	Formulas int      `json:"formulas"` // formulas turned into their values (their references would point elsewhere)
+	Unlinked string   `json:"unlinked"` // the Excel table cut loose from its Power Query query, if any
 }
 
 // ---------- names and keys ----------
@@ -239,7 +249,7 @@ func tablesOn(f *excelize.File, sheet string) []excelize.Table {
 // with the fast reader (sheet.go), the same way findData finds the data for writing; excelize, which loads the
 // whole sheet, is only used for the names of Excel tables, when the workbook has any.
 func readPlanilha(path string) (planilhaInfo, error) {
-	info := planilhaInfo{Path: path, Keys: map[string]string{}, Header: []string{}, Sheets: []string{}, Tables: []string{}}
+	info := planilhaInfo{Path: path, Keys: map[string]string{}, Filled: map[string]string{}, Header: []string{}, Sheets: []string{}, Tables: []string{}}
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return info, nil
 	}
@@ -288,6 +298,7 @@ func readPlanilha(path string) (planilhaInfo, error) {
 			continue
 		}
 		info.Sheet = s.name
+		info.Query = pk.queryTableOn(s.part)
 		iDoc, iItem, iFile := indexCanon(info.Header, "Sales Doc."), indexCanon(info.Header, "Item"), indexCanon(info.Header, "Arquivo Origem")
 		err = eachRow(part, sst, 0, func(n int, row []rowCell) bool {
 			if n <= info.HeaderRow {
@@ -296,6 +307,7 @@ func readPlanilha(path string) (planilhaInfo, error) {
 			r := rowTexts(row)
 			if k := itemKey(cell(r, iDoc), cell(r, iItem)); k != "" {
 				info.Keys[k] = strings.TrimSpace(cell(r, iFile))
+				info.Filled[k] = filledMask(r, len(info.Header))
 				info.Rows++
 			}
 			return true
@@ -314,6 +326,21 @@ func readPlanilha(path string) (planilhaInfo, error) {
 		return info, nil
 	}
 	return info, nil
+}
+
+// filledMask says which of the first n columns of a row have something, as hex digits of 4 columns each
+// (bit i of the number is column i): the window uses it to see which items have cells to complete.
+func filledMask(row []string, n int) string {
+	mask := make([]byte, (n+3)/4)
+	for j := 0; j < n; j++ {
+		if strings.TrimSpace(cell(row, j)) != "" {
+			mask[j/4] |= 1 << (j % 4)
+		}
+	}
+	for i, m := range mask {
+		mask[i] = "0123456789abcdef"[m]
+	}
+	return string(mask)
 }
 
 // rowTexts lays a row out by column, as excelize's GetRows does: "" in the gaps, nothing after the last value.
@@ -406,16 +433,21 @@ func dateStyleOf(f *excelize.File) (int, error) {
 
 // growTables makes the Excel tables that start at the header row reach the last row and column, so rows added
 // below them are inside the table (a pivot table or chart built on the table sees them).
-func growTables(f *excelize.File, sheet string, headerRow, lastCol, lastRow int) error {
+// growTables makes the Excel tables that start at the header reach the last row and column written. The ones a
+// query fills (links) are made again even when they already reach, to cut them loose from the query.
+func growTables(f *excelize.File, sheet string, headerRow, lastCol, lastRow int, links map[string]queryLink) error {
 	for _, t := range tablesOn(f, sheet) {
 		c1, r1, c2, r2, err := tableBounds(t.Range)
-		if err != nil || r1 != headerRow {
+		if err != nil {
 			continue
 		}
-		if c2 >= lastCol && r2 >= lastRow {
+		grow := r1 == headerRow && (c2 < lastCol || r2 < lastRow)
+		if _, linked := links[t.Name]; !grow && !linked {
 			continue
 		}
-		t.Range = cellName(c1, r1) + ":" + cellName(max(c2, lastCol), max(r2, lastRow))
+		if grow {
+			t.Range = cellName(c1, r1) + ":" + cellName(max(c2, lastCol), max(r2, lastRow))
+		}
 		if err := f.DeleteTable(t.Name); err != nil {
 			return err
 		}
@@ -424,6 +456,67 @@ func growTables(f *excelize.File, sheet string, headerRow, lastCol, lastRow int)
 		}
 	}
 	return nil
+}
+
+// queryLink is an Excel table that a Power Query query fills (Dados > Obter Dados, loaded to a table): the table
+// part has a relationship to a query table, which lists the query's columns, and a hidden name marks its range.
+type queryLink struct{ rels, name string }
+
+// queryLinks finds the tables on the sheet that a query fills, by table name. The app writing in such a table and
+// the query refreshing it would undo each other, and excelize's DeleteTable leaves the table's relationships
+// behind: a table made again with other columns would still point at the query's, which Excel cannot match.
+func queryLinks(f *excelize.File, sheet string) map[string]queryLink {
+	links := map[string]queryLink{}
+	for _, t := range tablesOn(f, sheet) {
+		f.Pkg.Range(func(k, v any) bool {
+			part, _ := k.(string)
+			data, _ := v.([]byte)
+			if !strings.HasPrefix(part, "xl/tables/table") || !strings.HasSuffix(part, ".xml") || !bytes.Contains(data, []byte(` name="`+t.Name+`"`)) {
+				return true
+			}
+			relsPart := "xl/tables/_rels/" + filepath.Base(part) + ".rels"
+			rels, _ := f.Pkg.Load(relsPart)
+			relsData, _ := rels.([]byte)
+			m := queryTableTarget.FindSubmatch(relsData)
+			if m == nil {
+				return false
+			}
+			link := queryLink{rels: relsPart}
+			target := string(m[1]) + string(m[2])
+			if qt, ok := f.Pkg.Load("xl/queryTables/" + filepath.Base(target)); ok {
+				qtData, _ := qt.([]byte)
+				if n := queryTableName.FindSubmatch(qtData); n != nil {
+					link.name = string(n[1])
+				}
+			}
+			links[t.Name] = link
+			return false
+		})
+	}
+	return links
+}
+
+var (
+	queryTableTarget = regexp.MustCompile(`Type="[^"]*/queryTable"[^>]*Target="([^"]+)"|Target="([^"]+)"[^>]*Type="[^"]*/queryTable"`)
+	queryTableName   = regexp.MustCompile(`<queryTable\b[^>]*\bname="([^"]+)"`)
+)
+
+// unlinkQueries cuts the rebuilt tables loose from their queries: their leftover relationships and the hidden names
+// of the query ranges go. The query stays in the workbook, as a connection that writes nowhere. It returns the
+// tables' names, for the window to say.
+func unlinkQueries(f *excelize.File, sheet string, links map[string]queryLink) string {
+	var names []string
+	for table, l := range links {
+		f.Pkg.Delete(l.rels)
+		f.Relationships.Delete(l.rels)
+		if l.name != "" {
+			f.DeleteDefinedName(&excelize.DefinedName{Name: l.name, Scope: sheet})
+			f.DeleteDefinedName(&excelize.DefinedName{Name: l.name})
+		}
+		names = append(names, table)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 // setUsedRange writes the sheet's dimension (A1 to the last cell): Power Query and other readers trust it to
@@ -483,10 +576,10 @@ func writePlanilha(path string, req gravarReq, backup bool) (gravarResult, error
 	res.Sheet = lay.sheet
 	header := lay.header
 	// The spreadsheet's own column order stays; columns it does not have yet go to the end.
-	col := map[string]int{}
+	col := map[string]int{} // canon name -> 1-based column; the first with the name, as indexCanon and the window see it
 	for i, h := range header {
-		if h != "" {
-			col[canon(h)] = i + 1
+		if k := canon(h); h != "" && col[k] == 0 {
+			col[k] = i + 1
 		}
 	}
 	for _, c := range req.Columns {
@@ -529,10 +622,9 @@ func writePlanilha(path string, req gravarReq, backup bool) (gravarResult, error
 			continue
 		}
 		row, found := existing[key]
+		complete := found && !req.Replace // an item already there: only its empty cells get a value
 		switch {
-		case found && !req.Replace:
-			res.Skipped++
-			continue
+		case complete:
 		case found:
 			res.Updated++
 		default:
@@ -541,7 +633,17 @@ func writePlanilha(path string, req gravarReq, backup bool) (gravarResult, error
 			existing[key] = row
 			res.Added++
 		}
+		filled := false
 		for j := range req.Columns {
+			if complete {
+				if v, ok := values[j].(string); values[j] == nil || ok && strings.TrimSpace(v) == "" {
+					continue
+				}
+				if row-1 < len(lay.rows) && strings.TrimSpace(cell(lay.rows[row-1], target[j]-1)) != "" {
+					continue
+				}
+				filled = true
+			}
 			name := cellName(target[j], row)
 			switch v := values[j].(type) {
 			case nil:
@@ -559,10 +661,19 @@ func writePlanilha(path string, req gravarReq, backup bool) (gravarResult, error
 				f.SetCellValue(lay.sheet, name, fmt.Sprint(v))
 			}
 		}
+		if complete {
+			if filled {
+				res.Completed++
+			} else {
+				res.Skipped++
+			}
+		}
 	}
-	if err := growTables(f, lay.sheet, lay.headerRow, len(header), next-1); err != nil {
+	links := queryLinks(f, lay.sheet)
+	if err := growTables(f, lay.sheet, lay.headerRow, len(header), next-1, links); err != nil {
 		return res, err
 	}
+	res.Unlinked = unlinkQueries(f, lay.sheet, links)
 	width := len(header)
 	for _, r := range lay.rows {
 		width = max(width, len(r))
@@ -699,6 +810,7 @@ func organizePlanilha(path string, req organizarReq, backup bool) (organizarResu
 	}
 	res.Rows = len(data)
 
+	links := queryLinks(f, lay.sheet)
 	tables := tablesOn(f, lay.sheet)
 	for _, t := range tables {
 		if err := f.DeleteTable(t.Name); err != nil {
@@ -762,5 +874,6 @@ func organizePlanilha(path string, req organizarReq, backup bool) (organizarResu
 			return res, fmt.Errorf("não foi possível refazer a tabela %s: %w", t.Name, err)
 		}
 	}
+	res.Unlinked = unlinkQueries(f, lay.sheet, links)
 	return res, saveSwapped(f, path)
 }

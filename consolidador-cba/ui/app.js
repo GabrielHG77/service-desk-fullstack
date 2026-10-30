@@ -18,6 +18,9 @@ const fold = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const collator = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 const baseName = (p) => p.split(/[\\/]/).filter(Boolean).pop() || p;
 const themeOf = (t) => (t === "light" || t === "dark" ? t : "auto");
+const hasValue = (v) => v != null && String(v).trim() !== "";
+// A coluna i da linha tem algo na planilha? mask vem de readPlanilha: dígitos hexadecimais, 4 colunas cada.
+const filledAt = (mask, i) => i >= 0 && (i >> 2) < mask.length && ((parseInt(mask[i >> 2], 16) >> (i & 3)) & 1) === 1;
 function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -408,7 +411,8 @@ class AppModel {
     this.planilha = p && p.path
       ? {
           path: p.path, exists: !!p.exists, rows: p.rows || 0, keys: new Map(Object.entries(p.keys || {})), error: p.error || "",
-          sheet: p.sheet || "", headerRow: p.headerRow || 0, header: p.header || [], tables: p.tables || [], sheets: p.sheets || []
+          sheet: p.sheet || "", headerRow: p.headerRow || 0, header: p.header || [], tables: p.tables || [], sheets: p.sheets || [],
+          filled: new Map(Object.entries(p.filled || {})), query: p.query || ""
         }
       : null;
     if (!this.planilha) this.show = "all";
@@ -424,16 +428,26 @@ class AppModel {
   }
 
   // Itens que ainda não estão na planilha: o primeiro de cada Sales Doc. + Item, na ordem dos arquivos.
+  // O que Gravar faz: os itens que ainda não estão na planilha (rows) e os que já estão mas têm em branco, nas
+  // colunas da tabela, uma célula que os arquivos têm (complete: Gravar preenche essas células e não muda as outras).
   pending() {
     const res = this.result, pl = this.planilha;
     if (this.pendKey && this.pendKey[0] === res && this.pendKey[1] === pl) return this.pend;
-    const out = { rows: [], set: new Set(), byFile: new Map() };
+    const out = { rows: [], set: new Set(), byFile: new Map(), complete: [] };
     if (res && pl && !pl.error) {
       const seen = new Set();
+      const inSheet = new Map();
+      pl.header.forEach((h, i) => { const k = CBA.canon(h); if (h && !inSheet.has(k)) inSheet.set(k, i); });
+      const at = res.cols.map((c) => (inSheet.has(CBA.canon(c)) ? inSheet.get(CBA.canon(c)) : -1));
       for (const r of res.rows) {
         const k = rowKey(r);
-        if (!k || pl.keys.has(k) || seen.has(k)) continue;
+        if (!k || seen.has(k)) continue;
         seen.add(k);
+        if (pl.keys.has(k)) {
+          const mask = pl.filled.get(k) || "";
+          if (res.cols.some((c, j) => hasValue(CBA.cellValue(r, c)) && !filledAt(mask, at[j]))) out.complete.push(r);
+          continue;
+        }
         out.rows.push(r);
         out.set.add(r);
         out.byFile.set(r.file, (out.byFile.get(r.file) || 0) + 1);
@@ -520,7 +534,8 @@ class AppModel {
     this.confirm = {
       title: `Organizar a aba ${pl.sheet} no padrão do app?`,
       text: d.items.map((i) => "• " + i).join("\n") + drop + keep +
-        `\n\n${d.drop.length ? "Os outros dados" : "Os dados"} não mudam, só de lugar.${tables} As outras abas não são tocadas. ${this.backupNote("de agora")}`,
+        `\n\n${d.drop.length ? "Os outros dados" : "Os dados"} não mudam, só de lugar.${tables} As outras abas não são tocadas. ${this.backupNote("de agora")}` +
+        (pl.query ? "\n\n" + this.queryNote() : ""),
       yes: d.drop.length ? `Organizar e tirar ${plural(d.drop.length, "coluna", "colunas")}` : "Organizar",
       run: () => this.organizar()
     };
@@ -540,7 +555,7 @@ class AppModel {
       if (out.dropped.length) bits.push(plural(out.dropped.length, "característica fora da lista saiu", "características fora da lista saíram"));
       if (out.kept.length) bits.push(`${out.kept.slice(0, 3).join(", ")}${out.kept.length > 3 ? "…" : ""} no fim`);
       if (out.formulas) bits.push(plural(out.formulas, "fórmula virou valor", "fórmulas viraram valores"));
-      this.notify(`Aba ${out.sheet} organizada no padrão do app: ${bits.join(", ")}.`, "saved", out.path);
+      this.notify(`Aba ${out.sheet} organizada no padrão do app: ${bits.join(", ")}.${this.unlinkedNote(out)}`, "saved", out.path);
     } catch (err) {
       this.notify(err.message, "error");
     } finally {
@@ -549,12 +564,35 @@ class AppModel {
     }
   }
 
-  async gravar() {
-    const rows = this.pending().rows.filter((r) => this.picks(r.file));
+  async gravar(confirmed = false) {
+    const p = this.pending();
+    const rows = p.rows.concat(p.complete).filter((r) => this.picks(r.file));
     if (!rows.length || !this.canWrite()) return;
+    const pl = this.planilha;
+    if (pl.query && !confirmed) {
+      this.confirm = {
+        title: `A aba ${pl.sheet} vem de uma consulta do Power Query`,
+        text: this.queryNote() + `\n\n${this.backupNote("de agora")}`,
+        yes: "Desligar da consulta e gravar",
+        run: () => this.gravar(true)
+      };
+      return;
+    }
     const out = await this.write(rows, false);
-    if (out) this.notify(`${plural(out.added, "item novo gravado", "itens novos gravados")} em ${baseName(out.path)}.${out.backup ? ` A versão anterior ficou em ${baseName(out.backup)}.` : ""}`, "saved", out.path);
+    if (!out) return;
+    const done = [];
+    if (out.added) done.push(plural(out.added, "item novo gravado", "itens novos gravados"));
+    if (out.completed) done.push(plural(out.completed, "item completado", "itens completados"));
+    this.notify(`${done.join(" e ") || "Nada a gravar"} em ${baseName(out.path)}.${this.unlinkedNote(out)}${out.backup ? ` A versão anterior ficou em ${baseName(out.backup)}.` : ""}`, "saved", out.path);
   }
+
+  // A tabela da aba é a saída de uma consulta do Power Query: o app e a consulta escreveriam um por cima do outro.
+  queryNote() {
+    const pl = this.planilha;
+    return `A tabela ${pl.query} da aba ${pl.sheet} é preenchida por uma consulta do Power Query. Se o app gravar nela e a consulta for atualizada no Excel, uma desfaz a outra.` +
+      "\n\nPor isso o app desliga a tabela da consulta: a consulta continua na pasta de trabalho, mas não escreve mais nessa aba, e os dados dela passam a ser mantidos pelo app.";
+  }
+  unlinkedNote(out) { return out.unlinked ? ` A tabela ${out.unlinked} foi desligada da consulta do Power Query.` : ""; }
 
   // Os arquivos marcados, ou todos (por exemplo depois de pôr colunas novas na lista, para preencher os itens já gravados).
   askRegravar() {
@@ -568,7 +606,8 @@ class AppModel {
       title: `Regravar ${what}?`,
       text: `${plural(saved, "item que já está na planilha recebe", "itens que já estão na planilha recebem")} os valores de agora` +
         (fresh ? ` e ${plural(fresh, "item novo entra", "itens novos entram")} no fim` : "") +
-        `. As outras abas e as colunas escritas à mão não mudam. ${this.backupNote("anterior")}`,
+        `. As outras abas e as colunas escritas à mão não mudam. ${this.backupNote("anterior")}` +
+        (this.planilha.query ? "\n\n" + this.queryNote() : ""),
       yes: "Regravar",
       run: () => this.regravar(rels)
     };
@@ -585,7 +624,7 @@ class AppModel {
     });
     const out = await this.write(rows, true);
     const what = rels.length === 1 ? this.fileName(rels[0]) + " regravado" : plural(rels.length, "arquivo regravado", "arquivos regravados");
-    if (out) this.notify(`${what}: ${plural(out.updated, "item atualizado", "itens atualizados")}, ${plural(out.added, "novo", "novos")}.`, "saved", out.path);
+    if (out) this.notify(`${what}: ${plural(out.updated, "item atualizado", "itens atualizados")}, ${plural(out.added, "novo", "novos")}.${this.unlinkedNote(out)}`, "saved", out.path);
   }
 
   // ---------- seleção de arquivos (como a seleção múltipla de uma List) ----------
@@ -622,6 +661,7 @@ class AppModel {
     if (!this.selection.length) return "Nenhum arquivo marcado";
     return plural(this.selection.length, "arquivo marcado", "arquivos marcados");
   }
+  completeIn(rels) { return this.pending().complete.filter((r) => (rels ? rels.includes(r.file) : true)).length; }
   pendingIn(rels) { const b = this.pending().byFile; return (rels || this.selectable()).reduce((n, rel) => n + (b.get(rel) || 0), 0); }
   savedIn(rels) { return this.result ? this.result.rows.filter((r) => (rels ? rels.includes(r.file) : true) && this.isSaved(r)).length : 0; }
 
@@ -766,7 +806,10 @@ function PlanilhaCard(model) {
       ? `<span class="status warn">${icon("warn", "tint-orange")}Organizada diferente do app</span>
          <button class="link" type="button" data-action="ask-organizar">Ver diferenças e organizar…</button>`
       : "";
-    el.innerHTML = `${sheetIcon()}<strong title="${esc(pl.path)}">${esc(name)}</strong><span class="path" title="${esc(pl.path)}">${esc(parent)}</span>${status}${organize}
+    const query = pl.query
+      ? `<span class="status warn" title="Quando o app gravar ou organizar, a tabela é desligada da consulta (pede confirmação antes).">${icon("warn", "tint-orange")}A tabela ${esc(pl.query)} vem de uma consulta do Power Query</span>`
+      : "";
+    el.innerHTML = `${sheetIcon()}<strong title="${esc(pl.path)}">${esc(name)}</strong><span class="path" title="${esc(pl.path)}">${esc(parent)}</span>${status}${query}${organize}
       <button class="link" type="button" data-action="choose-planilha">Trocar planilha…</button>`;
   });
 }
@@ -840,12 +883,18 @@ function Toolbar(model) {
     // Botão principal: escolher a planilha, gravar os novos, ou nada a fazer.
     const primary = $("primary");
     const n = model.pendingIn(model.isAll() ? null : model.selection);
+    const m = model.completeIn(model.isAll() ? null : model.selection);
     const pl = model.planilha;
     let label = "Gravar na planilha", action = "gravar", enabled = false, tip = "";
     if (model.mode === "sample") tip = "Os dados de exemplo não são gravados.";
     else if (!pl) { label = "Escolher planilha…"; action = "choose-planilha"; enabled = ready; }
     else if (pl.error) tip = pl.error;
-    else if (n) { label = `Gravar ${plural(n, "novo", "novos")}`; enabled = hasRows; tip = `Acrescenta na planilha só os itens ${model.isAll() ? "" : "dos arquivos marcados "}que ainda não estão nela (Ctrl+S).`; }
+    else if (n || m) {
+      label = n && m ? `Gravar ${plural(n, "novo", "novos")} e completar ${fmtInt(m)}` : n ? `Gravar ${plural(n, "novo", "novos")}` : `Completar ${plural(m, "item", "itens")}`;
+      enabled = hasRows;
+      tip = (n ? `Acrescenta na planilha os itens ${model.isAll() ? "" : "dos arquivos marcados "}que ainda não estão nela. ` : "") +
+        (m ? `Nos ${fmtInt(m)} que já estão com colunas em branco, preenche essas células com o valor dos arquivos; o que já tem valor não muda. ` : "") + "(Ctrl+S)";
+    }
     else if (hasRows) { label = "Planilha em dia"; tip = model.isAll() ? "Todos os itens da pasta já estão na planilha." : "Os itens dos arquivos marcados já estão na planilha."; }
     primary.dataset.action = action;
     primary.innerHTML = (label === "Planilha em dia" ? icon("ok") : "") + `<span>${esc(label)}</span>`;
@@ -904,7 +953,9 @@ function Stats(model) {
         if (!model.planilha || model.planilha.error) return stat("Novos", "—");
         const n = model.pendingIn(all ? null : model.selection);
         const saved = model.savedIn(all ? null : model.selection);
-        return stat("Novos para gravar", n ? fmtInt(n) : "Nenhum", n ? "tint-blue" : "", saved ? `${fmtInt(saved)} já na planilha` : "");
+        const m = model.completeIn(all ? null : model.selection);
+        const note = [saved ? `${fmtInt(saved)} já na planilha` : "", m ? `${fmtInt(m)} com colunas em branco` : ""].filter(Boolean).join(" · ");
+        return stat("Novos para gravar", n ? fmtInt(n) : "Nenhum", n ? "tint-blue" : "", note);
       })() +
       (all ? stat("Arquivos lidos", fmtInt(r.fileCount)) : one ? stat("Situação", situation, sitTint) : stat("Arquivos marcados", `${fmtInt(model.selection.length)} de ${fmtInt(model.selectable().length)}`)) +
       stat(errors ? "Erros e avisos" : "Avisos", attention ? fmtInt(attention) : "Nenhum", tint);

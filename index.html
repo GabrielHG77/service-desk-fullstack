@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>MQTT Panel</title>
+<title>MCP Bench</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230c0e0f'/%3E%3Cpath d='M22 9v24l21-12z' fill='%23f2d740'/%3E%3Cg fill='%23f2d740'%3E%3Ccircle cx='17' cy='46' r='6'/%3E%3Ccircle cx='32' cy='46' r='6'/%3E%3Ccircle cx='47' cy='46' r='6'/%3E%3Crect x='9' y='54' width='46' height='2'/%3E%3C/g%3E%3Cg fill='%230c0e0f'%3E%3Ccircle cx='17' cy='46' r='2.4'/%3E%3Ccircle cx='32' cy='46' r='2.4'/%3E%3Ccircle cx='47' cy='46' r='2.4'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 :root{--primary:#f2d740;--ink:#0c0e0f;--black:#0c0e0f;--secondary:#3dc2ff;--tertiary:#5260ff;--success:#2dd36f;--warning:#ffc409;--danger:#eb445a;--medium:#92949c;   /* the colours of the buttons you make yourself */
   --ground:#f4f5f6;--surface:#fff;--raised:#f1f3f4;--active:#e6e9ec;--border:#dde1e5;--rule:#e9ecef;--control:#c4cad1;--text:#14171a;--muted:#59616a;--on:#14171a;--stop:#c4242a;
@@ -574,7 +575,7 @@ const ic=(n,sz=18)=>{const e=h('span',{class:'ti','aria-hidden':'true'});e.inner
 const goto=n=>{if(route.n!==n){route={n};render()}};
 // the frame: a rail with the mark of the product and the three screens (the bottom of the window on a phone), and the page to its right. A selected screen has a line under its name
 const tabs=cur=>h('aside',{class:'side'},
-  h('button',{type:'button',class:'brand','aria-label':'MQTT Panel: Buttons',title:'MQTT Panel',onclick:()=>goto('home')},h('span',{class:'logo','aria-hidden':'true'})),
+  h('button',{type:'button',class:'brand','aria-label':'MCP Bench: Buttons',title:'MCP Bench',onclick:()=>goto('home')},h('span',{class:'logo','aria-hidden':'true'})),
   h('nav',{class:'tabs','aria-label':'Screens'},[['home','Buttons'],['status','Status'],['logs','Log']].map(([n,l])=>
     h('button',{type:'button',class:n===cur?'on':'','aria-current':n===cur?'page':null,title:l,onclick:()=>goto(n)},ic(n),h('span',{class:'tl'},l)))));
 const shell=(cur,...kids)=>h('main',{class:'wide'},h('div',{class:'shell'},tabs(cur),h('div',{class:'content'},kids)));
@@ -582,7 +583,7 @@ const brokerInfo=()=>sys.clients?`${sys.clients} clients${sys.version?' · '+sys
 // the title of a screen: the product and the broker it is scoped to (with the connection, one click to switch it off or on), the name of the screen, one line about what the data says, and the actions
 const head=(title,sub,...acts)=>h('div',{class:'head'},
   h('div',{},
-    h('div',{class:'crumb'},h('span',{},'MQTT Panel'),db.conn?h('span',{class:'mono'},`${db.conn.host}:${db.conn.port}`):null,
+    h('div',{class:'crumb'},h('span',{},'MCP Bench'),db.conn?h('span',{class:'mono'},`${db.conn.host}:${db.conn.port}`):null,
       db.conn?h('button',{id:'st',type:'button',class:'st '+status,onclick:chipClick},status):null,db.conn?h('span',{id:'sideinfo'}):null,   // its text is set by drawSide, outside what is compared to decide a redraw: a client that comes and goes does not rebuild the buttons
       
       db.conn?h('button',{type:'button',class:'cfg',title:'Connection','aria-label':'Connection',onclick:()=>go({n:'conn'})},ic('conn',16)):null),

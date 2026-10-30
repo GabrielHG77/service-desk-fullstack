@@ -1,4 +1,4 @@
-// MQTT Panel for Windows: serves index.html on 127.0.0.1 and relays each Websocket from the page to a plain TCP MQTT
+// MCP Bench for Windows: serves index.html on 127.0.0.1 and relays each Websocket from the page to a plain TCP MQTT
 // broker, so the broker's normal port (1883) works with no Mosquitto and nothing to install.
 package main
 
@@ -261,7 +261,7 @@ func main() {
 	url := "http://" + addr + "/"
 	ln, err := net.Listen("tcp", addr)
 	if err != nil { // most likely already running: just show its window again
-		fmt.Println("MQTT Panel ja esta aberto em", url, "-", err)
+		fmt.Println("MCP Bench ja esta aberto em", url, "-", err)
 		if !*noOpen {
 			open(url)
 		}
@@ -275,7 +275,7 @@ func main() {
 			panic(p)
 		}
 	}()
-	fmt.Println("MQTT Panel rodando em", url, "- feche esta janela para sair")
+	fmt.Println("MCP Bench rodando em", url, "- feche esta janela para sair")
 	fmt.Println("O que o app manda para o broker (topico, QoS, payload) e o que ele responde aparece aqui.")
 	if !*noOpen {
 		go open(url)
